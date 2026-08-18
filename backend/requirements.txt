@@ -2,3 +2,6 @@ fastapi
 uvicorn
 pydantic
 sqlalchemy
+python-jose[cryptography]
+pwdlib[argon2]
+python-multipart
