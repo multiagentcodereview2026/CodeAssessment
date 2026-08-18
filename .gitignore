@@ -2,5 +2,3 @@ backend/venv/
 __pycache__/ 
 *.pyc 
 backend/codeassessment.db
-README.md
-frontend/README.md
