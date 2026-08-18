@@ -24,6 +24,8 @@ from database import get_db
 from schemas import AssignStudentRequest
 from schemas import AssignmentResponse
 from schemas import LoginResponse
+from schemas import ProblemCreate
+from schemas import ProblemResponse
 from schemas import RegisterRequest
 from schemas import SubmissionDetails
 from schemas import SubmissionRequest
@@ -92,7 +94,7 @@ def health():
 
 
 # =========================================================
-# REGISTER
+# AUTHENTICATION
 # =========================================================
 
 @app.post(
@@ -114,7 +116,6 @@ def register(
             detail="Role must be student or instructor"
         )
 
-
     existing_username = (
         db.query(models.User)
         .filter(
@@ -130,7 +131,6 @@ def register(
             status_code=400,
             detail="Username already exists"
         )
-
 
     existing_email = (
         db.query(models.User)
@@ -148,7 +148,6 @@ def register(
             detail="Email already exists"
         )
 
-
     user = models.User(
         username=request.username,
         email=request.email,
@@ -158,13 +157,9 @@ def register(
         role=request.role
     )
 
-
     db.add(user)
-
     db.commit()
-
     db.refresh(user)
-
 
     return user
 
@@ -191,7 +186,6 @@ def login(
         .first()
     )
 
-
     if user is None:
 
         raise HTTPException(
@@ -201,7 +195,6 @@ def login(
                 "WWW-Authenticate": "Bearer"
             }
         )
-
 
     if not verify_password(
         form_data.password,
@@ -216,13 +209,11 @@ def login(
             }
         )
 
-
     access_token = create_access_token(
         user_id=user.id,
         username=user.username,
         role=user.role
     )
-
 
     return {
         "access_token": access_token,
@@ -268,14 +259,12 @@ def assign_student(
         .first()
     )
 
-
     if student is None:
 
         raise HTTPException(
             status_code=404,
             detail="Student not found"
         )
-
 
     if student.role != "student":
 
@@ -284,7 +273,6 @@ def assign_student(
             detail="Selected user is not a student"
         )
 
-
     existing_assignment = (
         db.query(
             models.InstructorStudentAssignment
@@ -292,12 +280,12 @@ def assign_student(
         .filter(
             models.InstructorStudentAssignment.instructor_id
             == current_user.id,
+
             models.InstructorStudentAssignment.student_id
             == student.id
         )
         .first()
     )
-
 
     if existing_assignment:
 
@@ -306,7 +294,6 @@ def assign_student(
             detail="Student is already assigned"
         )
 
-
     assignment = (
         models.InstructorStudentAssignment(
             instructor_id=current_user.id,
@@ -314,13 +301,9 @@ def assign_student(
         )
     )
 
-
     db.add(assignment)
-
     db.commit()
-
     db.refresh(assignment)
-
 
     return assignment
 
@@ -348,9 +331,7 @@ def get_assigned_students(
         .all()
     )
 
-
     students = []
-
 
     for assignment in assignments:
 
@@ -363,7 +344,6 @@ def get_assigned_students(
             .first()
         )
 
-
         if student:
 
             students.append({
@@ -373,13 +353,234 @@ def get_assigned_students(
                 "role": student.role
             })
 
-
     return students
 
 
 # =========================================================
-# CREATE SUBMISSION
+# PROBLEM MANAGEMENT
 # =========================================================
+
+# ---------------------------------------------------------
+# CREATE PROBLEM
+# ---------------------------------------------------------
+
+@app.post(
+    "/api/problems",
+    response_model=ProblemResponse
+)
+def create_problem(
+    problem: ProblemCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_instructor)
+):
+
+    existing_problem = (
+        db.query(models.Problem)
+        .filter(
+            models.Problem.problem_id
+            == problem.problem_id
+        )
+        .first()
+    )
+
+    if existing_problem:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Problem ID already exists"
+        )
+
+    new_problem = models.Problem(
+        problem_id=problem.problem_id,
+        title=problem.title,
+        description=problem.description,
+        constraints=problem.constraints,
+        input_format=problem.input_format,
+        output_format=problem.output_format,
+        supported_languages=problem.supported_languages,
+        difficulty=problem.difficulty,
+        time_limit=problem.time_limit,
+        memory_limit=problem.memory_limit
+    )
+
+    db.add(new_problem)
+    db.commit()
+    db.refresh(new_problem)
+
+    return new_problem
+
+
+# ---------------------------------------------------------
+# GET ALL PROBLEMS
+# ---------------------------------------------------------
+
+@app.get(
+    "/api/problems",
+    response_model=list[ProblemResponse]
+)
+def get_problems(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+
+    return (
+        db.query(models.Problem)
+        .order_by(
+            models.Problem.created_at.desc()
+        )
+        .all()
+    )
+
+
+# ---------------------------------------------------------
+# GET ONE PROBLEM
+# ---------------------------------------------------------
+
+@app.get(
+    "/api/problems/{problem_id}",
+    response_model=ProblemResponse
+)
+def get_problem(
+    problem_id: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+
+    problem = (
+        db.query(models.Problem)
+        .filter(
+            models.Problem.problem_id
+            == problem_id
+        )
+        .first()
+    )
+
+    if problem is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Problem not found"
+        )
+
+    return problem
+
+
+# ---------------------------------------------------------
+# UPDATE PROBLEM
+# ---------------------------------------------------------
+
+@app.put(
+    "/api/problems/{problem_id}",
+    response_model=ProblemResponse
+)
+def update_problem(
+    problem_id: str,
+    problem_data: ProblemCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_instructor)
+):
+
+    problem = (
+        db.query(models.Problem)
+        .filter(
+            models.Problem.problem_id
+            == problem_id
+        )
+        .first()
+    )
+
+    if problem is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Problem not found"
+        )
+
+    problem.title = problem_data.title
+
+    problem.description = (
+        problem_data.description
+    )
+
+    problem.constraints = (
+        problem_data.constraints
+    )
+
+    problem.input_format = (
+        problem_data.input_format
+    )
+
+    problem.output_format = (
+        problem_data.output_format
+    )
+
+    problem.supported_languages = (
+        problem_data.supported_languages
+    )
+
+    problem.difficulty = (
+        problem_data.difficulty
+    )
+
+    problem.time_limit = (
+        problem_data.time_limit
+    )
+
+    problem.memory_limit = (
+        problem_data.memory_limit
+    )
+
+    db.commit()
+    db.refresh(problem)
+
+    return problem
+
+
+# ---------------------------------------------------------
+# DELETE PROBLEM
+# ---------------------------------------------------------
+
+@app.delete(
+    "/api/problems/{problem_id}"
+)
+def delete_problem(
+    problem_id: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_instructor)
+):
+
+    problem = (
+        db.query(models.Problem)
+        .filter(
+            models.Problem.problem_id
+            == problem_id
+        )
+        .first()
+    )
+
+    if problem is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Problem not found"
+        )
+
+    db.delete(problem)
+    db.commit()
+
+    return {
+        "message": "Problem deleted successfully",
+        "problem_id": problem_id
+    }
+
+
+# =========================================================
+# SUBMISSIONS
+# =========================================================
+
+# ---------------------------------------------------------
+# CREATE SUBMISSION
+# ---------------------------------------------------------
 
 @app.post(
     "/api/submissions",
@@ -391,8 +592,6 @@ def create_submission(
     current_user=Depends(require_student)
 ):
 
-    # Student can submit only for their own account
-
     if (
         submission.student_id
         != current_user.username
@@ -400,9 +599,29 @@ def create_submission(
 
         raise HTTPException(
             status_code=403,
-            detail="You can only submit code for your own account"
+            detail=(
+                "You can only submit code "
+                "for your own account"
+            )
         )
 
+    # Verify that the problem exists
+
+    problem = (
+        db.query(models.Problem)
+        .filter(
+            models.Problem.problem_id
+            == submission.problem_id
+        )
+        .first()
+    )
+
+    if problem is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Problem not found"
+        )
 
     existing_student = (
         db.query(models.Student)
@@ -413,7 +632,6 @@ def create_submission(
         .first()
     )
 
-
     if existing_student is None:
 
         student = models.Student(
@@ -422,14 +640,11 @@ def create_submission(
         )
 
         db.add(student)
-
         db.commit()
-
 
     submission_id = (
         f"SUB-{uuid4().hex[:8]}"
     )
-
 
     new_submission = models.Submission(
         submission_id=submission_id,
@@ -440,13 +655,9 @@ def create_submission(
         status="SUBMITTED"
     )
 
-
     db.add(new_submission)
-
     db.commit()
-
     db.refresh(new_submission)
-
 
     return SubmissionResponse(
         submission_id=new_submission.submission_id,
@@ -457,9 +668,9 @@ def create_submission(
     )
 
 
-# =========================================================
+# ---------------------------------------------------------
 # GET ONE SUBMISSION
-# =========================================================
+# ---------------------------------------------------------
 
 @app.get(
     "/api/submissions/{submission_id}",
@@ -480,7 +691,6 @@ def get_submission(
         .first()
     )
 
-
     if submission is None:
 
         raise HTTPException(
@@ -488,10 +698,7 @@ def get_submission(
             detail="Submission not found"
         )
 
-
-    # -----------------------------------------------------
-    # STUDENT ACCESS
-    # -----------------------------------------------------
+    # Student access
 
     if current_user.role == "student":
 
@@ -502,15 +709,15 @@ def get_submission(
 
             raise HTTPException(
                 status_code=403,
-                detail="You can only access your own submissions"
+                detail=(
+                    "You can only access "
+                    "your own submissions"
+                )
             )
 
         return submission
 
-
-    # -----------------------------------------------------
-    # INSTRUCTOR ACCESS
-    # -----------------------------------------------------
+    # Instructor access
 
     if current_user.role == "instructor":
 
@@ -523,14 +730,12 @@ def get_submission(
             .first()
         )
 
-
         if student is None:
 
             raise HTTPException(
                 status_code=403,
                 detail="Student account not found"
             )
-
 
         assignment = (
             db.query(
@@ -546,17 +751,17 @@ def get_submission(
             .first()
         )
 
-
         if assignment is None:
 
             raise HTTPException(
                 status_code=403,
-                detail="Student is not assigned to this instructor"
+                detail=(
+                    "Student is not assigned "
+                    "to this instructor"
+                )
             )
 
-
         return submission
-
 
     raise HTTPException(
         status_code=403,
@@ -564,9 +769,9 @@ def get_submission(
     )
 
 
-# =========================================================
+# ---------------------------------------------------------
 # GET SUBMISSIONS
-# =========================================================
+# ---------------------------------------------------------
 
 @app.get(
     "/api/submissions",
@@ -577,9 +782,7 @@ def get_submissions(
     current_user=Depends(get_current_user)
 ):
 
-    # -----------------------------------------------------
-    # STUDENT
-    # -----------------------------------------------------
+    # Student
 
     if current_user.role == "student":
 
@@ -595,10 +798,7 @@ def get_submissions(
             .all()
         )
 
-
-    # -----------------------------------------------------
-    # INSTRUCTOR
-    # -----------------------------------------------------
+    # Instructor
 
     if current_user.role == "instructor":
 
@@ -613,17 +813,14 @@ def get_submissions(
             .all()
         )
 
-
         if not assignments:
 
             return []
-
 
         student_user_ids = [
             assignment.student_id
             for assignment in assignments
         ]
-
 
         students = (
             db.query(models.User)
@@ -635,17 +832,14 @@ def get_submissions(
             .all()
         )
 
-
         student_usernames = [
             student.username
             for student in students
         ]
 
-
         if not student_usernames:
 
             return []
-
 
         return (
             db.query(models.Submission)
@@ -659,7 +853,6 @@ def get_submissions(
             )
             .all()
         )
-
 
     raise HTTPException(
         status_code=403,

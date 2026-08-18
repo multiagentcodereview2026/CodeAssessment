@@ -150,3 +150,70 @@ class InstructorStudentAssignment(Base):
         DateTime,
         default=datetime.utcnow
     )
+class Problem(Base):
+    __tablename__ = "problems"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    problem_id = Column(
+        String(100),
+        unique=True,
+        nullable=False,
+        index=True
+    )
+
+    title = Column(
+        String(200),
+        nullable=False
+    )
+
+    description = Column(
+        Text,
+        nullable=False
+    )
+
+    constraints = Column(
+        Text,
+        nullable=True
+    )
+
+    input_format = Column(
+        Text,
+        nullable=True
+    )
+
+    output_format = Column(
+        Text,
+        nullable=True
+    )
+
+    supported_languages = Column(
+        String(500),
+        nullable=False
+    )
+
+    difficulty = Column(
+        String(50),
+        nullable=True
+    )
+
+    time_limit = Column(
+        Integer,
+        nullable=False,
+        default=2
+    )
+
+    memory_limit = Column(
+        Integer,
+        nullable=False,
+        default=256
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )

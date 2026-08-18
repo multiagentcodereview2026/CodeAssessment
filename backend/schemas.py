@@ -70,3 +70,32 @@ class AssignmentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+class ProblemCreate(BaseModel):
+    problem_id: str
+    title: str
+    description: str
+    constraints: str | None = None
+    input_format: str | None = None
+    output_format: str | None = None
+    supported_languages: str
+    difficulty: str | None = None
+    time_limit: int = 2
+    memory_limit: int = 256
+
+
+class ProblemResponse(BaseModel):
+    id: int
+    problem_id: str
+    title: str
+    description: str
+    constraints: str | None
+    input_format: str | None
+    output_format: str | None
+    supported_languages: str
+    difficulty: str | None
+    time_limit: int
+    memory_limit: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
