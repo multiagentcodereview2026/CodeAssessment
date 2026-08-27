@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from sqlalchemy import Boolean
 from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import Integer
@@ -211,6 +212,41 @@ class Problem(Base):
         Integer,
         nullable=False,
         default=256
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+class TestCase(Base):
+    __tablename__ = "test_cases"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    problem_id = Column(
+        String(100),
+        nullable=False,
+        index=True
+    )
+
+    input_data = Column(
+        Text,
+        nullable=False
+    )
+
+    expected_output = Column(
+        Text,
+        nullable=False
+    )
+
+    is_hidden = Column(
+        Boolean,
+        default=True,
+        nullable=False
     )
 
     created_at = Column(

@@ -31,7 +31,8 @@ from schemas import SubmissionDetails
 from schemas import SubmissionRequest
 from schemas import SubmissionResponse
 from schemas import UserResponse
-
+from schemas import TestCaseCreate
+from schemas import TestCaseResponse
 
 # =========================================================
 # DATABASE
@@ -858,3 +859,108 @@ def get_submissions(
         status_code=403,
         detail="Invalid user role"
     )
+@app.post(
+    "/api/problems/{problem_id}/test-cases",
+    response_model=TestCaseResponse
+)
+def create_test_case(
+    problem_id: str,
+    test_case: TestCaseCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_instructor)
+):
+    # Check whether the problem exists
+    problem = (
+        db.query(models.Problem)
+        .filter(
+            models.Problem.problem_id == problem_id
+        )
+        .first()
+    )
+
+    if problem is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Problem not found"
+        )
+
+    new_test_case = models.TestCase(
+        problem_id=problem_id,
+        input_data=test_case.input_data,
+        expected_output=test_case.expected_output,
+        is_hidden=test_case.is_hidden
+    )
+
+    db.add(new_test_case)
+    db.commit()
+    db.refresh(new_test_case)
+
+    return new_test_case
+@app.get(
+    "/api/problems/{problem_id}/test-cases",
+    response_model=list[TestCaseResponse]
+)
+def get_test_cases(
+    problem_id: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    # Check whether problem exists
+    problem = (
+        db.query(models.Problem)
+        .filter(
+            models.Problem.problem_id == problem_id
+        )
+        .first()
+    )
+
+    if problem is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Problem not found"
+        )
+
+    test_cases = (
+        db.query(models.TestCase)
+        .filter(
+            models.TestCase.problem_id == problem_id
+        )
+        .all()
+    )
+
+    # Students should not receive hidden test cases
+    if current_user.role == "student":
+        test_cases = [
+            tc for tc in test_cases
+            if not tc.is_hidden
+        ]
+
+    return test_cases
+@app.delete(
+    "/api/test-cases/{test_case_id}"
+)
+def delete_test_case(
+    test_case_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_instructor)
+):
+    test_case = (
+        db.query(models.TestCase)
+        .filter(
+            models.TestCase.id == test_case_id
+        )
+        .first()
+    )
+
+    if test_case is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Test case not found"
+        )
+
+    db.delete(test_case)
+    db.commit()
+
+    return {
+        "message": "Test case deleted successfully"
+    }
