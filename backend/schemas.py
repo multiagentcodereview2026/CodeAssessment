@@ -99,6 +99,9 @@ class ProblemResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+
 class TestCaseCreate(BaseModel):
     input_data: str
     expected_output: str
@@ -115,3 +118,29 @@ class TestCaseResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class TestResultResponse(BaseModel):
+    test_case_id: int
+    status: str
+    input: str
+    expected_output: str
+    actual_output: str
+    execution_time: float
+    stderr: str
+
+
+class EvaluationResponse(BaseModel):
+    total_tests: int
+    passed_tests: int
+    failed_tests: int
+    status: str
+    test_results: list[TestResultResponse]
+
+
+class SubmissionEvaluationResponse(BaseModel):
+    submission_id: str
+    student_id: str
+    problem_id: str
+    language: str
+    status: str
+    evaluation: EvaluationResponse

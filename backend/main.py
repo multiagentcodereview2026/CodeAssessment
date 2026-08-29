@@ -9,6 +9,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 import models
+from services.evaluator import evaluate_submission
 
 from auth import create_access_token
 from auth import get_current_user
@@ -30,17 +31,17 @@ from schemas import RegisterRequest
 from schemas import SubmissionDetails
 from schemas import SubmissionRequest
 from schemas import SubmissionResponse
+from schemas import SubmissionEvaluationResponse
 from schemas import UserResponse
 from schemas import TestCaseCreate
 from schemas import TestCaseResponse
+
 
 # =========================================================
 # DATABASE
 # =========================================================
 
-Base.metadata.create_all(
-    bind=engine
-)
+Base.metadata.create_all(bind=engine)
 
 
 # =========================================================
@@ -76,7 +77,6 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-
     return {
         "message": "AI Programming Assessment System API"
     }
@@ -88,7 +88,6 @@ def root():
 
 @app.get("/health")
 def health():
-
     return {
         "status": "healthy"
     }
@@ -111,7 +110,6 @@ def register(
         "student",
         "instructor"
     ]:
-
         raise HTTPException(
             status_code=400,
             detail="Role must be student or instructor"
@@ -127,7 +125,6 @@ def register(
     )
 
     if existing_username:
-
         raise HTTPException(
             status_code=400,
             detail="Username already exists"
@@ -143,7 +140,6 @@ def register(
     )
 
     if existing_email:
-
         raise HTTPException(
             status_code=400,
             detail="Email already exists"
@@ -188,7 +184,6 @@ def login(
     )
 
     if user is None:
-
         raise HTTPException(
             status_code=401,
             detail="Invalid username or password",
@@ -201,7 +196,6 @@ def login(
         form_data.password,
         user.password_hash
     ):
-
         raise HTTPException(
             status_code=401,
             detail="Invalid username or password",
@@ -233,7 +227,6 @@ def login(
 def get_me(
     current_user=Depends(get_current_user)
 ):
-
     return current_user
 
 
@@ -261,14 +254,12 @@ def assign_student(
     )
 
     if student is None:
-
         raise HTTPException(
             status_code=404,
             detail="Student not found"
         )
 
     if student.role != "student":
-
         raise HTTPException(
             status_code=400,
             detail="Selected user is not a student"
@@ -289,7 +280,6 @@ def assign_student(
     )
 
     if existing_assignment:
-
         raise HTTPException(
             status_code=400,
             detail="Student is already assigned"
@@ -346,7 +336,6 @@ def get_assigned_students(
         )
 
         if student:
-
             students.append({
                 "id": student.id,
                 "username": student.username,
@@ -385,7 +374,6 @@ def create_problem(
     )
 
     if existing_problem:
-
         raise HTTPException(
             status_code=400,
             detail="Problem ID already exists"
@@ -457,7 +445,6 @@ def get_problem(
     )
 
     if problem is None:
-
         raise HTTPException(
             status_code=404,
             detail="Problem not found"
@@ -491,45 +478,20 @@ def update_problem(
     )
 
     if problem is None:
-
         raise HTTPException(
             status_code=404,
             detail="Problem not found"
         )
 
     problem.title = problem_data.title
-
-    problem.description = (
-        problem_data.description
-    )
-
-    problem.constraints = (
-        problem_data.constraints
-    )
-
-    problem.input_format = (
-        problem_data.input_format
-    )
-
-    problem.output_format = (
-        problem_data.output_format
-    )
-
-    problem.supported_languages = (
-        problem_data.supported_languages
-    )
-
-    problem.difficulty = (
-        problem_data.difficulty
-    )
-
-    problem.time_limit = (
-        problem_data.time_limit
-    )
-
-    problem.memory_limit = (
-        problem_data.memory_limit
-    )
+    problem.description = problem_data.description
+    problem.constraints = problem_data.constraints
+    problem.input_format = problem_data.input_format
+    problem.output_format = problem_data.output_format
+    problem.supported_languages = problem_data.supported_languages
+    problem.difficulty = problem_data.difficulty
+    problem.time_limit = problem_data.time_limit
+    problem.memory_limit = problem_data.memory_limit
 
     db.commit()
     db.refresh(problem)
@@ -560,7 +522,6 @@ def delete_problem(
     )
 
     if problem is None:
-
         raise HTTPException(
             status_code=404,
             detail="Problem not found"
@@ -580,12 +541,12 @@ def delete_problem(
 # =========================================================
 
 # ---------------------------------------------------------
-# CREATE SUBMISSION
+# CREATE SUBMISSION + EVALUATION
 # ---------------------------------------------------------
 
 @app.post(
     "/api/submissions",
-    response_model=SubmissionResponse
+    response_model=SubmissionEvaluationResponse
 )
 def create_submission(
     submission: SubmissionRequest,
@@ -593,11 +554,14 @@ def create_submission(
     current_user=Depends(require_student)
 ):
 
+    # -----------------------------------------------------
+    # Verify student
+    # -----------------------------------------------------
+
     if (
         submission.student_id
         != current_user.username
     ):
-
         raise HTTPException(
             status_code=403,
             detail=(
@@ -606,7 +570,9 @@ def create_submission(
             )
         )
 
-    # Verify that the problem exists
+    # -----------------------------------------------------
+    # Verify problem
+    # -----------------------------------------------------
 
     problem = (
         db.query(models.Problem)
@@ -618,11 +584,14 @@ def create_submission(
     )
 
     if problem is None:
-
         raise HTTPException(
             status_code=404,
             detail="Problem not found"
         )
+
+    # -----------------------------------------------------
+    # Verify/create student record
+    # -----------------------------------------------------
 
     existing_student = (
         db.query(models.Student)
@@ -643,6 +612,10 @@ def create_submission(
         db.add(student)
         db.commit()
 
+    # -----------------------------------------------------
+    # Create submission
+    # -----------------------------------------------------
+
     submission_id = (
         f"SUB-{uuid4().hex[:8]}"
     )
@@ -660,13 +633,95 @@ def create_submission(
     db.commit()
     db.refresh(new_submission)
 
-    return SubmissionResponse(
-        submission_id=new_submission.submission_id,
-        student_id=new_submission.student_id,
-        problem_id=new_submission.problem_id,
-        language=new_submission.language,
-        status=new_submission.status
+    # -----------------------------------------------------
+    # Load test cases
+    # -----------------------------------------------------
+
+    test_cases = (
+        db.query(models.TestCase)
+        .filter(
+            models.TestCase.problem_id
+            == submission.problem_id
+        )
+        .all()
     )
+
+    # -----------------------------------------------------
+    # Check test cases
+    # -----------------------------------------------------
+
+    if not test_cases:
+
+        new_submission.status = "NO_TEST_CASES"
+
+        db.commit()
+        db.refresh(new_submission)
+
+        return {
+            "submission_id": new_submission.submission_id,
+            "student_id": new_submission.student_id,
+            "problem_id": new_submission.problem_id,
+            "language": new_submission.language,
+            "status": new_submission.status,
+            "evaluation": {
+                "total_tests": 0,
+                "passed_tests": 0,
+                "failed_tests": 0,
+                "status": "NO_TEST_CASES",
+                "test_results": []
+            }
+        }
+
+    # -----------------------------------------------------
+    # Language check
+    # -----------------------------------------------------
+
+    if submission.language.lower() != "python":
+
+        new_submission.status = "UNSUPPORTED_LANGUAGE"
+
+        db.commit()
+        db.refresh(new_submission)
+
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Currently only Python submissions "
+                "are supported by the Docker executor"
+            )
+        )
+
+    # -----------------------------------------------------
+    # Evaluate submission
+    # -----------------------------------------------------
+
+    evaluation_result = evaluate_submission(
+        code=submission.code,
+        test_cases=test_cases,
+        timeout=problem.time_limit
+    )
+
+    # -----------------------------------------------------
+    # Update submission status
+    # -----------------------------------------------------
+
+    new_submission.status = evaluation_result["status"]
+
+    db.commit()
+    db.refresh(new_submission)
+
+    # -----------------------------------------------------
+    # Return evaluation
+    # -----------------------------------------------------
+
+    return {
+        "submission_id": new_submission.submission_id,
+        "student_id": new_submission.student_id,
+        "problem_id": new_submission.problem_id,
+        "language": new_submission.language,
+        "status": new_submission.status,
+        "evaluation": evaluation_result
+    }
 
 
 # ---------------------------------------------------------
@@ -693,13 +748,14 @@ def get_submission(
     )
 
     if submission is None:
-
         raise HTTPException(
             status_code=404,
             detail="Submission not found"
         )
 
+    # -----------------------------------------------------
     # Student access
+    # -----------------------------------------------------
 
     if current_user.role == "student":
 
@@ -707,7 +763,6 @@ def get_submission(
             submission.student_id
             != current_user.username
         ):
-
             raise HTTPException(
                 status_code=403,
                 detail=(
@@ -718,7 +773,9 @@ def get_submission(
 
         return submission
 
+    # -----------------------------------------------------
     # Instructor access
+    # -----------------------------------------------------
 
     if current_user.role == "instructor":
 
@@ -732,7 +789,6 @@ def get_submission(
         )
 
         if student is None:
-
             raise HTTPException(
                 status_code=403,
                 detail="Student account not found"
@@ -753,7 +809,6 @@ def get_submission(
         )
 
         if assignment is None:
-
             raise HTTPException(
                 status_code=403,
                 detail=(
@@ -783,7 +838,9 @@ def get_submissions(
     current_user=Depends(get_current_user)
 ):
 
+    # -----------------------------------------------------
     # Student
+    # -----------------------------------------------------
 
     if current_user.role == "student":
 
@@ -799,7 +856,9 @@ def get_submissions(
             .all()
         )
 
+    # -----------------------------------------------------
     # Instructor
+    # -----------------------------------------------------
 
     if current_user.role == "instructor":
 
@@ -815,7 +874,6 @@ def get_submissions(
         )
 
         if not assignments:
-
             return []
 
         student_user_ids = [
@@ -839,7 +897,6 @@ def get_submissions(
         ]
 
         if not student_usernames:
-
             return []
 
         return (
@@ -859,6 +916,16 @@ def get_submissions(
         status_code=403,
         detail="Invalid user role"
     )
+
+
+# =========================================================
+# TEST CASE MANAGEMENT
+# =========================================================
+
+# ---------------------------------------------------------
+# CREATE TEST CASE
+# ---------------------------------------------------------
+
 @app.post(
     "/api/problems/{problem_id}/test-cases",
     response_model=TestCaseResponse
@@ -869,11 +936,12 @@ def create_test_case(
     db: Session = Depends(get_db),
     current_user=Depends(require_instructor)
 ):
-    # Check whether the problem exists
+
     problem = (
         db.query(models.Problem)
         .filter(
-            models.Problem.problem_id == problem_id
+            models.Problem.problem_id
+            == problem_id
         )
         .first()
     )
@@ -896,6 +964,12 @@ def create_test_case(
     db.refresh(new_test_case)
 
     return new_test_case
+
+
+# ---------------------------------------------------------
+# GET TEST CASES
+# ---------------------------------------------------------
+
 @app.get(
     "/api/problems/{problem_id}/test-cases",
     response_model=list[TestCaseResponse]
@@ -905,11 +979,12 @@ def get_test_cases(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    # Check whether problem exists
+
     problem = (
         db.query(models.Problem)
         .filter(
-            models.Problem.problem_id == problem_id
+            models.Problem.problem_id
+            == problem_id
         )
         .first()
     )
@@ -923,7 +998,8 @@ def get_test_cases(
     test_cases = (
         db.query(models.TestCase)
         .filter(
-            models.TestCase.problem_id == problem_id
+            models.TestCase.problem_id
+            == problem_id
         )
         .all()
     )
@@ -936,6 +1012,12 @@ def get_test_cases(
         ]
 
     return test_cases
+
+
+# ---------------------------------------------------------
+# DELETE TEST CASE
+# ---------------------------------------------------------
+
 @app.delete(
     "/api/test-cases/{test_case_id}"
 )
@@ -944,10 +1026,12 @@ def delete_test_case(
     db: Session = Depends(get_db),
     current_user=Depends(require_instructor)
 ):
+
     test_case = (
         db.query(models.TestCase)
         .filter(
-            models.TestCase.id == test_case_id
+            models.TestCase.id
+            == test_case_id
         )
         .first()
     )
