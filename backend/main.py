@@ -673,32 +673,16 @@ def create_submission(
         }
 
     # -----------------------------------------------------
-    # Language check
-    # -----------------------------------------------------
-
-    if submission.language.lower() != "python":
-
-        new_submission.status = "UNSUPPORTED_LANGUAGE"
-
-        db.commit()
-        db.refresh(new_submission)
-
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Currently only Python submissions "
-                "are supported by the Docker executor"
-            )
-        )
 
     # -----------------------------------------------------
     # Evaluate submission
     # -----------------------------------------------------
 
     evaluation_result = evaluate_submission(
-        code=submission.code,
-        test_cases=test_cases,
-        timeout=problem.time_limit
+          code=submission.code,
+          test_cases=test_cases,
+          language=submission.language,
+          timeout=max(problem.time_limit, 10)
     )
 
     # -----------------------------------------------------

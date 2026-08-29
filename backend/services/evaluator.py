@@ -1,27 +1,30 @@
-from services.executor import execute_python_code
+from services.executor import execute_code
 
 
 def normalize_output(output: str) -> str:
     """
     Normalize output before comparison.
 
-    Removes leading/trailing whitespace,
-    normalizes line endings, and removes
-    whitespace differences inside the output.
+    Removes leading/trailing whitespace and
+    normalizes line endings.
     """
-    return "".join(output.strip().split())
+    if output is None:
+        return ""
+
+    return output.strip().replace("\r\n", "\n")
 
 
 def evaluate_submission(
     code: str,
     test_cases: list,
+    language: str = "python",
     timeout: int = 2
 ):
     """
     Run submitted code against all test cases.
 
-    Each test case is executed separately inside Docker.
-    The actual output is compared with the expected output.
+    The selected language determines which Docker
+    executor is used.
     """
 
     results = []
@@ -31,19 +34,20 @@ def evaluate_submission(
 
     for test_case in test_cases:
 
-        # -------------------------------------------------
+        # ----------------------------------------------------
         # Execute submitted code
-        # -------------------------------------------------
+        # ----------------------------------------------------
 
-        execution = execute_python_code(
+        execution = execute_code(
+            language=language,
             code=code,
             input_data=test_case.input_data,
             timeout=timeout
         )
 
-        # -------------------------------------------------
+        # ----------------------------------------------------
         # Normalize outputs
-        # -------------------------------------------------
+        # ----------------------------------------------------
 
         actual_output = normalize_output(
             execution["stdout"]
@@ -53,9 +57,9 @@ def evaluate_submission(
             test_case.expected_output
         )
 
-        # -------------------------------------------------
+        # ----------------------------------------------------
         # Determine test result
-        # -------------------------------------------------
+        # ----------------------------------------------------
 
         if execution["status"] != "SUCCESS":
 
@@ -72,9 +76,9 @@ def evaluate_submission(
             test_status = "FAIL"
             failed += 1
 
-        # -------------------------------------------------
-        # Store test result
-        # -------------------------------------------------
+        # ----------------------------------------------------
+        # Store result
+        # ----------------------------------------------------
 
         results.append({
             "test_case_id": test_case.id,
@@ -83,12 +87,12 @@ def evaluate_submission(
             "expected_output": expected_output,
             "actual_output": actual_output,
             "execution_time": execution["execution_time"],
-            "stderr": execution["stderr"]
+            "stderr": execution["stderr"],
         })
 
-    # -----------------------------------------------------
+    # --------------------------------------------------------
     # Overall result
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
     total = len(test_cases)
 
@@ -103,10 +107,6 @@ def evaluate_submission(
     else:
 
         overall_status = "FAILED"
-
-    # -----------------------------------------------------
-    # Return evaluation
-    # -----------------------------------------------------
 
     return {
         "total_tests": total,
