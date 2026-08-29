@@ -3,13 +3,8 @@ from services.executor import execute_code
 
 def normalize_output(output: str) -> str:
     """
-    Normalize output before comparison.
-
-    Removes leading/trailing whitespace and
-    normalizes line endings.
+    Normalize program output before comparison.
     """
-    if output is None:
-        return ""
 
     return output.strip().replace("\r\n", "\n")
 
@@ -17,14 +12,12 @@ def normalize_output(output: str) -> str:
 def evaluate_submission(
     code: str,
     test_cases: list,
-    language: str = "python",
+    language: str,
     timeout: int = 2
 ):
     """
-    Run submitted code against all test cases.
-
-    The selected language determines which Docker
-    executor is used.
+    Execute submitted code against all test cases
+    and calculate the functional score.
     """
 
     results = []
@@ -34,9 +27,9 @@ def evaluate_submission(
 
     for test_case in test_cases:
 
-        # ----------------------------------------------------
+        # --------------------------------------------------
         # Execute submitted code
-        # ----------------------------------------------------
+        # --------------------------------------------------
 
         execution = execute_code(
             language=language,
@@ -45,9 +38,9 @@ def evaluate_submission(
             timeout=timeout
         )
 
-        # ----------------------------------------------------
+        # --------------------------------------------------
         # Normalize outputs
-        # ----------------------------------------------------
+        # --------------------------------------------------
 
         actual_output = normalize_output(
             execution["stdout"]
@@ -57,9 +50,9 @@ def evaluate_submission(
             test_case.expected_output
         )
 
-        # ----------------------------------------------------
+        # --------------------------------------------------
         # Determine test result
-        # ----------------------------------------------------
+        # --------------------------------------------------
 
         if execution["status"] != "SUCCESS":
 
@@ -76,9 +69,9 @@ def evaluate_submission(
             test_status = "FAIL"
             failed += 1
 
-        # ----------------------------------------------------
-        # Store result
-        # ----------------------------------------------------
+        # --------------------------------------------------
+        # Store test result
+        # --------------------------------------------------
 
         results.append({
             "test_case_id": test_case.id,
@@ -90,28 +83,43 @@ def evaluate_submission(
             "stderr": execution["stderr"],
         })
 
-    # --------------------------------------------------------
-    # Overall result
-    # --------------------------------------------------------
+    # ------------------------------------------------------
+    # Calculate totals
+    # ------------------------------------------------------
 
     total = len(test_cases)
+
+    # ------------------------------------------------------
+    # Calculate functional score
+    # ------------------------------------------------------
 
     if total == 0:
 
         overall_status = "NO_TEST_CASES"
+        score = 0.0
 
     elif failed == 0:
 
         overall_status = "PASSED"
+        score = 100.0
 
     else:
 
         overall_status = "FAILED"
+        score = round(
+            (passed / total) * 100,
+            2
+        )
+
+    # ------------------------------------------------------
+    # Return evaluation result
+    # ------------------------------------------------------
 
     return {
         "total_tests": total,
         "passed_tests": passed,
         "failed_tests": failed,
+        "score": score,
         "status": overall_status,
         "test_results": results
     }

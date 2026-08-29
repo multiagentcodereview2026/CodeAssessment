@@ -35,8 +35,9 @@ print(a + b)
 
 result = evaluate_submission(
     code=code,
-    test_cases=test_cases
+    test_cases=test_cases,
+    language="python",
+    timeout=2
 )
-
 
 print(result)
