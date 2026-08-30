@@ -15,6 +15,14 @@ from database import get_db
 from schemas import SubmissionDetails
 from schemas import SubmissionRequest
 from schemas import SubmissionResponse
+from schemas import UserRegister
+from schemas import UserLogin
+from schemas import Token
+from schemas import UserOut
+
+from auth import hash_password
+from auth import verify_password
+from auth import create_access_token
 
 
 Base.metadata.create_all(
@@ -71,25 +79,7 @@ def create_submission(
     db: Session = Depends(get_db)
 ):
 
-    existing_student = (
-        db.query(models.Student)
-        .filter(
-            models.Student.student_id
-            == submission.student_id
-        )
-        .first()
-    )
-
-    if existing_student is None:
-
-        student = models.Student(
-            student_id=submission.student_id,
-            name=submission.student_id
-        )
-
-        db.add(student)
-
-        db.commit()
+    
 
 
     submission_id = (
@@ -184,6 +174,87 @@ def get_submissions(
         )
         .all()
     )
+@app.post(
+    "/api/auth/register",
+    response_model=UserOut
+)
+def register(
+    user_data: UserRegister,
+    db: Session = Depends(get_db)
+):
 
+    existing_user = (
+        db.query(models.User)
+        .filter(
+            models.User.email == user_data.email
+        )
+        .first()
+    )
+
+    if existing_user is not None:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Email already registered"
+        )
+
+    if user_data.role not in ("student", "instructor"):
+
+        raise HTTPException(
+            status_code=400,
+            detail="Role must be 'student' or 'instructor'"
+        )
+
+    new_user = models.User(
+        email=user_data.email,
+        hashed_password=hash_password(user_data.password),
+        name=user_data.name,
+        role=user_data.role,
+        student_id=user_data.student_id
+    )
+
+    db.add(new_user)
+
+    db.commit()
+
+    db.refresh(new_user)
+
+    return new_user
+
+
+@app.post(
+    "/api/auth/login",
+    response_model=Token
+)
+def login(
+    credentials: UserLogin,
+    db: Session = Depends(get_db)
+):
+
+    user = (
+        db.query(models.User)
+        .filter(
+            models.User.email == credentials.email
+        )
+        .first()
+    )
+
+    if user is None or not verify_password(
+        credentials.password, user.hashed_password
+    ):
+
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect email or password"
+        )
+
+    access_token = create_access_token(
+        data={
+            "sub": str(user.id),
+            "role": user.role
+        }
+    )
+
+    return Token(access_token=access_token)
 
     return submissions

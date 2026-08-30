@@ -9,9 +9,9 @@ from sqlalchemy import Text
 from database import Base
 
 
-class Student(Base):
+class User(Base):
 
-    __tablename__ = "students"
+    __tablename__ = "users"
 
     id = Column(
         Integer,
@@ -19,16 +19,34 @@ class Student(Base):
         index=True
     )
 
-    student_id = Column(
-        String(100),
+    email = Column(
+        String(200),
         unique=True,
         nullable=False,
         index=True
     )
 
+    hashed_password = Column(
+        String(255),
+        nullable=False
+    )
+
+    role = Column(
+        String(20),
+        nullable=False,
+        default="student"
+    )
+
     name = Column(
         String(200),
         nullable=True
+    )
+
+    student_id = Column(
+        String(100),
+        unique=True,
+        nullable=True,
+        index=True
     )
 
     created_at = Column(

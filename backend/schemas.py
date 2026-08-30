@@ -32,3 +32,36 @@ class SubmissionDetails(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class UserRegister(BaseModel):
+
+    email: str
+    password: str
+    name: str
+    role: str
+    student_id: str | None = None
+
+
+class UserLogin(BaseModel):
+
+    email: str
+    password: str
+
+
+class Token(BaseModel):
+
+    access_token: str
+    token_type: str = "bearer"
+
+
+class UserOut(BaseModel):
+
+    id: int
+    email: str
+    name: str | None
+    role: str
+    student_id: str | None
+
+    class Config:
+        from_attributes = True

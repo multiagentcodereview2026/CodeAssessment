@@ -4,3 +4,7 @@ __pycache__/
 backend/codeassessment.db 
 .env
 backend/.env
+.DS_Store
+frontend/dist/
+frontend/node_modules/
+
