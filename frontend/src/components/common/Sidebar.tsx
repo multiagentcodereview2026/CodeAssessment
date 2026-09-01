@@ -44,9 +44,9 @@ export const Sidebar: React.FC = () => {
 
   const instructorNavItems = [
     { id: 'instructor-dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'instructor-assignments', label: 'Assign Questions', icon: CalendarCheck },
+    { id: 'instructor-submissions', label: 'Submissions & AI Feedback', icon: FileSpreadsheet },
     { id: 'instructor-students', label: 'Assigned Students (48)', icon: Users },
-    { id: 'instructor-assignments', label: 'Assignments Dispatch', icon: CalendarCheck },
-    { id: 'instructor-problems', label: 'Problem Bank', icon: Code2 },
     { id: 'instructor-analytics', label: 'Class Analytics', icon: BarChart3 },
     {
       id: 'instructor-similarity',

@@ -199,8 +199,11 @@ export const AssignmentsManagerView: React.FC = () => {
                 </span>
               </div>
 
-              <button className="px-3.5 py-2 bg-slate-900 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-colors">
-                Gradebook
+              <button
+                onClick={() => setCurrentView('instructor-submissions')}
+                className="px-3.5 py-2 bg-slate-900 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Review Submissions
               </button>
             </div>
           </div>

@@ -21,6 +21,7 @@ import { InstructorDashboard } from './components/instructor/InstructorDashboard
 import { StudentRosterView } from './components/instructor/StudentRosterView';
 import { ClassAnalyticsView } from './components/instructor/ClassAnalyticsView';
 import { AssignmentsManagerView } from './components/instructor/AssignmentsManagerView';
+import { InstructorSubmissionsReviewView } from './components/instructor/InstructorSubmissionsReviewView';
 import { SimilarityReviewView } from './components/instructor/SimilarityReviewView';
 import { ReportsExportView } from './components/instructor/ReportsExportView';
 import { CoursesManagerView } from './components/instructor/CoursesManagerView';
@@ -59,21 +60,21 @@ const MainLayout: React.FC = () => {
       case 'settings':
         return <SettingsView />;
 
-      // Instructor Views
+      // Instructor Views (Strictly Assignment Dispatch, Submissions Review & Moderation)
       case 'instructor-dashboard':
         return <InstructorDashboard />;
-      case 'instructor-courses':
-        return <CoursesManagerView />;
-      case 'instructor-students':
-        return <StudentRosterView />;
       case 'instructor-assignments':
         return <AssignmentsManagerView />;
-      case 'instructor-problems':
-        return <ProblemsListView />;
+      case 'instructor-submissions':
+        return <InstructorSubmissionsReviewView />;
+      case 'instructor-students':
+        return <StudentRosterView />;
       case 'instructor-analytics':
         return <ClassAnalyticsView />;
       case 'instructor-similarity':
         return <SimilarityReviewView />;
+      case 'instructor-courses':
+        return <CoursesManagerView />;
       case 'instructor-reports':
         return <ReportsExportView />;
       case 'instructor-settings':
