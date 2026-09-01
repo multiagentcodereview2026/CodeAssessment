@@ -12,14 +12,25 @@ import { useApp } from '../../context/AppContext';
 import { DifficultyBadge } from '../common/Badge';
 
 export const RecommendationsView: React.FC = () => {
-  const { activeAssessment, openProblemWorkspace, setCurrentView } = useApp();
+  const { activeAssessment, openProblemWorkspace, setCurrentView, goBackToDashboard } = useApp();
   const { suggestedImprovements, recommendedTopics, practiceProblems } = activeAssessment;
 
   return (
-    <div className="space-y-6 pb-12 animate-fadeIn">
+    <div className="space-y-6 pb-12 animate-fadeIn max-w-7xl mx-auto">
+      {/* Top Breadcrumb Navigation */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={goBackToDashboard}
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors p-2 hover:bg-slate-100 rounded-xl cursor-pointer"
+        >
+          <ArrowRight className="w-4 h-4 rotate-180" />
+          <span>Back to Dashboard</span>
+        </button>
+      </div>
+
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
           AI Recommendations & Practice Suite
         </h1>
         <p className="text-xs text-slate-500 mt-1">

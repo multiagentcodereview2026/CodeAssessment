@@ -15,7 +15,7 @@ import { useApp } from '../../context/AppContext';
 import { Modal } from '../common/Modal';
 
 export const StudentProfileView: React.FC = () => {
-  const { currentUser } = useApp();
+  const { currentUser, goBackToDashboard } = useApp();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [name, setName] = useState(currentUser.name);
   const [institution, setInstitution] = useState(currentUser.institution);
@@ -38,6 +38,17 @@ export const StudentProfileView: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12 animate-fadeIn">
+      {/* Top Breadcrumb Navigation */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={goBackToDashboard}
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors p-2 hover:bg-slate-100 rounded-xl cursor-pointer"
+        >
+          <Award className="w-4 h-4" />
+          <span>← Back to Dashboard</span>
+        </button>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

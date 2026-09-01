@@ -19,7 +19,7 @@ import { Assignment, Problem, Difficulty, TestCase } from '../../types';
 import { Modal } from '../common/Modal';
 
 export const AssignmentsManagerView: React.FC = () => {
-  const { assignments, addAssignment, problems, currentUser } = useApp();
+  const { assignments, addAssignment, problems, currentUser, goBackToDashboard } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [tabType, setTabType] = useState<'custom' | 'existing'>('custom');
 
@@ -180,6 +180,17 @@ export const AssignmentsManagerView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn max-w-7xl mx-auto">
+      {/* Top Breadcrumb Navigation */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={goBackToDashboard}
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-emerald-700 transition-colors p-2 hover:bg-slate-100 rounded-xl cursor-pointer"
+        >
+          <ArrowRight className="w-4 h-4 rotate-180" />
+          <span>Back to Instructor Dashboard</span>
+        </button>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-xs">
         <div>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import {
   UserProfile,
   Role,
@@ -81,7 +81,8 @@ interface AppContextType {
   currentRole: Role;
   switchRole: (role: Role) => void;
   currentView: string;
-  setCurrentView: (view: string) => void;
+  setCurrentView: (view: string, pushHistory?: boolean) => void;
+  goBackToDashboard: () => void;
   selectedProblemId: string;
   setSelectedProblemId: (id: string) => void;
   selectedProblem: Problem;
@@ -121,7 +122,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentRole, setCurrentRole] = useState<Role>('student');
   const [currentUser, setCurrentUser] = useState<UserProfile>(MOCK_STUDENT_USER);
-  const [currentView, setCurrentView] = useState<string>('dashboard');
+  const [currentView, setCurrentViewState] = useState<string>('dashboard');
   const [problems, setProblems] = useState<Problem[]>(MOCK_PROBLEMS);
   const [selectedProblemId, setSelectedProblemId] = useState<string>('prob-1');
   const [activeAssessment, setActiveAssessment] = useState<AssessmentResult>(MOCK_DEFAULT_ASSESSMENT);
@@ -139,6 +140,45 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     '📢 Instructor Notice: Prof. Sarah Miller posted a new challenge "Two Sum" for CSE-301. Please solve before May 10!'
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+
+  // Initialize browser history state
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.history.replaceState({ view: currentView, problemId: selectedProblemId }, '');
+    }
+  }, []);
+
+  // Listen to browser Back / Forward events
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state && event.state.view) {
+        setCurrentViewState(event.state.view);
+        if (event.state.problemId) {
+          setSelectedProblemId(event.state.problemId);
+        }
+      } else {
+        setCurrentViewState(currentRole === 'student' ? 'dashboard' : 'instructor-dashboard');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [currentRole]);
+
+  const setCurrentView = (view: string, pushHistory: boolean = true) => {
+    setCurrentViewState(view);
+    if (pushHistory && typeof window !== 'undefined') {
+      window.history.pushState({ view, problemId: selectedProblemId }, '', `#${view}`);
+    }
+    // Scroll window smoothly to top on view change
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const goBackToDashboard = () => {
+    setCurrentView(currentRole === 'student' ? 'dashboard' : 'instructor-dashboard');
+  };
 
   const switchRole = (role: Role) => {
     setCurrentRole(role);
@@ -291,6 +331,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         switchRole,
         currentView,
         setCurrentView,
+        goBackToDashboard,
         selectedProblemId,
         setSelectedProblemId,
         selectedProblem,

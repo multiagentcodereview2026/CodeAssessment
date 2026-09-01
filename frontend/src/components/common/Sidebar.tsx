@@ -140,7 +140,7 @@ export const Sidebar: React.FC = () => {
 
   return (
     <>
-      <aside className="w-60 flex-shrink-0 bg-white border-r border-slate-200/80 min-h-[calc(100vh-4rem)] hidden md:block">
+      <aside className="w-60 flex-shrink-0 bg-white border-r border-slate-200/80 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto hidden md:block select-none z-30">
         {navContent}
       </aside>
 

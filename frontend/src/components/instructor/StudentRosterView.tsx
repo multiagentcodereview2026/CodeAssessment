@@ -19,7 +19,7 @@ import { StudentRosterItem } from '../../types';
 import { Modal } from '../common/Modal';
 
 export const StudentRosterView: React.FC = () => {
-  const { studentRoster, selectedStudent, setSelectedStudent } = useApp();
+  const { studentRoster, selectedStudent, setSelectedStudent, goBackToDashboard } = useApp();
   const [search, setSearch] = useState('');
   const [filterTopic, setFilterTopic] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -34,7 +34,18 @@ export const StudentRosterView: React.FC = () => {
   });
 
   return (
-    <div className="space-y-6 pb-12 animate-fadeIn">
+    <div className="space-y-6 pb-12 animate-fadeIn max-w-7xl mx-auto">
+      {/* Top Breadcrumb Navigation */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={goBackToDashboard}
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-emerald-700 transition-colors p-2 hover:bg-slate-100 rounded-xl cursor-pointer"
+        >
+          <UserCheck className="w-4 h-4" />
+          <span>← Back to Instructor Dashboard</span>
+        </button>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

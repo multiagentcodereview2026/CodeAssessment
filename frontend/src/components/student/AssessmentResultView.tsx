@@ -29,6 +29,7 @@ export const AssessmentResultView: React.FC = () => {
   const {
     activeAssessment,
     setCurrentView,
+    goBackToDashboard,
     openProblemWorkspace
   } = useApp();
 
@@ -55,11 +56,11 @@ export const AssessmentResultView: React.FC = () => {
       {/* Top Header & Breadcrumb */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <button
-          onClick={() => setCurrentView(isAssignedSubmission ? 'problems' : 'recommendations')}
-          className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors"
+          onClick={goBackToDashboard}
+          className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors p-2 hover:bg-slate-100 rounded-xl cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>{isAssignedSubmission ? 'Back to Coursework Problems' : 'Back to Practice Bank'}</span>
+          <span>Back to Dashboard</span>
         </button>
 
         <div className="flex items-center gap-3">

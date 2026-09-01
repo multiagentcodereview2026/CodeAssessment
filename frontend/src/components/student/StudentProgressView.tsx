@@ -19,7 +19,7 @@ import { ScoreTrendLineChart } from '../common/ChartComponents';
 import { DifficultyBadge } from '../common/Badge';
 
 export const StudentProgressView: React.FC = () => {
-  const { studentProgress, problems, openProblemWorkspace } = useApp();
+  const { studentProgress, problems, openProblemWorkspace, goBackToDashboard } = useApp();
   // Strictly only 2 independent modes: 'assigned' (Instructor Coursework) vs 'practice' (Self-Paced Practice). NO 'all' tab.
   const [activeTab, setActiveTab] = useState<'assigned' | 'practice'>('assigned');
 
@@ -59,6 +59,17 @@ export const StudentProgressView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn max-w-7xl mx-auto">
+      {/* Top Breadcrumb Navigation */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={goBackToDashboard}
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors p-2 hover:bg-slate-100 rounded-xl cursor-pointer"
+        >
+          <ArrowRight className="w-4 h-4 rotate-180" />
+          <span>Back to Dashboard</span>
+        </button>
+      </div>
+
       {/* Header & Independent Mode Selector */}
       <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
