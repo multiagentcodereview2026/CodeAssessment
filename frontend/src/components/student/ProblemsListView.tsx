@@ -41,13 +41,12 @@ export const ProblemsListView: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isInstructor = location.pathname.startsWith('/instructor');
-  const { openProblemWorkspace, submissions, courses } = useApp();
+  const { openProblemWorkspace, submissions, courses, problems, addProblem, updateProblem, deleteProblem } = useApp();
 
   const [activeTab, setActiveTab] = useState<'instructor' | 'practice'>('instructor');
   const [search, setSearch] = useState('');
   const [difficultyFilter, setDifficultyFilter] = useState<string>('all');
   const [selectedTag, setSelectedTag] = useState<string>('all');
-  const [problems, setProblems] = useState<Problem[]>(MOCK_PROBLEMS);
 
   // Question Creator / Customizer Modal State
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
@@ -208,26 +207,22 @@ export const ProblemsListView: React.FC = () => {
 
     if (editingProblemId) {
       // Update existing problem
-      setProblems(prev =>
-        prev.map(p => {
-          if (p.id === editingProblemId) {
-            return {
-              ...p,
-              title: formTitle.trim(),
-              description: formDescription.trim(),
-              difficulty: formDifficulty,
-              courseCode: formCourseCode,
-              tags: parsedTags.length > 0 ? parsedTags : ['Algorithms'],
-              optimalComplexity: {
-                time: formTimeComp.trim() || 'O(N)',
-                space: formSpaceComp.trim() || 'O(1)'
-              },
-              testCases: formattedTestCases
-            };
-          }
-          return p;
-        })
-      );
+      const existing = problems.find(p => p.id === editingProblemId);
+      if (existing) {
+        updateProblem({
+          ...existing,
+          title: formTitle.trim(),
+          description: formDescription.trim(),
+          difficulty: formDifficulty,
+          courseCode: formCourseCode,
+          tags: parsedTags.length > 0 ? parsedTags : ['Algorithms'],
+          optimalComplexity: {
+            time: formTimeComp.trim() || 'O(N)',
+            space: formSpaceComp.trim() || 'O(1)'
+          },
+          testCases: formattedTestCases
+        });
+      }
     } else {
       // Create new problem
       const newProblem: Problem = {
@@ -252,7 +247,7 @@ export const ProblemsListView: React.FC = () => {
         testCases: formattedTestCases
       };
 
-      setProblems([newProblem, ...problems]);
+      addProblem(newProblem);
     }
 
     setIsQuestionModalOpen(false);
@@ -261,7 +256,7 @@ export const ProblemsListView: React.FC = () => {
   // Delete Problem
   const handleDeleteProblem = (probId: string) => {
     if (window.confirm('Are you sure you want to remove this problem from the problem bank?')) {
-      setProblems(problems.filter(p => p.id !== probId));
+      deleteProblem(probId);
     }
   };
 

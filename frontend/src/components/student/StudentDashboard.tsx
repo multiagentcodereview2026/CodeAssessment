@@ -22,11 +22,14 @@ export const StudentDashboard: React.FC = () => {
     currentUser,
     studentProgress,
     submissions,
+    problems,
     openProblemWorkspace,
     openAssessmentResult
   } = useApp();
 
-  const handleResumeChallenge = (probId: string = 'prob-1') => {
+  const activeProblem = problems[0] || MOCK_PROBLEMS[0];
+
+  const handleResumeChallenge = (probId: string = activeProblem.id) => {
     openProblemWorkspace(probId);
     navigate(`/problems/${probId}`);
   };
@@ -38,8 +41,8 @@ export const StudentDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
-      {/* Top Welcome Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 p-6 sm:p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
+      {/* Top Banner (Clean Greeting & Primary CTAs - Jakob's & Fitts's Law) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-full bg-gradient-to-l from-indigo-500/10 to-transparent pointer-events-none" />
         
         <div className="relative z-10">
@@ -50,11 +53,11 @@ export const StudentDashboard: React.FC = () => {
 
         <div className="flex items-center gap-3 relative z-10">
           <button
-            onClick={() => handleResumeChallenge('prob-1')}
+            onClick={() => handleResumeChallenge(activeProblem.id)}
             className="px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
           >
             <Zap className="w-4 h-4 text-amber-300" />
-            <span>Resume "Two Sum"</span>
+            <span>Resume "{activeProblem.title}"</span>
           </button>
         </div>
       </div>
@@ -298,12 +301,12 @@ export const StudentDashboard: React.FC = () => {
             onClick={() => navigate('/problems')}
             className="text-xs font-bold text-indigo-600 hover:underline cursor-pointer"
           >
-            See All Problems ({MOCK_PROBLEMS.length})
+            See All Problems ({problems.length})
           </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {MOCK_PROBLEMS.slice(0, 3).map((prob) => (
+          {problems.slice(0, 3).map((prob) => (
             <div
               key={prob.id}
               onClick={() => handleResumeChallenge(prob.id)}

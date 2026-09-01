@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import {
   UserProfile,
   Role,
@@ -34,7 +34,7 @@ export const INITIAL_COURSES: CourseItem[] = [
     title: 'Data Structures & Algorithms',
     term: 'Spring 2026',
     studentsCount: 48,
-    activeAssignments: 3,
+    activeAssignments: 4,
     avgGrade: '74.3%'
   },
   {
@@ -61,6 +61,10 @@ interface AppContextType {
   switchRole: (role: Role) => void;
   currentView: string;
   setCurrentView: (view: string) => void;
+  problems: Problem[];
+  addProblem: (problem: Problem) => void;
+  updateProblem: (problem: Problem) => void;
+  deleteProblem: (id: string) => void;
   selectedProblemId: string;
   setSelectedProblemId: (id: string) => void;
   selectedProblem: Problem;
@@ -99,6 +103,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentRole, setCurrentRole] = useState<Role>('student');
   const [currentUser, setCurrentUser] = useState<UserProfile>(MOCK_STUDENT_USER);
   const [currentView, setCurrentView] = useState<string>('dashboard');
+
+  // Shared persistent problems state
+  const [problems, setProblems] = useState<Problem[]>(() => {
+    try {
+      const saved = localStorage.getItem('codevedha_problems');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return MOCK_PROBLEMS;
+  });
+
   const [selectedProblemId, setSelectedProblemId] = useState<string>('prob-1');
   const [activeAssessment, setActiveAssessment] = useState<AssessmentResult>(MOCK_DEFAULT_ASSESSMENT);
   const [submissions, setSubmissions] = useState<SubmissionItem[]>(MOCK_RECENT_SUBMISSIONS);
@@ -112,6 +126,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [instructorStats, setInstructorStats] = useState(MOCK_INSTRUCTOR_STATS);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [toasts, setToasts] = useState<ToastInfo[]>([]);
+
+  // Sync problems to localStorage on change
+  useEffect(() => {
+    try {
+      localStorage.setItem('codevedha_problems', JSON.stringify(problems));
+    } catch {}
+  }, [problems]);
 
   const showToast = (message: string, type: 'success' | 'info' | 'warning' | 'error' = 'success') => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
@@ -152,7 +173,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     showToast('Signed out successfully', 'info');
   };
 
-  const selectedProblem = MOCK_PROBLEMS.find(p => p.id === selectedProblemId) || MOCK_PROBLEMS[0];
+  const addProblem = (newProb: Problem) => {
+    setProblems(prev => [newProb, ...prev]);
+    showToast(`Question "${newProb.title}" published to Problem Bank!`, 'success');
+  };
+
+  const updateProblem = (updatedProb: Problem) => {
+    setProblems(prev => prev.map(p => (p.id === updatedProb.id ? updatedProb : p)));
+    showToast(`Question "${updatedProb.title}" updated successfully!`, 'success');
+  };
+
+  const deleteProblem = (id: string) => {
+    setProblems(prev => prev.filter(p => p.id !== id));
+    showToast('Question removed from Problem Bank', 'info');
+  };
+
+  const selectedProblem = problems.find(p => p.id === selectedProblemId) || problems[0] || MOCK_PROBLEMS[0];
 
   const openProblemWorkspace = (problemId: string) => {
     setSelectedProblemId(problemId);
@@ -200,15 +236,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       ...prev,
       activeAssignments: prev.activeAssignments + 1
     }));
-    
-    // Also increment active assignment count on corresponding course if match
-    setCourses(prev => prev.map(c => {
-      if (newAssignment.course.includes(c.code)) {
-        return { ...c, activeAssignments: c.activeAssignments + 1 };
-      }
-      return c;
-    }));
-
     showToast(`Assignment "${newAssignment.title}" published!`, 'success');
   };
 
@@ -258,6 +285,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         switchRole,
         currentView,
         setCurrentView,
+        problems,
+        addProblem,
+        updateProblem,
+        deleteProblem,
         selectedProblemId,
         setSelectedProblemId,
         selectedProblem,
