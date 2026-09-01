@@ -7,7 +7,8 @@ import {
   ChevronDown,
   LogOut,
   ShieldCheck,
-  User
+  User,
+  Menu
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -15,10 +16,10 @@ export const Navbar: React.FC = () => {
   const {
     currentUser,
     currentRole,
-    switchRole,
     logout,
     setCurrentView,
-    similarityAlerts
+    similarityAlerts,
+    setMobileMenuOpen
   } = useApp();
 
   const [profileOpen, setProfileOpen] = useState(false);
@@ -27,8 +28,17 @@ export const Navbar: React.FC = () => {
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200 shadow-xs">
       <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-        {/* Left: Brand Logo */}
+        {/* Left: Mobile Toggle & Brand Logo */}
         <div className="flex items-center gap-3">
+          {/* Mobile hamburger button */}
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl md:hidden transition-colors"
+            title="Open Menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
           <div
             onClick={() => setCurrentView(currentRole === 'student' ? 'dashboard' : 'instructor-dashboard')}
             className="flex items-center gap-2.5 cursor-pointer group"

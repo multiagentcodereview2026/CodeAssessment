@@ -58,6 +58,8 @@ interface AppContextType {
   openAssessmentResult: (submissionId?: string) => void;
   activeBroadcast: string | null;
   dismissBroadcast: () => void;
+  mobileMenuOpen: boolean;
+  setMobileMenuOpen: (open: boolean) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -179,6 +181,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setActiveBroadcast(null);
   };
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+
   return (
     <AppContext.Provider
       value={{
@@ -212,7 +216,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         openProblemWorkspace,
         openAssessmentResult,
         activeBroadcast,
-        dismissBroadcast
+        dismissBroadcast,
+        mobileMenuOpen,
+        setMobileMenuOpen
       }}
     >
       {children}

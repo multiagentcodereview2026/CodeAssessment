@@ -26,6 +26,8 @@ import { AssessmentResult, SubmissionItem } from '../../types';
 export const ProblemWorkspace: React.FC = () => {
   const {
     selectedProblem,
+    problems,
+    setSelectedProblemId,
     setCurrentView,
     addSubmission
   } = useApp();
@@ -298,19 +300,53 @@ public:
         </div>
       )}
 
-      {/* Top Breadcrumb & Action bar */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={() => setCurrentView('dashboard')}
-          className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Dashboard</span>
-        </button>
+      {/* Top Breadcrumb & Quick Problem Selector */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setCurrentView('dashboard')}
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors p-1.5 hover:bg-slate-100 rounded-lg"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Dashboard</span>
+          </button>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">Auto-saved to Sandbox</span>
-          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+          <span className="text-slate-300">/</span>
+
+          {/* Quick Problem Selector */}
+          <select
+            value={selectedProblem.id}
+            onChange={(e) => {
+              setSelectedProblemId(e.target.value);
+              const targetProb = problems.find(p => p.id === e.target.value);
+              if (targetProb && targetProb.starterCode[language]) {
+                setCode(targetProb.starterCode[language]);
+              }
+              setRunOutput(null);
+            }}
+            className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer"
+          >
+            {problems.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title} ({p.difficulty}) {p.origin === 'instructor_assigned' ? '• 🎓 Coursework' : '• 💡 Practice'}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-3 self-end sm:self-auto">
+          <button
+            onClick={() => setCurrentView('scores')}
+            className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Problem Score Analysis</span>
+          </button>
+
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 pl-2 border-l border-slate-200">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="hidden sm:inline">Sandbox Active</span>
+          </div>
         </div>
       </div>
 

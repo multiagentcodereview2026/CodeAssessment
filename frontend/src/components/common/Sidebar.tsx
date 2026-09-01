@@ -15,30 +15,37 @@ import {
   ShieldAlert,
   FileSpreadsheet,
   BookOpen,
-  Cpu
+  Cpu,
+  X
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export const Sidebar: React.FC = () => {
-  const { currentRole, currentView, setCurrentView, similarityAlerts } = useApp();
+  const {
+    currentRole,
+    currentView,
+    setCurrentView,
+    similarityAlerts,
+    mobileMenuOpen,
+    setMobileMenuOpen
+  } = useApp();
 
   const studentNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'problems', label: 'Problems', icon: Code2 },
+    { id: 'problems', label: 'Problem Bank', icon: Code2 },
     { id: 'submissions', label: 'Submissions', icon: ListOrdered },
-    { id: 'scores', label: 'Scores & Analytics', icon: LineChart },
-    { id: 'feedback', label: 'Feedback', icon: MessageSquareText },
-    { id: 'recommendations', label: 'Recommendations', icon: Lightbulb },
-    { id: 'progress', label: 'Progress', icon: TrendingUp },
+    { id: 'scores', label: 'Problem Scores', icon: LineChart },
+    { id: 'progress', label: 'Learning Progress', icon: TrendingUp },
+    { id: 'recommendations', label: 'AI Recommendations', icon: Lightbulb },
+    { id: 'feedback', label: 'Feedback History', icon: MessageSquareText },
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
 
   const instructorNavItems = [
     { id: 'instructor-dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'instructor-courses', label: 'Courses', icon: BookOpen },
-    { id: 'instructor-students', label: 'Students', icon: Users },
-    { id: 'instructor-assignments', label: 'Assignments', icon: CalendarCheck },
+    { id: 'instructor-students', label: 'Assigned Students (48)', icon: Users },
+    { id: 'instructor-assignments', label: 'Assignments Dispatch', icon: CalendarCheck },
     { id: 'instructor-problems', label: 'Problem Bank', icon: Code2 },
     { id: 'instructor-analytics', label: 'Class Analytics', icon: BarChart3 },
     {
@@ -47,15 +54,34 @@ export const Sidebar: React.FC = () => {
       icon: ShieldAlert,
       badge: similarityAlerts.length > 0 ? similarityAlerts.length : undefined
     },
-    { id: 'instructor-reports', label: 'Reports', icon: FileSpreadsheet },
+    { id: 'instructor-courses', label: 'Courses & Cohorts', icon: BookOpen },
+    { id: 'instructor-reports', label: 'Reports Export', icon: FileSpreadsheet },
     { id: 'instructor-settings', label: 'Settings', icon: Settings }
   ];
 
   const navItems = currentRole === 'student' ? studentNavItems : instructorNavItems;
 
-  return (
-    <aside className="w-64 flex-shrink-0 bg-white border-r border-slate-200 min-h-[calc(100vh-4rem)] flex flex-col justify-between p-4 hidden md:flex">
-      <div className="space-y-6">
+  const handleNavClick = (viewId: string) => {
+    setCurrentView(viewId);
+    setMobileMenuOpen(false);
+  };
+
+  const navContent = (
+    <div className="flex flex-col justify-between h-full p-4">
+      <div className="space-y-5">
+        {/* Mobile Header with close button */}
+        <div className="flex md:hidden items-center justify-between pb-3 border-b border-slate-100">
+          <span className="font-extrabold text-sm text-slate-800">
+            Navigation Menu
+          </span>
+          <button
+            onClick={() => setMobileMenuOpen(false)}
+            className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
         {/* Role identifier badge */}
         <div className="px-3 py-2 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -73,13 +99,16 @@ export const Sidebar: React.FC = () => {
         <nav className="space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = currentView === item.id || (item.id === 'problems' && currentView === 'workspace') || (item.id === 'submissions' && currentView === 'result');
+            const isActive =
+              currentView === item.id ||
+              (item.id === 'problems' && currentView === 'workspace') ||
+              (item.id === 'submissions' && currentView === 'result');
 
             return (
               <button
                 key={item.id}
-                onClick={() => setCurrentView(item.id)}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                onClick={() => handleNavClick(item.id)}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                   isActive
                     ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
@@ -118,6 +147,31 @@ export const Sidebar: React.FC = () => {
           </div>
         </div>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop Persistent Sidebar */}
+      <aside className="w-64 flex-shrink-0 bg-white border-r border-slate-200 min-h-[calc(100vh-4rem)] hidden md:block">
+        {navContent}
+      </aside>
+
+      {/* Mobile Drawer (Visible when hamburger is clicked) */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex animate-fadeIn">
+          {/* Backdrop */}
+          <div
+            onClick={() => setMobileMenuOpen(false)}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+          />
+
+          {/* Drawer Body */}
+          <div className="relative w-72 max-w-[85vw] bg-white h-full shadow-2xl z-10 animate-slideRight">
+            {navContent}
+          </div>
+        </div>
+      )}
+    </>
   );
 };

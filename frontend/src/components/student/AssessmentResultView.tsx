@@ -56,6 +56,13 @@ export const AssessmentResultView: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <button
+            onClick={() => setCurrentView('scores')}
+            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Problem Score Analytics</span>
+          </button>
+          <button
             onClick={() => window.print()}
             className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
           >
