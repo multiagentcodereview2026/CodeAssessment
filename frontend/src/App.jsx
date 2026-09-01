@@ -76,7 +76,7 @@ function AppRoutes() {
           <Route path="dashboard" element={<InstructorDashboard />} />
           <Route path="courses" element={<CoursesManagerView />} />
           <Route path="students" element={<StudentRosterView />} />
-          <Route path="assignments" element={<AssignmentsManagerView />} />
+          <Route path="assignments" element={<Navigate to="/instructor/problems" replace />} />
           <Route path="problems" element={<ProblemsListView />} />
           <Route path="analytics" element={<ClassAnalyticsView />} />
           <Route path="similarity" element={<SimilarityReviewView />} />

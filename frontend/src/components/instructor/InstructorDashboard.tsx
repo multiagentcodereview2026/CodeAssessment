@@ -41,11 +41,11 @@ export const InstructorDashboard: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-3 relative z-10">
           <button
-            onClick={() => navigate('/instructor/assignments')}
+            onClick={() => navigate('/instructor/problems')}
             className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>Create Assignment</span>
+            <span>Create Question</span>
           </button>
           <button
             onClick={() => navigate('/instructor/reports')}
@@ -81,13 +81,13 @@ export const InstructorDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Active Assignments */}
+        {/* Active Questions */}
         <div
-          onClick={() => navigate('/instructor/assignments')}
+          onClick={() => navigate('/instructor/problems')}
           className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs hover:border-emerald-300 card-hover cursor-pointer transition-all"
         >
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold text-slate-500">Active Assignments</span>
+            <span className="text-xs font-semibold text-slate-500">Active Questions</span>
             <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
               <CalendarCheck className="w-4 h-4" />
             </div>
@@ -98,7 +98,7 @@ export const InstructorDashboard: React.FC = () => {
           <div className="mt-2 text-xs text-emerald-600 font-semibold flex items-center justify-between">
             <span>All sandboxes active</span>
             <span className="text-emerald-700 font-semibold flex items-center gap-0.5">
-              Manage <ChevronRight className="w-3 h-3" />
+              Problem Bank <ChevronRight className="w-3 h-3" />
             </span>
           </div>
         </div>
@@ -218,11 +218,11 @@ export const InstructorDashboard: React.FC = () => {
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Active Course Assignments</h3>
+                <h3 className="text-base font-bold text-slate-900">Active Course Problems</h3>
                 <p className="text-xs text-slate-400 mt-0.5">Real-time submission & grading progress</p>
               </div>
               <button
-                onClick={() => navigate('/instructor/assignments')}
+                onClick={() => navigate('/instructor/problems')}
                 className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 cursor-pointer"
               >
                 <span>View All</span>

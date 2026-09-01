@@ -104,10 +104,10 @@ export const CoursesManagerView: React.FC = () => {
                 </div>
 
                 <div
-                  onClick={() => navigate('/instructor/assignments')}
+                  onClick={() => navigate('/instructor/problems')}
                   className="p-3 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-emerald-50/50 cursor-pointer transition-colors"
                 >
-                  <span className="text-[10px] text-slate-400 font-semibold block">Assignments</span>
+                  <span className="text-[10px] text-slate-400 font-semibold block">Questions</span>
                   <span className="text-base font-extrabold text-slate-800 font-mono mt-0.5 block">
                     {course.activeAssignments}
                   </span>
@@ -135,7 +135,7 @@ export const CoursesManagerView: React.FC = () => {
               </button>
 
               <button
-                onClick={() => navigate('/instructor/assignments')}
+                onClick={() => navigate('/instructor/problems')}
                 className="px-4 py-2 bg-slate-900 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer"
               >
                 Manage Class

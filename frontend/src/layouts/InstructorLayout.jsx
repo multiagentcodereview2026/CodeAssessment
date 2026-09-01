@@ -50,7 +50,6 @@ const InstructorLayout = () => {
     { name: 'Dashboard', path: '/instructor/dashboard', icon: LayoutDashboard },
     { name: 'Courses', path: '/instructor/courses', icon: BookOpen },
     { name: 'Student Roster', path: '/instructor/students', icon: Users },
-    { name: 'Assignments', path: '/instructor/assignments', icon: CalendarCheck },
     { name: 'Problem Bank', path: '/instructor/problems', icon: Code2 },
     { name: 'Class Analytics', path: '/instructor/analytics', icon: BarChart3 },
     { name: 'Similarity & Plagiarism', path: '/instructor/similarity', icon: ShieldAlert },
@@ -188,7 +187,7 @@ const InstructorLayout = () => {
                       <div 
                         onClick={() => {
                           setNotifOpen(false);
-                          navigate('/instructor/assignments');
+                          navigate('/instructor/problems');
                         }}
                         className="p-3 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border border-slate-200/70 cursor-pointer transition-colors space-y-1"
                       >
