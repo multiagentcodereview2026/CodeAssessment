@@ -17,20 +17,15 @@ import {
 import { useApp } from '../../context/AppContext';
 import { CircularGauge } from '../common/CircularGauge';
 import { ScoreTrendLineChart, CategoryDonutChart } from '../common/ChartComponents';
+import { TOPIC_MASTERY, RUBRIC_AGENTS } from '../../data/learningInsights';
 
 export const AnalyticsProgressView: React.FC = () => {
   const navigate = useNavigate();
   const { studentProgress } = useApp();
   const [timeframe, setTimeframe] = useState<'month' | 'semester' | 'all'>('month');
 
-  const topicMastery = [
-    { name: 'Arrays & Two Pointers', mastery: 95, color: '#10b981' },
-    { name: 'Hash Map & Lookup', mastery: 90, color: '#3b82f6' },
-    { name: 'Linked Lists & Pointers', mastery: 80, color: '#06b6d4' },
-    { name: 'Trees & DFS/BFS', mastery: 75, color: '#8b5cf6' },
-    { name: 'Graphs & Topological Sort', mastery: 50, color: '#f59e0b' },
-    { name: 'Dynamic Programming & Memo', mastery: 45, color: '#ef4444' }
-  ];
+  const topicMastery = TOPIC_MASTERY;
+  const lowestTopic = [...topicMastery].sort((a, b) => a.mastery - b.mastery)[0];
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
@@ -55,6 +50,39 @@ export const AnalyticsProgressView: React.FC = () => {
             <option value="semester">Spring Semester 2026</option>
             <option value="all">All-Time Cumulative</option>
           </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-amber-200/80 p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <span className="text-xs font-extrabold uppercase text-amber-700">Next Study Sprint</span>
+            <h2 className="mt-1 text-lg font-extrabold text-slate-900">{lowestTopic.name}</h2>
+            <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+              Mastery is currently {lowestTopic.mastery}%. {lowestTopic.nextAction}
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/feedback?tab=practice')}
+            className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <span>Open Practice Plan</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
+          <span className="text-xs font-extrabold uppercase text-slate-500">Evaluator Coverage</span>
+          <div className="mt-3 grid grid-cols-5 gap-1.5">
+            {RUBRIC_AGENTS.map((agent) => (
+              <div key={agent.key} className="h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-700">
+                {agent.key.slice(0, 2).toUpperCase()}
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">
+            Every submission is explained through five independent evaluator outputs.
+          </p>
         </div>
       </div>
 

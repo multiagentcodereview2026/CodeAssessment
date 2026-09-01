@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Code2,
@@ -17,15 +17,11 @@ import {
   Edit3,
   Trash2,
   AlertTriangle,
-  Award,
   ShieldAlert,
   FileCheck2,
-  Check,
-  Eye,
-  EyeOff
+  Check
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { MOCK_PROBLEMS } from '../../mock/data';
 import { DifficultyBadge } from '../common/Badge';
 import { Modal } from '../common/Modal';
 import { Problem, Difficulty } from '../../types';
@@ -68,35 +64,6 @@ export const ProblemsListView: React.FC = () => {
   // Question Specific Analytics Modal State
   const [selectedProblemForAnalytics, setSelectedProblemForAnalytics] = useState<Problem | null>(null);
 
-  // Sync problems from API if available, falling back to mock problems
-  useEffect(() => {
-    fetch('/api/problems')
-      .then(res => {
-        if (res.ok) return res.json();
-        return null;
-      })
-      .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          const merged = MOCK_PROBLEMS.map(mockP => {
-            const apiMatch = data.find((d: any) => d.problem_id === mockP.slug || d.problem_id === mockP.id);
-            if (apiMatch) {
-              return {
-                ...mockP,
-                title: apiMatch.title || mockP.title,
-                difficulty: apiMatch.difficulty || mockP.difficulty,
-                description: apiMatch.description || mockP.description,
-                isInstructorAssigned: true,
-                courseCode: 'CS201'
-              };
-            }
-            return mockP;
-          });
-          setProblems(merged);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
   const allTags = Array.from(new Set(problems.flatMap((p) => p.tags)));
   const solvedSlugs = new Set(submissions.map(s => s.problemSlug || s.problemId));
 
@@ -118,6 +85,12 @@ export const ProblemsListView: React.FC = () => {
   });
 
   const hasActiveFilters = search !== '' || difficultyFilter !== 'all' || selectedTag !== 'all';
+  const selectedTabCount = activeTab === 'instructor' ? instructorCount : practiceCount;
+  const completionCount = filtered.filter(p => solvedSlugs.has(p.slug) || solvedSlugs.has(p.id)).length;
+  const hiddenCaseCount = filtered.reduce((count, p) => count + p.testCases.filter(tc => tc.isHidden).length, 0);
+  const focusLabel = activeTab === 'instructor'
+    ? 'Finish assigned work before the deadline, then inspect the AI report for revision gains.'
+    : 'Use standard practice to reinforce topics the evaluator marks as weak.';
 
   const handleClearFilters = () => {
     setSearch('');
@@ -200,9 +173,11 @@ export const ProblemsListView: React.FC = () => {
       .map(t => t.trim())
       .filter(Boolean);
 
-    const formattedTestCases = formTestCases.map(tc => ({
+    const formattedTestCases = formTestCases.map((tc, idx) => ({
+      id: tc.id || `tc-${Date.now()}-${idx + 1}`,
       input: tc.input || 'nums = [1, 2, 3]',
-      expectedOutput: tc.output || '[0, 1]'
+      expectedOutput: tc.output || '[0, 1]',
+      isHidden: tc.isHidden
     }));
 
     if (editingProblemId) {
@@ -215,6 +190,7 @@ export const ProblemsListView: React.FC = () => {
           description: formDescription.trim(),
           difficulty: formDifficulty,
           courseCode: formCourseCode,
+          dueDate: formDueDate,
           tags: parsedTags.length > 0 ? parsedTags : ['Algorithms'],
           optimalComplexity: {
             time: formTimeComp.trim() || 'O(N)',
@@ -232,9 +208,12 @@ export const ProblemsListView: React.FC = () => {
         difficulty: formDifficulty,
         acceptanceRate: '0.0%',
         description: formDescription.trim() || 'Solve this algorithmic challenge with optimal time and space complexity.',
+        examples: [],
+        constraints: [],
         tags: parsedTags.length > 0 ? parsedTags : ['Algorithms'],
         isInstructorAssigned: true,
         courseCode: formCourseCode,
+        dueDate: formDueDate,
         optimalComplexity: {
           time: formTimeComp.trim() || 'O(N)',
           space: formSpaceComp.trim() || 'O(1)'
@@ -244,6 +223,7 @@ export const ProblemsListView: React.FC = () => {
           python: '# Starter code template\nclass Solution:\n    def solve(self):\n        pass',
           java: '// Starter code template\nclass Solution {\n    public void solve() {\n        // Your code here\n    }\n}'
         },
+        solutionCode: {},
         testCases: formattedTestCases
       };
 
@@ -323,6 +303,52 @@ export const ProblemsListView: React.FC = () => {
             {practiceCount}
           </span>
         </button>
+      </div>
+
+      {/* Queue Intelligence */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500">Current Queue</span>
+            <Layers className="w-4 h-4 text-indigo-500" />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-extrabold text-slate-900 font-mono">{selectedTabCount}</span>
+            <span className="text-xs text-slate-500">{activeTab === 'instructor' ? 'assigned questions' : 'practice drills'}</span>
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-500">{focusLabel}</p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500">Visible Progress</span>
+            <Check className="w-4 h-4 text-emerald-500" />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-extrabold text-slate-900 font-mono">{completionCount}</span>
+            <span className="text-xs text-slate-500">matched as solved</span>
+          </div>
+          <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-emerald-500"
+              style={{ width: `${filtered.length ? Math.round((completionCount / filtered.length) * 100) : 0}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500">Assessment Coverage</span>
+            <ShieldAlert className="w-4 h-4 text-amber-500" />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-extrabold text-slate-900 font-mono">{hiddenCaseCount}</span>
+            <span className="text-xs text-slate-500">hidden edge tests</span>
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+            Cards expose complexity targets so students solve for quality, not just visible samples.
+          </p>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -427,7 +453,7 @@ export const ProblemsListView: React.FC = () => {
                     {prob.isInstructorAssigned ? (
                       <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-amber-900 bg-amber-50 border border-amber-300 px-3 py-1 rounded-xl shadow-xs">
                         <Calendar className="w-3.5 h-3.5 text-amber-600" />
-                        <span>Due: 15 May, 2026</span>
+                        <span>Due: {prob.dueDate || '15 May, 2026'}</span>
                       </span>
                     ) : (
                       <DifficultyBadge difficulty={prob.difficulty} />
@@ -466,6 +492,21 @@ export const ProblemsListView: React.FC = () => {
                     </span>
                   </div>
 
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div className="rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-2">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Tests</span>
+                      <span className="text-[11px] font-mono font-bold text-slate-700">
+                        {prob.testCases.filter(tc => !tc.isHidden).length} public / {prob.testCases.filter(tc => tc.isHidden).length} hidden
+                      </span>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-2">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Target</span>
+                      <span className="text-[11px] font-mono font-bold text-slate-700">
+                        {prob.optimalComplexity.time}, {prob.optimalComplexity.space}
+                      </span>
+                    </div>
+                  </div>
+
                   {/* Title */}
                   <h3
                     onClick={() => {
@@ -502,7 +543,7 @@ export const ProblemsListView: React.FC = () => {
                 <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
                     <Clock className="w-3 h-3 text-slate-400" />
-                    <span>Opt: {prob.optimalComplexity.time}</span>
+                    <span>{prob.isInstructorAssigned ? `Due ${prob.dueDate || '15 May, 2026'}` : `Opt: ${prob.optimalComplexity.time}`}</span>
                   </div>
 
                   {isInstructor ? (

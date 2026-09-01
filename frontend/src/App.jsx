@@ -19,7 +19,6 @@ import { StudentProfileView } from './components/student/StudentProfileView';
 import { InstructorDashboard } from './components/instructor/InstructorDashboard';
 import { CoursesManagerView } from './components/instructor/CoursesManagerView';
 import { StudentRosterView } from './components/instructor/StudentRosterView';
-import { AssignmentsManagerView } from './components/instructor/AssignmentsManagerView';
 import { ClassAnalyticsView } from './components/instructor/ClassAnalyticsView';
 import { SimilarityReviewView } from './components/instructor/SimilarityReviewView';
 import { ReportsExportView } from './components/instructor/ReportsExportView';

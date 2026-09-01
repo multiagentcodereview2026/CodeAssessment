@@ -46,6 +46,7 @@ export interface Problem {
   };
   isInstructorAssigned?: boolean;
   courseCode?: string;
+  dueDate?: string;
 }
 
 export interface TestCaseResult {
@@ -238,3 +239,13 @@ export interface CourseItem {
   avgGrade: string;
 }
 
+export interface AnnouncementItem {
+  id: string;
+  title: string;
+  message: string;
+  problemId?: string;
+  courseCode?: string;
+  dueDate?: string;
+  createdAt: string;
+  read: boolean;
+}

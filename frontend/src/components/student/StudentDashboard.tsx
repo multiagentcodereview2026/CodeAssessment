@@ -10,7 +10,11 @@ import {
   Zap,
   ChevronRight,
   Clock,
-  Target
+  Target,
+  BookOpen,
+  FileText,
+  BellRing,
+  X
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { StatusBadge } from '../common/Badge';
@@ -23,11 +27,20 @@ export const StudentDashboard: React.FC = () => {
     studentProgress,
     submissions,
     problems,
+    activeAssessment,
+    announcements,
+    dismissAnnouncement,
     openProblemWorkspace,
     openAssessmentResult
   } = useApp();
 
   const activeProblem = problems[0] || MOCK_PROBLEMS[0];
+  const latestSubmission = submissions[0];
+  const assignedProblems = problems.filter((problem) => problem.isInstructorAssigned);
+  const weakTopic = studentProgress.weakTopics[0] || activeProblem.tags[0] || 'Algorithms';
+  const solvedPercent = Math.round((studentProgress.problemsSolved / studentProgress.totalProblems) * 100);
+  const projection = activeAssessment.scoreProjection;
+  const latestAnnouncement = announcements.find((item) => !item.read);
 
   const handleResumeChallenge = (probId: string = activeProblem.id) => {
     openProblemWorkspace(probId);
@@ -49,6 +62,9 @@ export const StudentDashboard: React.FC = () => {
           <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
             Hello, {currentUser.name}! 👋
           </h1>
+          <p className="mt-2 max-w-2xl text-sm text-indigo-100/90 leading-relaxed">
+            Your next best move is selected from deadlines, weak-topic feedback, and the latest AI score projection.
+          </p>
         </div>
 
         <div className="flex items-center gap-3 relative z-10">
@@ -60,6 +76,98 @@ export const StudentDashboard: React.FC = () => {
             <span>Resume "{activeProblem.title}"</span>
           </button>
         </div>
+      </div>
+
+      {latestAnnouncement && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-500 text-white shadow-sm">
+              <BellRing className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-sm font-extrabold text-amber-950">{latestAnnouncement.title}</h2>
+                {latestAnnouncement.courseCode && (
+                  <span className="px-2 py-0.5 rounded-md bg-white border border-amber-200 text-[10px] font-bold text-amber-800">
+                    {latestAnnouncement.courseCode}
+                  </span>
+                )}
+                {latestAnnouncement.dueDate && (
+                  <span className="px-2 py-0.5 rounded-md bg-amber-100 border border-amber-200 text-[10px] font-bold text-amber-800">
+                    Due {latestAnnouncement.dueDate}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-amber-800 leading-relaxed">
+                {latestAnnouncement.message} It is now available in your Instructor Assigned queue.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 md:self-center">
+            {latestAnnouncement.problemId && (
+              <button
+                onClick={() => handleResumeChallenge(latestAnnouncement.problemId)}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer"
+              >
+                <span>Solve Now</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <button
+              onClick={() => dismissAnnouncement(latestAnnouncement.id)}
+              className="p-2 rounded-xl text-amber-700 hover:bg-amber-100 transition-colors cursor-pointer"
+              title="Dismiss announcement"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Personalized Learning Path */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <button
+          onClick={() => handleResumeChallenge(activeProblem.id)}
+          className="text-left bg-white rounded-2xl border border-indigo-200/80 p-5 shadow-xs hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold text-indigo-700 uppercase">1. Continue</span>
+            <Zap className="w-4 h-4 text-indigo-500" />
+          </div>
+          <h3 className="mt-2 text-sm font-bold text-slate-900">{activeProblem.title}</h3>
+          <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+            Target {activeProblem.optimalComplexity.time} time and {activeProblem.optimalComplexity.space} space before submitting.
+          </p>
+        </button>
+
+        <button
+          onClick={() => handleInspectReport(latestSubmission?.id)}
+          className="text-left bg-white rounded-2xl border border-emerald-200/80 p-5 shadow-xs hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold text-emerald-700 uppercase">2. Revise</span>
+            <FileText className="w-4 h-4 text-emerald-500" />
+          </div>
+          <h3 className="mt-2 text-sm font-bold text-slate-900">{latestSubmission?.problemTitle || activeAssessment.problemTitle}</h3>
+          <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+            AI projects +{projection.improvementDelta} points if you address {projection.focusAreas[0]?.toLowerCase() || 'the top rubric gap'}.
+          </p>
+        </button>
+
+        <button
+          onClick={() => navigate('/feedback')}
+          className="text-left bg-white rounded-2xl border border-amber-200/80 p-5 shadow-xs hover:border-amber-400 hover:shadow-md transition-all cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold text-amber-700 uppercase">3. Practice</span>
+            <BookOpen className="w-4 h-4 text-amber-500" />
+          </div>
+          <h3 className="mt-2 text-sm font-bold text-slate-900">{weakTopic}</h3>
+          <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+            Practice is routed from weak-topic detection, so your next session closes a real rubric gap.
+          </p>
+        </button>
       </div>
 
       {/* Top 4 Key Stat Cards */}
@@ -111,7 +219,7 @@ export const StudentDashboard: React.FC = () => {
                 style={{ width: `${(studentProgress.problemsSolved / studentProgress.totalProblems) * 100}%` }}
               />
             </div>
-            <span className="font-mono text-[11px] font-semibold text-slate-600">80%</span>
+            <span className="font-mono text-[11px] font-semibold text-slate-600">{solvedPercent}%</span>
           </div>
         </div>
 
@@ -176,7 +284,7 @@ export const StudentDashboard: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-600 mt-1">
-              Applying AI recommendations on <strong className="text-slate-800">Two Sum</strong> will boost your score from <span className="font-mono font-bold text-slate-800">85</span> to <span className="font-mono font-bold text-emerald-600">92/100</span>.
+              Applying AI recommendations on <strong className="text-slate-800">{activeAssessment.problemTitle}</strong> can boost your score from <span className="font-mono font-bold text-slate-800">{projection.currentScore}</span> to <span className="font-mono font-bold text-emerald-600">{projection.projectedScore}/100</span>.
             </p>
           </div>
         </div>
@@ -306,7 +414,7 @@ export const StudentDashboard: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {problems.slice(0, 3).map((prob) => (
+          {assignedProblems.slice(0, 3).map((prob) => (
             <div
               key={prob.id}
               onClick={() => handleResumeChallenge(prob.id)}
@@ -318,7 +426,7 @@ export const StudentDashboard: React.FC = () => {
                     {prob.courseCode || 'CS201'}
                   </span>
                   <span className="text-[11px] text-slate-400 font-mono">
-                    Acc: {prob.acceptanceRate}
+                    Due: {prob.dueDate || '15 May, 2026'}
                   </span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
@@ -330,6 +438,10 @@ export const StudentDashboard: React.FC = () => {
                       {tag}
                     </span>
                   ))}
+                </div>
+                <div className="mt-3 flex items-center gap-2 text-[11px] font-mono text-slate-500">
+                  <Clock className="w-3 h-3" />
+                  <span>Opt: {prob.optimalComplexity.time} / {prob.optimalComplexity.space}</span>
                 </div>
               </div>
 

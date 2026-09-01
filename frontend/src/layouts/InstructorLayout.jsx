@@ -1,10 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
   BookOpen,
-  CalendarCheck,
   Code2,
   BarChart3,
   ShieldAlert,
@@ -15,7 +14,6 @@ import {
   ChevronDown,
   GraduationCap,
   Sparkles,
-  ShieldCheck,
   AlertTriangle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -72,7 +70,7 @@ const InstructorLayout = () => {
         initial={{ x: -100, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ duration: 0.3 }}
-        className="w-64 bg-white border-r border-slate-200 fixed h-full flex flex-col z-20"
+        className="hidden md:flex w-64 bg-white border-r border-slate-200 fixed h-full flex-col z-20"
       >
         <div className="h-16 flex items-center px-6 border-b border-slate-200">
           <div className="bg-emerald-600 p-1.5 rounded-lg mr-2 shadow-sm shadow-emerald-500/30">
@@ -119,8 +117,8 @@ const InstructorLayout = () => {
       </motion.nav>
 
       {/* Main Content Area */}
-      <div className="ml-64 flex-1 flex flex-col min-h-screen">
-        <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-30 glass">
+      <div className="md:ml-64 flex-1 flex flex-col min-h-screen">
+        <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 md:px-8 sticky top-0 z-30 glass">
           <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -292,7 +290,7 @@ const InstructorLayout = () => {
           </div>
         </header>
 
-        <main className="flex-1 p-8 overflow-y-auto relative custom-scrollbar">
+        <main className="flex-1 p-4 md:p-8 pb-24 overflow-y-auto relative custom-scrollbar">
           <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-emerald-50/50 to-transparent -z-10 pointer-events-none"></div>
           <AnimatePresence mode="wait">
             <motion.div
@@ -307,6 +305,24 @@ const InstructorLayout = () => {
             </motion.div>
           </AnimatePresence>
         </main>
+      </div>
+
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur border-t border-slate-200 px-2 py-2 grid grid-cols-5 gap-1">
+        {navItems.slice(0, 5).map((item) => {
+          const isActive = location.pathname === item.path || (item.path !== '/instructor/dashboard' && location.pathname.startsWith(item.path));
+          return (
+            <Link
+              key={item.name}
+              to={item.path}
+              className={`flex flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold transition-colors ${
+                isActive ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:bg-slate-100'
+              }`}
+            >
+              <item.icon className="w-4 h-4" />
+              <span className="truncate max-w-full">{item.name.split(' ')[0]}</span>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

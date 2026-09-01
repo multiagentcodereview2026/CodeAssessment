@@ -10,7 +10,8 @@ import {
   Assignment,
   SimilarityAlert,
   ReportItem,
-  CourseItem
+  CourseItem,
+  AnnouncementItem
 } from '../types';
 import {
   MOCK_STUDENT_USER,
@@ -26,6 +27,7 @@ import {
   MOCK_INSTRUCTOR_STATS
 } from '../mock/data';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import { useAuth } from './AuthContext';
 
 export const INITIAL_COURSES: CourseItem[] = [
   {
@@ -89,6 +91,8 @@ interface AppContextType {
   reports: ReportItem[];
   generateReport: (report: ReportItem) => void;
   instructorStats: typeof MOCK_INSTRUCTOR_STATS;
+  announcements: AnnouncementItem[];
+  dismissAnnouncement: (id: string) => void;
   isAuthenticated: boolean;
   login: (role: Role) => void;
   logout: () => void;
@@ -100,6 +104,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const auth = useAuth();
   const [currentRole, setCurrentRole] = useState<Role>('student');
   const [currentUser, setCurrentUser] = useState<UserProfile>(MOCK_STUDENT_USER);
   const [currentView, setCurrentView] = useState<string>('dashboard');
@@ -124,8 +129,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [similarityAlerts, setSimilarityAlerts] = useState<SimilarityAlert[]>(MOCK_SIMILARITY_ALERTS);
   const [reports, setReports] = useState<ReportItem[]>(MOCK_REPORTS);
   const [instructorStats, setInstructorStats] = useState(MOCK_INSTRUCTOR_STATS);
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('codevedha_announcements');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [toasts, setToasts] = useState<ToastInfo[]>([]);
+
+  useEffect(() => {
+    if (!auth?.user) return;
+
+    const role: Role = auth.user.role === 'instructor' ? 'instructor' : 'student';
+    const profileBase = role === 'instructor' ? MOCK_INSTRUCTOR_USER : MOCK_STUDENT_USER;
+
+    setCurrentRole(role);
+    setCurrentUser({
+      ...profileBase,
+      id: auth.user.id || profileBase.id,
+      name: auth.user.name || auth.user.username || profileBase.name,
+      email: auth.user.email || profileBase.email,
+      role
+    });
+    setIsAuthenticated(true);
+  }, [auth?.user]);
 
   // Sync problems to localStorage on change
   useEffect(() => {
@@ -133,6 +162,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.setItem('codevedha_problems', JSON.stringify(problems));
     } catch {}
   }, [problems]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('codevedha_announcements', JSON.stringify(announcements));
+    } catch {}
+  }, [announcements]);
 
   const showToast = (message: string, type: 'success' | 'info' | 'warning' | 'error' = 'success') => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
@@ -175,7 +210,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const addProblem = (newProb: Problem) => {
     setProblems(prev => [newProb, ...prev]);
+    setAnnouncements(prev => [
+      {
+        id: `ann-${Date.now()}`,
+        title: 'New question posted',
+        message: `${newProb.title} has been posted${newProb.courseCode ? ` for ${newProb.courseCode}` : ''}.`,
+        problemId: newProb.id,
+        courseCode: newProb.courseCode,
+        dueDate: newProb.dueDate,
+        createdAt: 'Just now',
+        read: false
+      },
+      ...prev
+    ]);
     showToast(`Question "${newProb.title}" published to Problem Bank!`, 'success');
+  };
+
+  const dismissAnnouncement = (id: string) => {
+    setAnnouncements(prev => prev.map(item => (
+      item.id === id ? { ...item, read: true } : item
+    )));
   };
 
   const updateProblem = (updatedProb: Problem) => {
@@ -313,6 +367,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         reports,
         generateReport,
         instructorStats,
+        announcements,
+        dismissAnnouncement,
         isAuthenticated,
         login,
         logout,

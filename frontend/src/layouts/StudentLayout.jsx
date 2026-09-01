@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -6,27 +6,25 @@ import {
   ListOrdered,
   LineChart,
   MessageSquareText,
-  Lightbulb,
-  TrendingUp,
   User,
   Settings,
   Bell,
   LogOut,
   ChevronDown,
   Sparkles,
-  CheckCircle2,
   Clock,
-  ExternalLink,
   ShieldCheck,
-  X
+  BellRing
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const StudentLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { announcements, dismissAnnouncement, openProblemWorkspace } = useApp();
   
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -67,6 +65,8 @@ const StudentLayout = () => {
   const displayName = user?.name || user?.username || 'Vignesh Reddy';
   const displayId = user?.username || user?.id || '24BD1A058Z';
   const displayEmail = user?.email || '24bd1a058z@geethanjali.edu.in';
+  const unreadAnnouncements = announcements.filter((item) => !item.read);
+  const notificationCount = unreadNotifs + unreadAnnouncements.length;
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -75,7 +75,7 @@ const StudentLayout = () => {
         initial={{ x: -100, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ duration: 0.3 }}
-        className="w-64 bg-white border-r border-slate-200 fixed h-full flex flex-col z-20"
+        className="hidden md:flex w-64 bg-white border-r border-slate-200 fixed h-full flex-col z-20"
       >
         <div className="h-16 flex items-center px-6 border-b border-slate-200">
           <div className="bg-indigo-600 p-1.5 rounded-lg mr-2 shadow-sm shadow-indigo-500/30">
@@ -122,8 +122,8 @@ const StudentLayout = () => {
       </motion.nav>
 
       {/* Main Content Area */}
-      <div className="ml-64 flex-1 flex flex-col min-h-screen">
-        <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-30 glass">
+      <div className="md:ml-64 flex-1 flex flex-col min-h-screen">
+        <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 md:px-8 sticky top-0 z-30 glass">
           <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -140,7 +140,7 @@ const StudentLayout = () => {
                 className="relative p-2 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
               >
                 <Bell className="w-5 h-5" />
-                {unreadNotifs > 0 && (
+                {notificationCount > 0 && (
                   <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-indigo-600 rounded-full border-2 border-white pulse-glow"></span>
                 )}
               </button>
@@ -158,11 +158,14 @@ const StudentLayout = () => {
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-extrabold text-slate-900">Notifications</span>
                         <span className="px-2 py-0.2 rounded-full bg-indigo-50 text-indigo-700 font-mono text-[10px] font-bold">
-                          {unreadNotifs} New
+                          {notificationCount} New
                         </span>
                       </div>
                       <button
-                        onClick={() => setUnreadNotifs(0)}
+                        onClick={() => {
+                          setUnreadNotifs(0);
+                          unreadAnnouncements.forEach((item) => dismissAnnouncement(item.id));
+                        }}
                         className="text-[11px] font-semibold text-indigo-600 hover:underline cursor-pointer"
                       >
                         Mark all read
@@ -170,6 +173,31 @@ const StudentLayout = () => {
                     </div>
 
                     <div className="space-y-2 text-xs max-h-72 overflow-y-auto custom-scrollbar">
+                      {unreadAnnouncements.map((announcement) => (
+                        <div
+                          key={announcement.id}
+                          onClick={() => {
+                            dismissAnnouncement(announcement.id);
+                            setNotifOpen(false);
+                            if (announcement.problemId) {
+                              openProblemWorkspace(announcement.problemId);
+                            }
+                            navigate(announcement.problemId ? `/problems/${announcement.problemId}` : '/problems');
+                          }}
+                          className="p-3 bg-amber-50/80 hover:bg-amber-50 rounded-2xl border border-amber-200 cursor-pointer transition-colors space-y-1"
+                        >
+                          <div className="flex items-center gap-2 text-amber-800 font-bold text-xs">
+                            <BellRing className="w-3.5 h-3.5 text-amber-600" />
+                            <span>{announcement.title}</span>
+                          </div>
+                          <p className="text-amber-800 text-[11px] leading-tight">
+                            {announcement.message}
+                            {announcement.dueDate ? ` Due ${announcement.dueDate}.` : ''}
+                          </p>
+                          <span className="text-[10px] text-slate-400 font-mono">{announcement.createdAt}</span>
+                        </div>
+                      ))}
+
                       <div 
                         onClick={() => {
                           setNotifOpen(false);
@@ -313,7 +341,7 @@ const StudentLayout = () => {
           </div>
         </header>
 
-        <main className="flex-1 p-8 overflow-y-auto relative custom-scrollbar">
+        <main className="flex-1 p-4 md:p-8 pb-24 overflow-y-auto relative custom-scrollbar">
           <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-indigo-50/50 to-transparent -z-10 pointer-events-none"></div>
           <AnimatePresence mode="wait">
             <motion.div
@@ -328,6 +356,24 @@ const StudentLayout = () => {
             </motion.div>
           </AnimatePresence>
         </main>
+      </div>
+
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur border-t border-slate-200 px-2 py-2 grid grid-cols-5 gap-1">
+        {navItems.slice(0, 5).map((item) => {
+          const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
+          return (
+            <Link
+              key={item.name}
+              to={item.path}
+              className={`flex flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold transition-colors ${
+                isActive ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'
+              }`}
+            >
+              <item.icon className="w-4 h-4" />
+              <span className="truncate max-w-full">{item.name.split(' ')[0]}</span>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

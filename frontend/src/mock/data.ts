@@ -166,7 +166,8 @@ public:
       space: 'O(N)'
     },
     isInstructorAssigned: true,
-    courseCode: 'CS201'
+    courseCode: 'CS201',
+    dueDate: '15 May, 2026'
   },
   {
     id: 'prob-2',
@@ -177,6 +178,7 @@ public:
     acceptanceRate: '56.8%',
     isInstructorAssigned: true,
     courseCode: 'CS301',
+    dueDate: '18 May, 2026',
     description: `Given an array of integers \`nums\` which is sorted in ascending order, and an integer \`target\`, write a function to search \`target\` in \`nums\`. If \`target\` exists, then return its index. Otherwise, return \`-1\`.
 
 You must write an algorithm with \`O(log n)\` runtime complexity.`,
@@ -315,7 +317,8 @@ public:
       space: 'O(1)'
     },
     isInstructorAssigned: true,
-    courseCode: 'CS201'
+    courseCode: 'CS201',
+    dueDate: '21 May, 2026'
   },
   {
     id: 'prob-4',
@@ -378,6 +381,7 @@ private:
     acceptanceRate: '40.3%',
     isInstructorAssigned: true,
     courseCode: 'CS201',
+    dueDate: '25 May, 2026',
     description: `Given a string \`s\` containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid.`,
     examples: [
       {

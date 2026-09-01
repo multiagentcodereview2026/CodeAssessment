@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DifficultyBadge } from '../common/Badge';
+import { TOPIC_MASTERY } from '../../data/learningInsights';
 
 export const FeedbackRecommendationsView: React.FC = () => {
   const navigate = useNavigate();
@@ -25,6 +26,12 @@ export const FeedbackRecommendationsView: React.FC = () => {
   const [search, setSearch] = useState('');
 
   const { recommendedTopics, practiceProblems } = activeAssessment;
+  const revisionPlan = activeAssessment.scoreProjection.focusAreas.map((area, index) => ({
+    title: area,
+    detail: activeAssessment.suggestedImprovements[index] || 'Apply the AI recommendation and resubmit to update the projected score.',
+    status: index === 0 ? 'Priority' : index === 1 ? 'Next' : 'Refinement'
+  }));
+  const weakestTopics = [...TOPIC_MASTERY].sort((a, b) => a.mastery - b.mastery).slice(0, 3);
 
   const filteredSubmissions = submissions.filter((s) =>
     s.problemTitle.toLowerCase().includes(search.toLowerCase()) ||
@@ -123,6 +130,37 @@ export const FeedbackRecommendationsView: React.FC = () => {
       {/* TAB 1: AI FEEDBACK */}
       {activeTab === 'feedback' && (
         <div className="space-y-4">
+          <div className="bg-white rounded-3xl border border-indigo-200/80 p-5 sm:p-6 shadow-xs">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <span className="text-xs font-extrabold uppercase text-indigo-700">Revision Checklist</span>
+                <h3 className="mt-1 text-base font-bold text-slate-900">
+                  Raise {activeAssessment.problemTitle} from {activeAssessment.scoreProjection.currentScore} to {activeAssessment.scoreProjection.projectedScore}
+                </h3>
+                <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+                  Focus areas are derived from the current assessment, so the checklist maps directly to backend assessment fields.
+                </p>
+              </div>
+              <button
+                onClick={() => handleStartPractice(activeAssessment.problemId)}
+                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Code2 className="w-3.5 h-3.5" />
+                <span>Revise in Sandbox</span>
+              </button>
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+              {revisionPlan.map((item) => (
+                <div key={item.title} className="rounded-2xl bg-slate-50 border border-slate-200/80 p-4">
+                  <span className="text-[10px] font-bold uppercase text-indigo-600">{item.status}</span>
+                  <h4 className="mt-1 text-xs font-extrabold text-slate-900">{item.title}</h4>
+                  <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">{item.detail}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageSquareText className="w-5 h-5 text-indigo-600" />
@@ -198,6 +236,22 @@ export const FeedbackRecommendationsView: React.FC = () => {
       {/* TAB 2: PRACTICE & TOPICS */}
       {activeTab === 'recommendations' && (
         <div className="space-y-6">
+          {/* Recommended Topic Clusters */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {weakestTopics.map((topic) => (
+              <div key={topic.name} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-slate-700">{topic.name}</span>
+                  <span className="text-xs font-mono font-bold text-amber-700">{topic.mastery}%</span>
+                </div>
+                <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${topic.mastery}%`, backgroundColor: topic.color }} />
+                </div>
+                <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">{topic.nextAction}</p>
+              </div>
+            ))}
+          </div>
+
           {/* Recommended Topic Clusters */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 sm:p-8 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">

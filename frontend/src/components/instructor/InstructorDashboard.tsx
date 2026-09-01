@@ -13,7 +13,9 @@ import {
   BookOpen,
   ChevronRight,
   Clock,
-  Sparkles
+  Sparkles,
+  AlertTriangle,
+  Target
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ScoreDistributionBarChart } from '../common/ChartComponents';
@@ -27,6 +29,16 @@ export const InstructorDashboard: React.FC = () => {
     similarityAlerts
   } = useApp();
 
+  const urgentAssignment = [...assignments].sort((a, b) => {
+    const aRatio = a.totalCount ? a.submittedCount / a.totalCount : 1;
+    const bRatio = b.totalCount ? b.submittedCount / b.totalCount : 1;
+    return aRatio - bRatio;
+  })[0];
+  const topSimilarityAlert = [...similarityAlerts].sort((a, b) => b.similarityPercentage - a.similarityPercentage)[0];
+  const completionRate = urgentAssignment?.totalCount
+    ? Math.round((urgentAssignment.submittedCount / urgentAssignment.totalCount) * 100)
+    : 0;
+
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
       {/* Top Banner (Clean Greeting & Primary CTAs - Jakob's & Fitts's Law) */}
@@ -37,6 +49,9 @@ export const InstructorDashboard: React.FC = () => {
           <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
             Hello, {currentUser.name}! 👋
           </h1>
+          <p className="mt-2 max-w-2xl text-sm text-emerald-100/90 leading-relaxed">
+            Kodacharya highlights where teaching attention is needed: low turnout, weak rubric bands, and originality risk.
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 relative z-10">
@@ -167,6 +182,57 @@ export const InstructorDashboard: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* Faculty Triage Rail */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <button
+          onClick={() => navigate('/instructor/problems')}
+          className="text-left bg-white rounded-2xl border border-amber-200/80 p-5 shadow-xs hover:border-amber-400 hover:shadow-md transition-all cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold text-amber-700 uppercase">Turnout Watch</span>
+            <Clock className="w-4 h-4 text-amber-500" />
+          </div>
+          <h3 className="mt-2 text-sm font-bold text-slate-900">{urgentAssignment?.title || 'No active assignments'}</h3>
+          <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+            {urgentAssignment
+              ? `${completionRate}% submitted. Prioritize reminders before grading pressure piles up.`
+              : 'Create a course problem to start tracking submissions.'}
+          </p>
+        </button>
+
+        <button
+          onClick={() => navigate('/instructor/analytics')}
+          className="text-left bg-white rounded-2xl border border-emerald-200/80 p-5 shadow-xs hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold text-emerald-700 uppercase">Teaching Focus</span>
+            <Target className="w-4 h-4 text-emerald-500" />
+          </div>
+          <h3 className="mt-2 text-sm font-bold text-slate-900">Complexity Reasoning</h3>
+          <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+            Class average is {instructorStats.averageScore}%. Use rubric analytics to find topics that need a short reteach.
+          </p>
+        </button>
+
+        <button
+          onClick={() => navigate('/instructor/similarity')}
+          className="text-left bg-white rounded-2xl border border-rose-200/80 p-5 shadow-xs hover:border-rose-400 hover:shadow-md transition-all cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold text-rose-700 uppercase">Originality Review</span>
+            <AlertTriangle className="w-4 h-4 text-rose-500" />
+          </div>
+          <h3 className="mt-2 text-sm font-bold text-slate-900">
+            {topSimilarityAlert ? `${topSimilarityAlert.similarityPercentage}% AST Match` : 'No active flags'}
+          </h3>
+          <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+            {topSimilarityAlert
+              ? `${topSimilarityAlert.studentA.name} and ${topSimilarityAlert.studentB.name} need side-by-side review.`
+              : 'Reviewed alerts disappear once marked resolved.'}
+          </p>
+        </button>
+      </div>
 
       {/* Middle Grid: Class Performance Analytics & Recent Assignments (Proximity & Miller's Law) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

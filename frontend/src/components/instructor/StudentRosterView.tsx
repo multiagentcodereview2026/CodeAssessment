@@ -1,20 +1,16 @@
 import React, { useState } from 'react';
 import {
   Search,
-  Filter,
   ArrowUpRight,
   ArrowDownRight,
-  UserCheck,
   AlertTriangle,
   Sparkles,
-  ChevronRight,
-  Mail,
-  School,
-  Building,
-  Calendar,
   Plus,
   Trash2,
-  X
+  X,
+  Target,
+  Send,
+  ClipboardList
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { StudentRosterItem } from '../../types';
@@ -34,6 +30,14 @@ export const StudentRosterView: React.FC = () => {
   const [newDept, setNewDept] = useState('CSE');
 
   const allTopics = Array.from(new Set(studentRoster.flatMap((s) => s.weakTopics)));
+  const atRiskCount = studentRoster.filter((s) => s.status === 'At Risk').length;
+  const needsAttentionCount = studentRoster.filter((s) => s.status === 'Needs Attention').length;
+  const mostCommonWeakTopic = allTopics
+    .map((topic) => ({
+      topic,
+      count: studentRoster.filter((student) => student.weakTopics.includes(topic)).length
+    }))
+    .sort((a, b) => b.count - a.count)[0];
 
   const filtered = studentRoster.filter((s) => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.rollNumber.toLowerCase().includes(search.toLowerCase());
@@ -94,6 +98,54 @@ export const StudentRosterView: React.FC = () => {
             <span>Enroll Student</span>
           </button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <button
+          onClick={() => setFilterStatus('at risk')}
+          className="text-left bg-white rounded-2xl border border-rose-200/80 p-5 shadow-xs hover:border-rose-400 hover:shadow-md transition-all cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold uppercase text-rose-700">At Risk</span>
+            <AlertTriangle className="w-4 h-4 text-rose-500" />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-rose-700 font-mono">{atRiskCount}</span>
+            <span className="text-xs text-slate-500">students</span>
+          </div>
+          <p className="mt-1 text-[11px] text-slate-500">Click to filter urgent intervention cases.</p>
+        </button>
+
+        <button
+          onClick={() => setFilterStatus('needs attention')}
+          className="text-left bg-white rounded-2xl border border-amber-200/80 p-5 shadow-xs hover:border-amber-400 hover:shadow-md transition-all cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold uppercase text-amber-700">Needs Attention</span>
+            <Target className="w-4 h-4 text-amber-500" />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-amber-700 font-mono">{needsAttentionCount}</span>
+            <span className="text-xs text-slate-500">students</span>
+          </div>
+          <p className="mt-1 text-[11px] text-slate-500">Good candidates for remedial practice sets.</p>
+        </button>
+
+        <button
+          onClick={() => mostCommonWeakTopic && setFilterTopic(mostCommonWeakTopic.topic)}
+          className="text-left bg-white rounded-2xl border border-emerald-200/80 p-5 shadow-xs hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold uppercase text-emerald-700">Common Gap</span>
+            <ClipboardList className="w-4 h-4 text-emerald-500" />
+          </div>
+          <div className="mt-2 text-sm font-extrabold text-slate-900">
+            {mostCommonWeakTopic?.topic || 'No weak topics'}
+          </div>
+          <p className="mt-1 text-[11px] text-slate-500">
+            {mostCommonWeakTopic ? `${mostCommonWeakTopic.count} students show this gap.` : 'Roster looks healthy.'}
+          </p>
+        </button>
       </div>
 
       {/* Filters */}
@@ -390,13 +442,31 @@ export const StudentRosterView: React.FC = () => {
               </div>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200">
+                <span className="text-[10px] uppercase font-bold text-indigo-700">Action 1</span>
+                <p className="mt-1 text-xs font-bold text-slate-900">Assign targeted practice</p>
+                <p className="mt-1 text-[11px] text-slate-600">Use weak topics to choose problem clusters.</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200">
+                <span className="text-[10px] uppercase font-bold text-amber-700">Action 2</span>
+                <p className="mt-1 text-xs font-bold text-slate-900">Review latest AI report</p>
+                <p className="mt-1 text-[11px] text-slate-600">Look for complexity and edge-case deductions.</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200">
+                <span className="text-[10px] uppercase font-bold text-emerald-700">Action 3</span>
+                <p className="mt-1 text-xs font-bold text-slate-900">Send feedback note</p>
+                <p className="mt-1 text-[11px] text-slate-600">Close the loop with a concrete next task.</p>
+              </div>
+            </div>
+
             {/* Contact / Action triggers */}
             <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
               <a
                 href={`mailto:${selectedStudent.email}`}
                 className="inline-flex items-center gap-1.5 text-emerald-600 font-bold hover:underline"
               >
-                <Mail className="w-4 h-4" />
+                <Send className="w-4 h-4" />
                 <span>Send Direct Feedback Email</span>
               </a>
 

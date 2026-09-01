@@ -1,27 +1,21 @@
 import React, { useState } from 'react';
 import {
   BarChart3,
-  TrendingUp,
-  Award,
   AlertTriangle,
-  Calendar,
-  Layers,
-  ChevronDown
+  Target,
+  Send
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { ScoreDistributionBarChart, ScoreTrendLineChart } from '../common/ChartComponents';
+import { ScoreDistributionBarChart } from '../common/ChartComponents';
+import { COHORT_WEAKNESS_STATS, BACKEND_FIELD_GUIDE } from '../../data/learningInsights';
 
 export const ClassAnalyticsView: React.FC = () => {
   const { instructorStats, studentRoster } = useApp();
   const [selectedRange, setSelectedRange] = useState('This Month');
 
-  const topicWeaknessStats = [
-    { topic: 'Dynamic Programming', failRate: '42.5%', studentsCount: 19, severity: 'High' },
-    { topic: 'Graphs (BFS/DFS)', failRate: '36.8%', studentsCount: 16, severity: 'High' },
-    { topic: 'Trees & Recursion', failRate: '28.1%', studentsCount: 12, severity: 'Medium' },
-    { topic: 'Linked Lists', failRate: '18.4%', studentsCount: 8, severity: 'Low' },
-    { topic: 'Arrays & Two Pointers', failRate: '8.2%', studentsCount: 4, severity: 'Low' }
-  ];
+  const topicWeaknessStats = COHORT_WEAKNESS_STATS;
+  const atRiskStudents = studentRoster.filter((student) => student.status !== 'On Track');
+  const highestRiskTopic = topicWeaknessStats[0];
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
@@ -46,6 +40,33 @@ export const ClassAnalyticsView: React.FC = () => {
             <option value="Last Month">April 2026</option>
             <option value="Full Semester">Full Semester</option>
           </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-rose-200/80 p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <span className="text-xs font-extrabold uppercase text-rose-700">Remediation Queue</span>
+            <h2 className="mt-1 text-lg font-extrabold text-slate-900">{highestRiskTopic.topic}</h2>
+            <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+              {highestRiskTopic.studentsCount} students impacted. {highestRiskTopic.reason}
+            </p>
+          </div>
+          <button className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer">
+            <Send className="w-3.5 h-3.5" />
+            <span>{highestRiskTopic.action}</span>
+          </button>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
+          <span className="text-xs font-extrabold uppercase text-slate-500">At-Risk Watchlist</span>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-rose-700 font-mono">{atRiskStudents.length}</span>
+            <span className="text-xs text-slate-500">students need attention</span>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-500 leading-relaxed">
+            Filter the roster by status to inspect individual weak topics and contact students.
+          </p>
         </div>
       </div>
 
@@ -141,13 +162,33 @@ export const ClassAnalyticsView: React.FC = () => {
                   </td>
                   <td className="py-3.5 text-right">
                     <button className="px-2.5 py-1 text-xs font-bold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
-                      Assign Remedial Problem Set
+                      {item.action}
                     </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 sm:p-8 space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <Target className="w-5 h-5 text-emerald-600" />
+            <h3 className="text-base font-bold text-slate-900">Backend Integration Map</h3>
+          </div>
+          <span className="text-xs text-slate-400 font-medium">Frontend contract</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {BACKEND_FIELD_GUIDE.map((item) => (
+            <div key={item.feature} className="rounded-2xl bg-slate-50 border border-slate-200/80 p-4">
+              <span className="text-xs font-extrabold text-slate-900">{item.feature}</span>
+              <p className="mt-1 text-[11px] font-mono text-indigo-700">{item.endpoint}</p>
+              <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">{item.payload}</p>
+            </div>
+          ))}
         </div>
       </div>
     </div>
