@@ -14,7 +14,10 @@ import {
   Terminal,
   Cpu,
   ShieldCheck,
-  Check
+  Check,
+  GraduationCap,
+  Calendar,
+  Code2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DifficultyBadge } from '../common/Badge';
@@ -26,6 +29,8 @@ export const ProblemWorkspace: React.FC = () => {
     setCurrentView,
     addSubmission
   } = useApp();
+
+  const isAssigned = selectedProblem.origin === 'instructor_assigned';
 
   const [language, setLanguage] = useState<string>('cpp');
   const [code, setCode] = useState<string>(
@@ -106,6 +111,7 @@ export const ProblemWorkspace: React.FC = () => {
         status: 'Accepted',
         executionTime: '124 ms',
         memory: '5.2 MB',
+        isAssignedSubmission: isAssigned,
         multiScores: {
           correctness: {
             score: 20,
@@ -173,9 +179,6 @@ export const ProblemWorkspace: React.FC = () => {
         aiRevisedCode: `class Solution {
 public:
     vector<int> twoSum(vector<int>& nums, int target) {
-        // AI Suggested Improvement:
-        // 1. Pre-allocate hash map bucket capacity to prevent re-hashing overhead
-        // 2. Use clear, descriptive variable naming
         std::unordered_map<int, int> numToIndexMap;
         numToIndexMap.reserve(nums.size());
 
@@ -234,9 +237,11 @@ public:
         score: 85,
         status: 'Passed',
         language: language === 'cpp' ? 'C++' : language === 'python' ? 'Python' : 'Java',
-        date: '01 May, 10:30 AM',
+        date: 'Just now',
         passedTestCases: 3,
         totalTestCases: 3,
+        origin: selectedProblem.origin,
+        assignmentId: selectedProblem.assignmentId,
         feedbackSummary: 'Good use of HashMap. Consider better variable names.'
       };
 
@@ -256,6 +261,43 @@ public:
 
   return (
     <div className="space-y-4 pb-12">
+      {/* Mode Context Banner */}
+      {isAssigned ? (
+        <div className="p-3.5 px-5 bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 text-white rounded-2xl border border-indigo-700/60 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 bg-indigo-500/20 text-indigo-300 rounded-lg border border-indigo-400/30">
+              <GraduationCap className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-bold text-white">Course Assignment Mode:</span>{' '}
+              <span className="text-indigo-200">
+                Assigned by {selectedProblem.instructorName || 'Prof. Sarah Miller'} • Due {selectedProblem.dueDate || '10 May, 2026'}
+              </span>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-400/30">
+            Graded Submission Active
+          </span>
+        </div>
+      ) : (
+        <div className="p-3.5 px-5 bg-slate-900 text-white rounded-2xl border border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 bg-purple-500/20 text-purple-300 rounded-lg border border-purple-400/30">
+              <Code2 className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-bold text-white">Self-Paced Practice Mode:</span>{' '}
+              <span className="text-slate-300">
+                Independent sandbox learning • AI multi-agent feedback & score growth
+              </span>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-400/30">
+            Independent Practice
+          </span>
+        </div>
+      )}
+
       {/* Top Breadcrumb & Action bar */}
       <div className="flex items-center justify-between">
         <button
@@ -416,7 +458,7 @@ public:
         {/* RIGHT PANEL: Code Editor & Execution Sandbox (Col span 7) */}
         <div className="lg:col-span-7 flex flex-col space-y-4">
           <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-xl overflow-hidden flex flex-col flex-1 relative">
-            {/* Editor Toolbar (Matches diagram step 4) */}
+            {/* Editor Toolbar */}
             <div className="flex flex-wrap items-center justify-between px-4 py-3 bg-slate-950 border-b border-slate-800 gap-2">
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 text-white font-bold text-xs">
@@ -496,10 +538,14 @@ public:
                 <button
                   onClick={handleSubmitCode}
                   disabled={isRunning || isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                  className={`px-5 py-2 rounded-xl text-white text-xs font-bold shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 cursor-pointer ${
+                    isAssigned
+                      ? 'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-indigo-600/30'
+                      : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-purple-600/30'
+                  }`}
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>Submit Code</span>
+                  <span>{isAssigned ? 'Submit Assignment' : 'Submit Practice'}</span>
                 </button>
               </div>
             </div>
@@ -514,7 +560,9 @@ public:
                   Multi-Agent AI Assessment in Progress
                 </h3>
                 <p className="text-xs text-slate-400 max-w-sm mt-1 mb-6">
-                  Evaluating algorithmic correctness, AST complexity, style semantics & originality rubric.
+                  {isAssigned
+                    ? 'Grading course assignment submission and syncing with instructor gradebook...'
+                    : 'Evaluating algorithmic correctness, AST complexity, and practice metrics...'}
                 </p>
 
                 {/* Pipeline Checklist */}

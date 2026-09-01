@@ -9,54 +9,114 @@ import {
   Zap,
   ChevronRight,
   Clock,
-  Target
+  Target,
+  GraduationCap,
+  Calendar,
+  AlertCircle,
+  X,
+  BookOpen,
+  Code2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { StatusBadge } from '../common/Badge';
+import { StatusBadge, DifficultyBadge } from '../common/Badge';
 import { LearningSummarySparkline } from '../common/ChartComponents';
-import { MOCK_PROBLEMS } from '../../mock/data';
 
 export const StudentDashboard: React.FC = () => {
   const {
     currentUser,
     studentProgress,
     submissions,
+    problems,
     openProblemWorkspace,
     openAssessmentResult,
-    setCurrentView
+    setCurrentView,
+    activeBroadcast,
+    dismissBroadcast
   } = useApp();
 
+  const instructorAssignedProblems = problems.filter(p => p.origin === 'instructor_assigned');
+  const selfPracticeProblems = problems.filter(p => p.origin !== 'instructor_assigned');
+  const pendingAssignedCount = instructorAssignedProblems.filter(p => p.studentStatus !== 'Submitted').length;
+
   return (
-    <div className="space-y-6 pb-12">
-      {/* Top Welcome Banner */}
+    <div className="space-y-6 pb-12 animate-fadeIn">
+      {/* 1. Dynamic Broadcast Alert from Instructor */}
+      {activeBroadcast && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-300/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fadeIn">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-amber-500 text-white rounded-xl shadow-xs flex-shrink-0">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-amber-800 bg-amber-200/80 px-2 py-0.5 rounded">
+                  Instructor Assignment
+                </span>
+                <span className="text-xs font-semibold text-slate-700">Course: CSE-301</span>
+              </div>
+              <p className="text-xs font-medium text-slate-800 mt-1 leading-snug">
+                {activeBroadcast}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-center">
+            <button
+              onClick={() => {
+                const firstPending = instructorAssignedProblems.find(p => p.studentStatus !== 'Submitted') || instructorAssignedProblems[0];
+                if (firstPending) openProblemWorkspace(firstPending.id);
+                else openProblemWorkspace('prob-1');
+              }}
+              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <span>Solve Question</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={dismissBroadcast}
+              className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-amber-100 transition-colors"
+              title="Dismiss notice"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Top Welcome Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 p-6 rounded-3xl text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-full bg-gradient-to-l from-indigo-500/10 to-transparent pointer-events-none" />
         
         <div className="space-y-1.5 relative z-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-semibold">
             <Sparkles className="w-3.5 h-3.5 text-indigo-300" />
-            <span>AI Code Intelligence Active</span>
+            <span>AI Code Intelligence & Grading Active</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
             Hello, {currentUser.name}! 👋
           </h1>
           <p className="text-sm text-slate-300">
-            Keep coding, keep improving! Your algorithmic accuracy is up 6.4% this week.
+            {pendingAssignedCount > 0
+              ? `You have ${pendingAssignedCount} pending assignment(s) posted by your instructor.`
+              : 'All instructor assignments are completed! Keep your streak going with self-paced practice.'}
           </p>
         </div>
 
         <div className="flex items-center gap-3 relative z-10">
           <button
-            onClick={() => openProblemWorkspace('prob-1')}
-            className="px-4 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold shadow-lg shadow-indigo-500/30 flex items-center gap-2 transition-transform active:scale-95"
+            onClick={() => {
+              const target = instructorAssignedProblems.find(p => p.studentStatus !== 'Submitted') || selfPracticeProblems[0];
+              if (target) openProblemWorkspace(target.id);
+            }}
+            className="px-4 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold shadow-lg shadow-indigo-500/30 flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
           >
             <Zap className="w-4 h-4" />
-            Resume "Two Sum"
+            <span>Resume Priority Problem</span>
           </button>
         </div>
       </div>
 
-      {/* Top 4 Key Stat Cards (Matching diagram step 2) */}
+      {/* 3. Top 4 Key Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Overall Score */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-indigo-200 transition-colors">
@@ -124,7 +184,7 @@ export const StudentDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Rank */}
+        {/* Cohort Rank */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-indigo-200 transition-colors">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-semibold text-slate-500">Cohort Rank</span>
@@ -143,44 +203,174 @@ export const StudentDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* AI Projected Score Action Card */}
-      <div className="p-5 rounded-2xl bg-gradient-to-r from-purple-900/10 via-indigo-900/10 to-transparent border border-purple-200/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-start gap-3.5">
-          <div className="p-2.5 bg-purple-600 text-white rounded-xl shadow-md shadow-purple-600/20">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-slate-900">
-                Projected Score After Revision Available
-              </h3>
-              <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase bg-purple-100 text-purple-800 rounded-full">
-                +7 pts Gain
-              </span>
+      {/* 4. TYPE 1: INSTRUCTOR ASSIGNED QUESTIONS SECTION */}
+      <div className="bg-white rounded-3xl border border-indigo-200/90 shadow-sm p-6 sm:p-7 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-indigo-50 text-indigo-700 rounded-xl">
+              <GraduationCap className="w-5 h-5" />
             </div>
-            <p className="text-xs text-slate-600 mt-0.5">
-              Applying AI recommendations on <strong className="text-slate-800">Two Sum</strong> will boost your score from <span className="font-mono font-bold text-slate-800">85</span> to <span className="font-mono font-bold text-emerald-600">92/100</span>.
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-extrabold text-slate-900">
+                  Instructor Assigned Questions
+                </h2>
+                <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-indigo-100 text-indigo-800 rounded-full">
+                  Mandatory • Graded
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Questions assigned by Prof. Sarah Miller for gradebook evaluation.
+              </p>
+            </div>
           </div>
+
+          <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+            Pending Tasks: <strong className="text-indigo-600 font-mono">{pendingAssignedCount}</strong> / {instructorAssignedProblems.length}
+          </span>
         </div>
 
-        <button
-          onClick={() => openAssessmentResult()}
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5 flex-shrink-0"
-        >
-          <span>View Detailed Feedback</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
+        {instructorAssignedProblems.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {instructorAssignedProblems.map((prob) => (
+              <div
+                key={prob.id}
+                onClick={() => openProblemWorkspace(prob.id)}
+                className={`p-5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between group ${
+                  prob.studentStatus === 'Submitted'
+                    ? 'bg-emerald-50/40 border-emerald-200 hover:border-emerald-400'
+                    : prob.studentStatus === 'In Progress'
+                    ? 'bg-indigo-50/40 border-indigo-300 hover:border-indigo-500 shadow-xs'
+                    : 'bg-white border-slate-200 hover:border-indigo-400 hover:shadow-md'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <DifficultyBadge difficulty={prob.difficulty} />
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      prob.studentStatus === 'Submitted'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : prob.studentStatus === 'In Progress'
+                        ? 'bg-indigo-100 text-indigo-800 animate-pulse'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {prob.studentStatus || 'Not Started'}
+                    </span>
+                  </div>
+
+                  <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                    {prob.title}
+                  </h3>
+
+                  <p className="text-xs text-slate-500 line-clamp-2 mt-1.5 leading-relaxed">
+                    {prob.description.replace(/[`*]/g, '')}
+                  </p>
+
+                  <div className="flex items-center gap-2 mt-3 text-[11px] text-slate-500 font-mono">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Due: {prob.dueDate || '10 May, 2026'}</span>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-slate-100/80 flex items-center justify-between text-xs font-bold">
+                  <span className="text-[11px] text-slate-400 font-sans">
+                    By {prob.instructorName || 'Prof. Sarah Miller'}
+                  </span>
+                  <span className="text-indigo-600 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                    <span>{prob.studentStatus === 'Submitted' ? 'Review Submission' : 'Solve Assigned'}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+            <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+            <h4 className="text-sm font-bold text-slate-800">No Pending Instructor Assignments</h4>
+            <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+              Your instructor hasn't posted new tasks at this moment. You can freely practice self-paced challenges below!
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Middle Grid: Recent Submissions & Side Panels (Matching Step 2) */}
+      {/* 5. TYPE 2: SELF-PACED PRACTICE SANDBOX (MANUAL LEARNING) */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 sm:p-7 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-purple-50 text-purple-700 rounded-xl">
+              <Code2 className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-extrabold text-slate-900">
+                  Self-Paced Practice Sandbox
+                </h2>
+                <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-slate-100 text-slate-700 rounded-full">
+                  Independent Learning
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Practice any problem manually at your own pace without instructor deadlines.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setCurrentView('problems')}
+            className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+          >
+            <span>Explore All ({selfPracticeProblems.length})</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {selfPracticeProblems.slice(0, 4).map((prob) => (
+            <div
+              key={prob.id}
+              onClick={() => openProblemWorkspace(prob.id)}
+              className="p-4 rounded-2xl border border-slate-200 hover:border-purple-400 hover:shadow-md transition-all cursor-pointer bg-slate-50/50 hover:bg-white flex flex-col justify-between group"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <DifficultyBadge difficulty={prob.difficulty} />
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Acc: {prob.acceptanceRate}
+                  </span>
+                </div>
+
+                <h4 className="text-sm font-bold text-slate-900 group-hover:text-purple-600 transition-colors">
+                  {prob.title}
+                </h4>
+
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {prob.tags.slice(0, 2).map((t, idx) => (
+                    <span key={idx} className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-purple-600">
+                <span>Practice Sandbox</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 6. Middle Grid: Recent Submissions & Weak Topics */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: Recent Submissions Table */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6">
           <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
             <div>
               <h2 className="text-base font-bold text-slate-900">Recent Submissions</h2>
-              <p className="text-xs text-slate-400">Your latest evaluations & AI assessments</p>
+              <p className="text-xs text-slate-400">Your latest evaluations across assigned & practice tasks</p>
             </div>
             <button
               onClick={() => setCurrentView('submissions')}
@@ -196,6 +386,7 @@ export const StudentDashboard: React.FC = () => {
               <thead>
                 <tr className="text-slate-400 border-b border-slate-100 font-medium">
                   <th className="pb-3 font-semibold">Problem</th>
+                  <th className="pb-3 font-semibold">Mode</th>
                   <th className="pb-3 font-semibold">Score</th>
                   <th className="pb-3 font-semibold">Status</th>
                   <th className="pb-3 font-semibold">Date & Time</th>
@@ -211,6 +402,13 @@ export const StudentDashboard: React.FC = () => {
                         <span className="text-[10px] text-slate-400 font-mono">({sub.language})</span>
                       </div>
                     </td>
+                    <td className="py-3.5">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                        sub.origin === 'instructor_assigned' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {sub.origin === 'instructor_assigned' ? 'Assigned' : 'Practice'}
+                      </span>
+                    </td>
                     <td className="py-3.5 font-mono font-bold">
                       <span className={sub.score >= 80 ? 'text-emerald-600' : sub.score >= 60 ? 'text-indigo-600' : 'text-rose-600'}>
                         {sub.score} / 100
@@ -224,9 +422,7 @@ export const StudentDashboard: React.FC = () => {
                     </td>
                     <td className="py-3.5 text-right">
                       <button
-                        onClick={() => {
-                          openAssessmentResult(sub.id);
-                        }}
+                        onClick={() => openAssessmentResult(sub.id)}
                         className="px-2.5 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                       >
                         Inspect AI Report
@@ -286,60 +482,6 @@ export const StudentDashboard: React.FC = () => {
               <span className="font-semibold text-indigo-600">85% Accuracy Target</span>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Assigned Problems Quick Launcher */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-base font-bold text-slate-900">Active Course Assignments</h3>
-            <p className="text-xs text-slate-400">Assigned by Prof. Sarah Miller • Due May 10</p>
-          </div>
-          <button
-            onClick={() => setCurrentView('problems')}
-            className="text-xs font-semibold text-indigo-600 hover:underline"
-          >
-            See All Problems ({MOCK_PROBLEMS.length})
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {MOCK_PROBLEMS.slice(0, 3).map((prob) => (
-            <div
-              key={prob.id}
-              onClick={() => openProblemWorkspace(prob.id)}
-              className="p-4 rounded-xl border border-slate-200 hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer bg-slate-50/50 hover:bg-white flex flex-col justify-between group"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                    prob.difficulty === 'Easy' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                  }`}>
-                    {prob.difficulty}
-                  </span>
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    Acc: {prob.acceptanceRate}
-                  </span>
-                </div>
-                <h4 className="text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
-                  {prob.title}
-                </h4>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {prob.tags.slice(0, 2).map((tag, tIdx) => (
-                    <span key={tIdx} className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-indigo-600">
-                <span>Code in Sandbox</span>
-                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>

@@ -42,6 +42,11 @@ export const MOCK_PROBLEMS: Problem[] = [
     difficulty: 'Easy',
     tags: ['Hash Map', 'Arrays', 'Two Pointers'],
     acceptanceRate: '54.2%',
+    origin: 'instructor_assigned',
+    assignmentId: 'asg-1',
+    instructorName: 'Prof. Sarah Miller',
+    dueDate: '10 May, 2026',
+    studentStatus: 'In Progress',
     description: `Given an array of integers \`nums\` and an integer \`target\`, return *indices of the two numbers such that they add up to \`target\`*.
 
 You may assume that each input would have ***exactly one solution***, and you may not use the *same* element twice.
@@ -145,7 +150,6 @@ public:
       'cpp': `class Solution {
 public:
     vector<int> twoSum(vector<int>& nums, int target) {
-        // Optimized Hash Map Lookup with reserve to minimize re-hashing
         unordered_map<int, int> numToIndex;
         numToIndex.reserve(nums.size());
         
@@ -173,6 +177,11 @@ public:
     difficulty: 'Easy',
     tags: ['Binary Search', 'Arrays'],
     acceptanceRate: '56.8%',
+    origin: 'instructor_assigned',
+    assignmentId: 'asg-1',
+    instructorName: 'Prof. Sarah Miller',
+    dueDate: '10 May, 2026',
+    studentStatus: 'Submitted',
     description: `Given an array of integers \`nums\` which is sorted in ascending order, and an integer \`target\`, write a function to search \`target\` in \`nums\`. If \`target\` exists, then return its index. Otherwise, return \`-1\`.
 
 You must write an algorithm with \`O(log n)\` runtime complexity.`,
@@ -252,6 +261,11 @@ public:
     difficulty: 'Easy',
     tags: ['Linked List', 'Recursion'],
     acceptanceRate: '74.1%',
+    origin: 'instructor_assigned',
+    assignmentId: 'asg-2',
+    instructorName: 'Prof. Sarah Miller',
+    dueDate: '20 May, 2026',
+    studentStatus: 'Not Started',
     description: `Given the \`head\` of a singly linked list, reverse the list, and return the reversed list.`,
     examples: [
       {
@@ -280,17 +294,7 @@ public:
       }
     ],
     starterCode: {
-      'cpp': `/**
- * Definition for singly-linked list.
- * struct ListNode {
- *     int val;
- *     ListNode *next;
- *     ListNode() : val(0), next(nullptr) {}
- *     ListNode(int x) : val(x), next(nullptr) {}
- *     ListNode(int x, ListNode *next) : val(x), next(next) {}
- * };
- */
-class Solution {
+      'cpp': `class Solution {
 public:
     ListNode* reverseList(ListNode* head) {
         ListNode* prev = nullptr;
@@ -318,6 +322,8 @@ public:
     difficulty: 'Easy',
     tags: ['Tree', 'Depth-First Search', 'Binary Tree'],
     acceptanceRate: '75.9%',
+    origin: 'self_practice',
+    studentStatus: 'Submitted',
     description: `Given the \`root\` of a binary tree, return the inorder traversal of its nodes' values.`,
     examples: [
       {
@@ -370,6 +376,8 @@ private:
     difficulty: 'Easy',
     tags: ['Stack', 'String'],
     acceptanceRate: '40.3%',
+    origin: 'self_practice',
+    studentStatus: 'Not Started',
     description: `Given a string \`s\` containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid.`,
     examples: [
       {
@@ -429,6 +437,8 @@ public:
     difficulty: 'Medium',
     tags: ['Dynamic Programming', 'Breadth-First Search'],
     acceptanceRate: '42.8%',
+    origin: 'self_practice',
+    studentStatus: 'Not Started',
     description: `You are given an integer array \`coins\` representing coins of different denominations and an integer \`amount\` representing a total amount of money.
 
 Return *the fewest number of coins that you need to make up that amount*. If that amount of money cannot be made up by any combination of the coins, return \`-1\`.`,
@@ -473,6 +483,54 @@ public:
       time: 'O(amount * coins.length)',
       space: 'O(amount)'
     }
+  },
+  {
+    id: 'prob-7',
+    title: 'Maximum Subarray',
+    slug: 'maximum-subarray',
+    difficulty: 'Medium',
+    tags: ['Dynamic Programming', 'Divide and Conquer'],
+    acceptanceRate: '50.1%',
+    origin: 'self_practice',
+    studentStatus: 'Not Started',
+    description: `Given an integer array \`nums\`, find the subarray with the largest sum, and return its sum.`,
+    examples: [
+      {
+        input: 'nums = [-2,1,-3,4,-1,2,1,-5,4]',
+        output: '6',
+        explanation: 'The subarray [4,-1,2,1] has the largest sum 6.'
+      }
+    ],
+    constraints: [
+      '1 <= nums.length <= 10^5',
+      '-10^4 <= nums[i] <= 10^4'
+    ],
+    testCases: [
+      {
+        id: 'tc-ms1',
+        input: 'nums = [-2,1,-3,4,-1,2,1,-5,4]',
+        expectedOutput: '6'
+      }
+    ],
+    starterCode: {
+      'cpp': `class Solution {
+public:
+    int maxSubArray(vector<int>& nums) {
+        int maxSum = nums[0];
+        int currentSum = nums[0];
+        for (size_t i = 1; i < nums.size(); ++i) {
+            currentSum = max(nums[i], currentSum + nums[i]);
+            maxSum = max(maxSum, currentSum);
+        }
+        return maxSum;
+    }
+};`
+    },
+    solutionCode: {},
+    optimalComplexity: {
+      time: 'O(N)',
+      space: 'O(1)'
+    }
   }
 ];
 
@@ -482,6 +540,7 @@ export const MOCK_DEFAULT_ASSESSMENT: AssessmentResult = {
   problemTitle: 'Two Sum',
   timestamp: '01 May, 10:30 AM',
   language: 'C++',
+  isAssignedSubmission: true,
   code: `class Solution {
 public:
     vector<int> twoSum(vector<int>& nums, int target) {
@@ -580,9 +639,6 @@ public:
   aiRevisedCode: `class Solution {
 public:
     vector<int> twoSum(vector<int>& nums, int target) {
-        // AI Suggested Improvement:
-        // 1. Pre-allocate hash map bucket capacity to prevent re-hashing overhead
-        // 2. Use clear, descriptive variable naming
         std::unordered_map<int, int> numToIndexMap;
         numToIndexMap.reserve(nums.size());
 
@@ -645,6 +701,8 @@ export const MOCK_RECENT_SUBMISSIONS: SubmissionItem[] = [
     date: '01 May, 10:30 AM',
     passedTestCases: 3,
     totalTestCases: 3,
+    origin: 'instructor_assigned',
+    assignmentId: 'asg-1',
     feedbackSummary: 'Good use of HashMap. Consider better variable names.'
   },
   {
@@ -657,6 +715,8 @@ export const MOCK_RECENT_SUBMISSIONS: SubmissionItem[] = [
     date: '01 May, 09:15 AM',
     passedTestCases: 3,
     totalTestCases: 3,
+    origin: 'instructor_assigned',
+    assignmentId: 'asg-1',
     feedbackSummary: 'Logic is correct. Try to handle edge cases clearly.'
   },
   {
@@ -669,6 +729,8 @@ export const MOCK_RECENT_SUBMISSIONS: SubmissionItem[] = [
     date: '30 Apr, 05:40 PM',
     passedTestCases: 1,
     totalTestCases: 2,
+    origin: 'instructor_assigned',
+    assignmentId: 'asg-2',
     feedbackSummary: 'Check null conditions while reversing the list.'
   },
   {
@@ -681,6 +743,7 @@ export const MOCK_RECENT_SUBMISSIONS: SubmissionItem[] = [
     date: '30 Apr, 07:20 PM',
     passedTestCases: 1,
     totalTestCases: 1,
+    origin: 'self_practice',
     feedbackSummary: 'Efficient solution! Good recursive approach.'
   },
   {
@@ -693,6 +756,7 @@ export const MOCK_RECENT_SUBMISSIONS: SubmissionItem[] = [
     date: '29 Apr, 02:10 PM',
     passedTestCases: 1,
     totalTestCases: 1,
+    origin: 'self_practice',
     feedbackSummary: 'Stack implemented properly. Consider early exit.'
   }
 ];
@@ -814,42 +878,42 @@ export const MOCK_STUDENT_ROSTER: StudentRosterItem[] = [
 export const MOCK_ASSIGNMENTS: Assignment[] = [
   {
     id: 'asg-1',
-    title: 'DSA Assignment 1',
-    description: 'Core arrays, two pointers, and hash table assessment with complexity constraints.',
+    title: 'DSA Assignment 1: Arrays & Hash Tables',
+    description: 'Instructor assigned: Core arrays, two pointers, and hash table assessment with complexity constraints.',
     course: 'CSE-301 Data Structures',
-    problemsCount: 4,
-    problemIds: ['prob-1', 'prob-2', 'prob-5'],
+    instructorName: 'Prof. Sarah Miller',
+    problemsCount: 2,
+    problemIds: ['prob-1', 'prob-2'],
+    assignedProblems: [
+      { problemId: 'prob-1', problemTitle: 'Two Sum', difficulty: 'Easy', studentStatus: 'In Progress' },
+      { problemId: 'prob-2', problemTitle: 'Binary Search', difficulty: 'Easy', studentStatus: 'Submitted', score: 70 }
+    ],
     submittedCount: 48,
     totalCount: 48,
     avgScore: 72.1,
-    dueDate: '10 May',
-    status: 'Active'
+    dueDate: '10 May, 2026',
+    postedDate: '01 May, 2026',
+    status: 'Active',
+    studentStatus: 'In Progress'
   },
   {
     id: 'asg-2',
-    title: 'Recursion Problems',
-    description: 'Linked list manipulation and tree recursive depth traversals.',
+    title: 'Recursion & Pointer Manipulation',
+    description: 'Instructor assigned: Linked list reversal and recursive stack bounds.',
     course: 'CSE-301 Data Structures',
-    problemsCount: 3,
-    problemIds: ['prob-3', 'prob-4'],
+    instructorName: 'Prof. Sarah Miller',
+    problemsCount: 1,
+    problemIds: ['prob-3'],
+    assignedProblems: [
+      { problemId: 'prob-3', problemTitle: 'Reverse Linked List', difficulty: 'Easy', studentStatus: 'Not Started' }
+    ],
     submittedCount: 45,
     totalCount: 48,
     avgScore: 75.6,
-    dueDate: '20 May',
-    status: 'Active'
-  },
-  {
-    id: 'asg-3',
-    title: 'Graphs & Trees',
-    description: 'Graph search (BFS/DFS), topological sort, and cycle detection.',
-    course: 'CSE-301 Data Structures',
-    problemsCount: 5,
-    problemIds: ['prob-6'],
-    submittedCount: 41,
-    totalCount: 48,
-    avgScore: 71.4,
-    dueDate: '30 May',
-    status: 'Active'
+    dueDate: '20 May, 2026',
+    postedDate: '02 May, 2026',
+    status: 'Active',
+    studentStatus: 'Not Started'
   }
 ];
 
@@ -864,8 +928,7 @@ export const MOCK_SIMILARITY_ALERTS: SimilarityAlert[] = [
     riskLevel: 'High',
     matchedLinesCount: 14,
     timestamp: '30 Apr, 06:12 PM',
-    studentACodeSnippet: `// Student Sai Kiran
-vector<int> twoSum(vector<int>& arr, int tar) {
+    studentACodeSnippet: `vector<int> twoSum(vector<int>& arr, int tar) {
     unordered_map<int,int> h;
     for(int idx = 0; idx < arr.size(); idx++) {
         int diff = tar - arr[idx];
@@ -874,8 +937,7 @@ vector<int> twoSum(vector<int>& arr, int tar) {
     }
     return {};
 }`,
-    studentBCodeSnippet: `// Student Harish N.
-vector<int> twoSum(vector<int>& arr, int tar) {
+    studentBCodeSnippet: `vector<int> twoSum(vector<int>& arr, int tar) {
     unordered_map<int,int> h;
     for(int idx = 0; idx < arr.size(); idx++) {
         int diff = tar - arr[idx];
@@ -885,40 +947,6 @@ vector<int> twoSum(vector<int>& arr, int tar) {
     return {};
 }`,
     aiAuditNotes: 'Identical Abstract Syntax Tree (AST) node sequence and exact duplicate identifier patterns. Variable names "arr", "tar", "h", "idx" identical across both submissions with token match ratio > 0.88.'
-  },
-  {
-    id: 'sim-2',
-    problemId: 'prob-3',
-    problemTitle: 'Reverse Linked List',
-    studentA: { id: 'stu-2', name: 'Arjun K.', rollNumber: '21C51208', submissionId: 'SUB89201' },
-    studentB: { id: 'stu-5', name: 'Karthik P.', rollNumber: '21C51252', submissionId: 'SUB89204' },
-    similarityPercentage: 68,
-    riskLevel: 'Medium',
-    matchedLinesCount: 8,
-    timestamp: '29 Apr, 08:44 PM',
-    studentACodeSnippet: `ListNode* reverseList(ListNode* head) {
-    ListNode* prev = nullptr;
-    ListNode* curr = head;
-    while(curr) {
-        ListNode* next = curr->next;
-        curr->next = prev;
-        prev = curr;
-        curr = next;
-    }
-    return prev;
-}`,
-    studentBCodeSnippet: `ListNode* reverseList(ListNode* head) {
-    ListNode* p = nullptr;
-    ListNode* c = head;
-    while(c != nullptr) {
-        ListNode* n = c->next;
-        c->next = p;
-        p = c;
-        c = n;
-    }
-    return p;
-}`,
-    aiAuditNotes: 'Structural isomorphism detected. Canonical iterative pattern with standard pointers, moderate risk due to standard problem template.'
   }
 ];
 

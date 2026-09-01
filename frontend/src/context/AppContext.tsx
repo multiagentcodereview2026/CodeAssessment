@@ -9,7 +9,8 @@ import {
   StudentRosterItem,
   Assignment,
   SimilarityAlert,
-  ReportItem
+  ReportItem,
+  StudentAssignmentStatus
 } from '../types';
 import {
   MOCK_STUDENT_USER,
@@ -34,6 +35,8 @@ interface AppContextType {
   selectedProblemId: string;
   setSelectedProblemId: (id: string) => void;
   selectedProblem: Problem;
+  problems: Problem[];
+  createProblem: (problem: Problem) => void;
   activeAssessment: AssessmentResult;
   setActiveAssessment: (result: AssessmentResult) => void;
   submissions: SubmissionItem[];
@@ -43,7 +46,8 @@ interface AppContextType {
   selectedStudent: StudentRosterItem | null;
   setSelectedStudent: (student: StudentRosterItem | null) => void;
   assignments: Assignment[];
-  addAssignment: (assignment: Assignment) => void;
+  addAssignment: (assignment: Assignment, newProblem?: Problem) => void;
+  updateProblemStatus: (problemId: string, status: StudentAssignmentStatus) => void;
   similarityAlerts: SimilarityAlert[];
   reports: ReportItem[];
   instructorStats: typeof MOCK_INSTRUCTOR_STATS;
@@ -52,6 +56,8 @@ interface AppContextType {
   logout: () => void;
   openProblemWorkspace: (problemId: string) => void;
   openAssessmentResult: (submissionId?: string) => void;
+  activeBroadcast: string | null;
+  dismissBroadcast: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -60,6 +66,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentRole, setCurrentRole] = useState<Role>('student');
   const [currentUser, setCurrentUser] = useState<UserProfile>(MOCK_STUDENT_USER);
   const [currentView, setCurrentView] = useState<string>('dashboard');
+  const [problems, setProblems] = useState<Problem[]>(MOCK_PROBLEMS);
   const [selectedProblemId, setSelectedProblemId] = useState<string>('prob-1');
   const [activeAssessment, setActiveAssessment] = useState<AssessmentResult>(MOCK_DEFAULT_ASSESSMENT);
   const [submissions, setSubmissions] = useState<SubmissionItem[]>(MOCK_RECENT_SUBMISSIONS);
@@ -71,6 +78,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [reports, setReports] = useState<ReportItem[]>(MOCK_REPORTS);
   const [instructorStats, setInstructorStats] = useState(MOCK_INSTRUCTOR_STATS);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [activeBroadcast, setActiveBroadcast] = useState<string | null>(
+    '📢 Instructor Notice: Prof. Sarah Miller posted a new challenge "Two Sum" for CSE-301. Please solve before May 10!'
+  );
 
   const switchRole = (role: Role) => {
     setCurrentRole(role);
@@ -92,7 +102,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setIsAuthenticated(false);
   };
 
-  const selectedProblem = MOCK_PROBLEMS.find(p => p.id === selectedProblemId) || MOCK_PROBLEMS[0];
+  const selectedProblem = problems.find(p => p.id === selectedProblemId) || problems[0];
 
   const openProblemWorkspace = (problemId: string) => {
     setSelectedProblemId(problemId);
@@ -103,10 +113,58 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setCurrentView('result');
   };
 
+  const createProblem = (newProblem: Problem) => {
+    setProblems(prev => [newProblem, ...prev]);
+  };
+
+  const updateProblemStatus = (problemId: string, status: StudentAssignmentStatus) => {
+    setProblems(prev =>
+      prev.map(p => (p.id === problemId ? { ...p, studentStatus: status } : p))
+    );
+  };
+
+  const addAssignment = (newAssignment: Assignment, newProblem?: Problem) => {
+    setAssignments(prev => [newAssignment, ...prev]);
+    
+    // If a new problem was created specifically for this assignment, add it to problems catalog
+    if (newProblem) {
+      setProblems(prev => [newProblem, ...prev]);
+    } else {
+      // Mark selected existing problem IDs as instructor_assigned
+      setProblems(prev =>
+        prev.map(p =>
+          newAssignment.problemIds.includes(p.id)
+            ? {
+                ...p,
+                origin: 'instructor_assigned',
+                assignmentId: newAssignment.id,
+                instructorName: newAssignment.instructorName || 'Prof. Sarah Miller',
+                dueDate: newAssignment.dueDate,
+                studentStatus: 'Not Started'
+              }
+            : p
+        )
+      );
+    }
+
+    setInstructorStats(prev => ({
+      ...prev,
+      activeAssignments: prev.activeAssignments + 1
+    }));
+
+    // Trigger notification banner for students
+    setActiveBroadcast(
+      `📢 New Assignment Posted: "${newAssignment.title}" by ${newAssignment.instructorName || 'Prof. Sarah Miller'} • Due ${newAssignment.dueDate}. Please solve!`
+    );
+  };
+
   const addSubmission = (newSub: SubmissionItem, newAssessment: AssessmentResult) => {
     setSubmissions(prev => [newSub, ...prev]);
     setActiveAssessment(newAssessment);
     
+    // update problem studentStatus
+    updateProblemStatus(newSub.problemId, 'Submitted');
+
     // update student progress
     setStudentProgress(prev => ({
       ...prev,
@@ -117,12 +175,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setCurrentView('result');
   };
 
-  const addAssignment = (newAssignment: Assignment) => {
-    setAssignments(prev => [newAssignment, ...prev]);
-    setInstructorStats(prev => ({
-      ...prev,
-      activeAssignments: prev.activeAssignments + 1
-    }));
+  const dismissBroadcast = () => {
+    setActiveBroadcast(null);
   };
 
   return (
@@ -136,6 +190,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         selectedProblemId,
         setSelectedProblemId,
         selectedProblem,
+        problems,
+        createProblem,
         activeAssessment,
         setActiveAssessment,
         submissions,
@@ -146,6 +202,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setSelectedStudent,
         assignments,
         addAssignment,
+        updateProblemStatus,
         similarityAlerts,
         reports,
         instructorStats,
@@ -153,7 +210,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         login,
         logout,
         openProblemWorkspace,
-        openAssessmentResult
+        openAssessmentResult,
+        activeBroadcast,
+        dismissBroadcast
       }}
     >
       {children}

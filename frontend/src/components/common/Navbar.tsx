@@ -100,6 +100,19 @@ export const Navbar: React.FC = () => {
                   </span>
                 </div>
                 <div className="divide-y divide-slate-50 max-h-64 overflow-y-auto">
+                  <div
+                    onClick={() => {
+                      setCurrentView('dashboard');
+                      setNotifOpen(false);
+                    }}
+                    className="p-3 hover:bg-amber-50/50 text-xs transition-colors cursor-pointer"
+                  >
+                    <p className="font-semibold text-amber-800 flex items-center gap-1">
+                      <GraduationCap className="w-3.5 h-3.5 text-amber-600" /> New Instructor Assignment
+                    </p>
+                    <p className="text-slate-600 text-[11px] mt-0.5">Prof. Sarah Miller posted "Two Sum" for CSE-301</p>
+                    <span className="text-[10px] text-slate-400 mt-1 block">5m ago • Mandatory</span>
+                  </div>
                   <div className="p-3 hover:bg-slate-50 text-xs transition-colors cursor-pointer">
                     <p className="font-semibold text-slate-800">Two Sum submission analyzed</p>
                     <p className="text-slate-500 text-[11px] mt-0.5">Scored 85/100 • AI Revision available (+7 pts)</p>

@@ -13,6 +13,8 @@ export interface UserProfile {
 }
 
 export type Difficulty = 'Easy' | 'Medium' | 'Hard';
+export type ProblemOrigin = 'instructor_assigned' | 'self_practice';
+export type StudentAssignmentStatus = 'Not Started' | 'In Progress' | 'Submitted' | 'Reviewed';
 
 export interface ProblemExample {
   input: string;
@@ -44,6 +46,11 @@ export interface Problem {
     time: string;
     space: string;
   };
+  origin?: ProblemOrigin;
+  assignmentId?: string;
+  instructorName?: string;
+  dueDate?: string;
+  studentStatus?: StudentAssignmentStatus;
 }
 
 export interface TestCaseResult {
@@ -134,6 +141,8 @@ export interface AssessmentResult {
   scoreProjection: ScoreProjection;
   aiRevisedCode: string;
   testResults: TestCaseResult[];
+  isAssignedSubmission?: boolean;
+  instructorFeedbackNotes?: string;
 }
 
 export interface SubmissionItem {
@@ -148,6 +157,8 @@ export interface SubmissionItem {
   passedTestCases: number;
   totalTestCases: number;
   feedbackSummary?: string;
+  origin?: ProblemOrigin;
+  assignmentId?: string;
 }
 
 export interface CategoryScore {
@@ -187,18 +198,30 @@ export interface StudentRosterItem {
   year: string;
 }
 
+export interface AssignedProblemItem {
+  problemId: string;
+  problemTitle: string;
+  difficulty: Difficulty;
+  studentStatus: StudentAssignmentStatus;
+  score?: number;
+}
+
 export interface Assignment {
   id: string;
   title: string;
   description: string;
   course: string;
+  instructorName?: string;
   problemsCount: number;
   problemIds: string[];
+  assignedProblems?: AssignedProblemItem[];
   submittedCount: number;
   totalCount: number;
   avgScore: number;
   dueDate: string;
+  postedDate?: string;
   status: 'Active' | 'Upcoming' | 'Closed';
+  studentStatus?: StudentAssignmentStatus;
 }
 
 export interface SimilarityAlert {
