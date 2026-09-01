@@ -1,14 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Sparkles,
   Search,
   Bell,
-  ArrowRightLeft,
   ChevronDown,
   LogOut,
   ShieldCheck,
   User,
-  Menu
+  Menu,
+  GraduationCap,
+  FileCode,
+  AlertTriangle,
+  Clock,
+  CheckCheck
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -19,18 +23,39 @@ export const Navbar: React.FC = () => {
     logout,
     setCurrentView,
     similarityAlerts,
-    setMobileMenuOpen
+    setMobileMenuOpen,
+    notifications,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    handleNotificationClick
   } = useApp();
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  // Close popups on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setNotifOpen(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setProfileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200 shadow-xs">
       <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         {/* Left: Mobile Toggle & Brand Logo */}
         <div className="flex items-center gap-3">
-          {/* Mobile hamburger button */}
           <button
             onClick={() => setMobileMenuOpen(true)}
             className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl md:hidden transition-colors"
@@ -82,80 +107,114 @@ export const Navbar: React.FC = () => {
             <span className="capitalize font-bold text-slate-800">{currentRole} Account</span>
             {currentRole === 'instructor' && (
               <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-mono font-bold">
-                48 Students Assigned
+                48 Students
               </span>
             )}
           </div>
 
           {/* Notifications Dropdown */}
-          <div className="relative">
+          <div className="relative" ref={notifRef}>
             <button
               onClick={() => setNotifOpen(!notifOpen)}
-              className="relative p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+              className="relative p-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+              title="Notifications"
             >
               <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-indigo-600 rounded-full ring-2 ring-white" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-rose-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center ring-2 ring-white animate-pulse">
+                  {unreadCount}
+                </span>
+              )}
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-100 py-3 z-50 animate-fadeIn">
-                <div className="px-4 pb-2 border-b border-slate-100 flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    Notifications
-                  </span>
-                  <span className="text-[10px] text-indigo-600 font-semibold cursor-pointer hover:underline">
-                    Mark read
-                  </span>
-                </div>
-                <div className="divide-y divide-slate-50 max-h-64 overflow-y-auto">
-                  <div
-                    onClick={() => {
-                      setCurrentView('dashboard');
-                      setNotifOpen(false);
-                    }}
-                    className="p-3 hover:bg-amber-50/50 text-xs transition-colors cursor-pointer"
-                  >
-                    <p className="font-semibold text-amber-800 flex items-center gap-1">
-                      <GraduationCap className="w-3.5 h-3.5 text-amber-600" /> New Instructor Assignment
-                    </p>
-                    <p className="text-slate-600 text-[11px] mt-0.5">Prof. Sarah Miller posted "Two Sum" for CSE-301</p>
-                    <span className="text-[10px] text-slate-400 mt-1 block">5m ago • Mandatory</span>
+              <div className="absolute right-0 mt-2 w-84 bg-white rounded-3xl shadow-2xl border border-slate-200 py-3 z-50 animate-fadeIn">
+                <div className="px-5 pb-3 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+                      Notifications
+                    </span>
+                    {unreadCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700">
+                        {unreadCount} new
+                      </span>
+                    )}
                   </div>
-                  <div className="p-3 hover:bg-slate-50 text-xs transition-colors cursor-pointer">
-                    <p className="font-semibold text-slate-800">Two Sum submission analyzed</p>
-                    <p className="text-slate-500 text-[11px] mt-0.5">Scored 85/100 • AI Revision available (+7 pts)</p>
-                    <span className="text-[10px] text-slate-400 mt-1 block">10m ago</span>
-                  </div>
-                  {currentRole === 'instructor' && similarityAlerts.length > 0 && (
-                    <div
-                      onClick={() => {
-                        setCurrentView('instructor-similarity');
-                        setNotifOpen(false);
-                      }}
-                      className="p-3 hover:bg-rose-50/50 text-xs transition-colors cursor-pointer"
+
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllNotificationsAsRead}
+                      className="text-[11px] text-indigo-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
                     >
-                      <p className="font-semibold text-rose-700 flex items-center gap-1">
-                        <ShieldCheck className="w-3.5 h-3.5" /> High Similarity Alert (89%)
-                      </p>
-                      <p className="text-slate-600 text-[11px] mt-0.5">Sai Kiran & Harish N. flagged on Two Sum</p>
-                      <span className="text-[10px] text-slate-400 mt-1 block">30m ago</span>
+                      <CheckCheck className="w-3.5 h-3.5" />
+                      <span>Mark all read</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+                  {notifications.length > 0 ? (
+                    notifications.map((notif) => (
+                      <div
+                        key={notif.id}
+                        onClick={() => {
+                          handleNotificationClick(notif);
+                          setNotifOpen(false);
+                        }}
+                        className={`p-3.5 px-5 hover:bg-slate-50 transition-colors cursor-pointer flex items-start gap-3 ${
+                          !notif.isRead ? 'bg-indigo-50/40' : ''
+                        }`}
+                      >
+                        <div className={`p-2 rounded-xl flex-shrink-0 mt-0.5 ${
+                          notif.type === 'assignment'
+                            ? 'bg-indigo-100 text-indigo-700'
+                            : notif.type === 'similarity'
+                            ? 'bg-rose-100 text-rose-700'
+                            : notif.type === 'submission'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {notif.type === 'assignment' ? (
+                            <GraduationCap className="w-4 h-4" />
+                          ) : notif.type === 'similarity' ? (
+                            <ShieldCheck className="w-4 h-4" />
+                          ) : notif.type === 'submission' ? (
+                            <FileCode className="w-4 h-4" />
+                          ) : (
+                            <Clock className="w-4 h-4" />
+                          )}
+                        </div>
+
+                        <div className="flex-1 space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <h4 className={`text-xs ${!notif.isRead ? 'font-extrabold text-slate-900' : 'font-bold text-slate-700'}`}>
+                              {notif.title}
+                            </h4>
+                            <span className="text-[10px] font-mono text-slate-400">
+                              {notif.timestamp}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 leading-snug">
+                            {notif.message}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-8 text-center text-xs text-slate-400">
+                      No notifications at this time.
                     </div>
                   )}
-                  <div className="p-3 hover:bg-slate-50 text-xs transition-colors cursor-pointer">
-                    <p className="font-semibold text-slate-800">DSA Assignment 1 due soon</p>
-                    <p className="text-slate-500 text-[11px] mt-0.5">10 May 2026 deadline</p>
-                    <span className="text-[10px] text-slate-400 mt-1 block">2h ago</span>
-                  </div>
                 </div>
               </div>
             )}
           </div>
 
           {/* User Profile Pill & Dropdown */}
-          <div className="relative">
+          <div className="relative" ref={profileRef}>
             <button
               onClick={() => setProfileOpen(!profileOpen)}
-              className="flex items-center gap-2.5 p-1.5 pl-2.5 rounded-full hover:bg-slate-100 border border-slate-200 transition-colors"
+              className="flex items-center gap-2.5 p-1.5 pl-2.5 rounded-full hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
             >
               <div className="text-left hidden lg:block">
                 <div className="text-xs font-bold text-slate-800 leading-tight">
@@ -174,7 +233,7 @@ export const Navbar: React.FC = () => {
             </button>
 
             {profileOpen && (
-              <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 animate-fadeIn">
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-3xl shadow-xl border border-slate-200 py-2 z-50 animate-fadeIn">
                 <div className="px-4 py-2.5 border-b border-slate-100">
                   <p className="text-xs font-bold text-slate-800">{currentUser.name}</p>
                   <p className="text-[11px] text-slate-500 truncate">{currentUser.email}</p>
@@ -189,7 +248,7 @@ export const Navbar: React.FC = () => {
                       setCurrentView(currentRole === 'student' ? 'profile' : 'instructor-dashboard');
                       setProfileOpen(false);
                     }}
-                    className="w-full px-4 py-2 text-xs text-left font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                    className="w-full px-4 py-2 text-xs text-left font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
                   >
                     <User className="w-3.5 h-3.5 text-slate-400" />
                     My Profile & Institution
@@ -199,7 +258,7 @@ export const Navbar: React.FC = () => {
                       logout();
                       setProfileOpen(false);
                     }}
-                    className="w-full px-4 py-2 text-xs text-left font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                    className="w-full px-4 py-2 text-xs text-left font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer"
                   >
                     <LogOut className="w-3.5 h-3.5 text-rose-500" />
                     Sign Out

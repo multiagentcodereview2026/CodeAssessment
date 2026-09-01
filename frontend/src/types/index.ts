@@ -250,3 +250,17 @@ export interface ReportItem {
   fileSize: string;
   format: 'PDF' | 'CSV' | 'XLSX';
 }
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  isRead: boolean;
+  type: 'assignment' | 'submission' | 'similarity' | 'alert';
+  actionTarget: {
+    view: string;
+    problemId?: string;
+    submissionId?: string;
+  };
+}

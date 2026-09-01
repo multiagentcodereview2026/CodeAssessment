@@ -10,7 +10,8 @@ import {
   Assignment,
   SimilarityAlert,
   ReportItem,
-  StudentAssignmentStatus
+  StudentAssignmentStatus,
+  AppNotification
 } from '../types';
 import {
   MOCK_STUDENT_USER,
@@ -25,6 +26,55 @@ import {
   MOCK_REPORTS,
   MOCK_INSTRUCTOR_STATS
 } from '../mock/data';
+
+export const INITIAL_NOTIFICATIONS: AppNotification[] = [
+  {
+    id: 'notif-1',
+    title: 'New Instructor Assignment',
+    message: 'Prof. Sarah Miller posted "Two Sum" for CSE-301 Section A.',
+    timestamp: '5m ago',
+    isRead: false,
+    type: 'assignment',
+    actionTarget: {
+      view: 'workspace',
+      problemId: 'prob-1'
+    }
+  },
+  {
+    id: 'notif-2',
+    title: 'Two Sum Evaluation Complete',
+    message: 'Scored 85/100. AI optimization diff available (+7 pts boost).',
+    timestamp: '15m ago',
+    isRead: false,
+    type: 'submission',
+    actionTarget: {
+      view: 'result',
+      submissionId: 'SUB90124'
+    }
+  },
+  {
+    id: 'notif-3',
+    title: 'High Similarity Alert Detected',
+    message: 'Sai Kiran & Harish N. have 89% AST code token similarity on Two Sum.',
+    timestamp: '30m ago',
+    isRead: false,
+    type: 'similarity',
+    actionTarget: {
+      view: 'instructor-analytics'
+    }
+  },
+  {
+    id: 'notif-4',
+    title: 'Coursework Deadline Approaching',
+    message: 'DSA Assignment 1 is due on 10 May 2026 for CSE-301.',
+    timestamp: '2h ago',
+    isRead: true,
+    type: 'alert',
+    actionTarget: {
+      view: 'problems'
+    }
+  }
+];
 
 interface AppContextType {
   currentUser: UserProfile;
@@ -60,6 +110,10 @@ interface AppContextType {
   dismissBroadcast: () => void;
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (open: boolean) => void;
+  notifications: AppNotification[];
+  markNotificationAsRead: (id: string) => void;
+  markAllNotificationsAsRead: () => void;
+  handleNotificationClick: (notif: AppNotification) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -80,9 +134,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [reports, setReports] = useState<ReportItem[]>(MOCK_REPORTS);
   const [instructorStats, setInstructorStats] = useState(MOCK_INSTRUCTOR_STATS);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
   const [activeBroadcast, setActiveBroadcast] = useState<string | null>(
     '📢 Instructor Notice: Prof. Sarah Miller posted a new challenge "Two Sum" for CSE-301. Please solve before May 10!'
   );
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
   const switchRole = (role: Role) => {
     setCurrentRole(role);
@@ -125,14 +181,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
   };
 
+  const markNotificationAsRead = (id: string) => {
+    setNotifications(prev =>
+      prev.map(n => (n.id === id ? { ...n, isRead: true } : n))
+    );
+  };
+
+  const markAllNotificationsAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+  };
+
+  const handleNotificationClick = (notif: AppNotification) => {
+    markNotificationAsRead(notif.id);
+    if (notif.actionTarget.problemId) {
+      openProblemWorkspace(notif.actionTarget.problemId);
+    } else if (notif.actionTarget.submissionId) {
+      openAssessmentResult(notif.actionTarget.submissionId);
+    } else if (notif.actionTarget.view) {
+      setCurrentView(notif.actionTarget.view);
+    }
+  };
+
   const addAssignment = (newAssignment: Assignment, newProblem?: Problem) => {
     setAssignments(prev => [newAssignment, ...prev]);
     
-    // If a new problem was created specifically for this assignment, add it to problems catalog
     if (newProblem) {
       setProblems(prev => [newProblem, ...prev]);
     } else {
-      // Mark selected existing problem IDs as instructor_assigned
       setProblems(prev =>
         prev.map(p =>
           newAssignment.problemIds.includes(p.id)
@@ -154,25 +229,52 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       activeAssignments: prev.activeAssignments + 1
     }));
 
-    // Trigger notification banner for students
+    // Trigger dynamic broadcast banner & push real notification
     setActiveBroadcast(
       `📢 New Assignment Posted: "${newAssignment.title}" by ${newAssignment.instructorName || 'Prof. Sarah Miller'} • Due ${newAssignment.dueDate}. Please solve!`
     );
+
+    const newNotif: AppNotification = {
+      id: `notif-${Date.now()}`,
+      title: 'New Instructor Assignment',
+      message: `Prof. Sarah Miller posted "${newAssignment.title}" for CSE-301.`,
+      timestamp: 'Just now',
+      isRead: false,
+      type: 'assignment',
+      actionTarget: {
+        view: 'workspace',
+        problemId: newProblem ? newProblem.id : newAssignment.problemIds[0]
+      }
+    };
+    setNotifications(prev => [newNotif, ...prev]);
   };
 
   const addSubmission = (newSub: SubmissionItem, newAssessment: AssessmentResult) => {
     setSubmissions(prev => [newSub, ...prev]);
     setActiveAssessment(newAssessment);
     
-    // update problem studentStatus
     updateProblemStatus(newSub.problemId, 'Submitted');
 
-    // update student progress
     setStudentProgress(prev => ({
       ...prev,
       overallScore: Number(((prev.overallScore * prev.problemsSolved + newSub.score) / (prev.problemsSolved + 1)).toFixed(1)),
       problemsSolved: Math.min(prev.totalProblems, prev.problemsSolved + 1)
     }));
+
+    // Add evaluation notification
+    const newNotif: AppNotification = {
+      id: `notif-${Date.now()}`,
+      title: `${newSub.problemTitle} Evaluated`,
+      message: `Scored ${newSub.score}/100. Multi-agent explainable report is ready.`,
+      timestamp: 'Just now',
+      isRead: false,
+      type: 'submission',
+      actionTarget: {
+        view: 'result',
+        submissionId: newSub.id
+      }
+    };
+    setNotifications(prev => [newNotif, ...prev]);
 
     setCurrentView('result');
   };
@@ -180,8 +282,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const dismissBroadcast = () => {
     setActiveBroadcast(null);
   };
-
-  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
   return (
     <AppContext.Provider
@@ -218,7 +318,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         activeBroadcast,
         dismissBroadcast,
         mobileMenuOpen,
-        setMobileMenuOpen
+        setMobileMenuOpen,
+        notifications,
+        markNotificationAsRead,
+        markAllNotificationsAsRead,
+        handleNotificationClick
       }}
     >
       {children}

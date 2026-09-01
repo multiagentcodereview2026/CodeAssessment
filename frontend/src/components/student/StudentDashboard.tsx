@@ -6,28 +6,21 @@ import {
   TrendingUp,
   ArrowRight,
   Sparkles,
-  Zap,
-  ChevronRight,
-  Clock,
-  Target,
   GraduationCap,
-  Calendar,
   AlertCircle,
   X,
-  Code2
+  Code2,
+  ListOrdered,
+  LineChart,
+  Lightbulb
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { StatusBadge } from '../common/Badge';
-import { LearningSummarySparkline } from '../common/ChartComponents';
 
 export const StudentDashboard: React.FC = () => {
   const {
     currentUser,
     studentProgress,
-    submissions,
     problems,
-    openProblemWorkspace,
-    openAssessmentResult,
     setCurrentView,
     activeBroadcast,
     dismissBroadcast
@@ -69,7 +62,7 @@ export const StudentDashboard: React.FC = () => {
             </button>
             <button
               onClick={dismissBroadcast}
-              className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-amber-100 transition-colors"
+              className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-amber-100 transition-colors cursor-pointer"
               title="Dismiss notice"
             >
               <X className="w-4 h-4" />
@@ -99,7 +92,7 @@ export const StudentDashboard: React.FC = () => {
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => setCurrentView('problems')}
-            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center gap-2 transition-all cursor-pointer"
+            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center gap-2 transition-all cursor-pointer"
           >
             <GraduationCap className="w-4 h-4" />
             <span>Open Coursework</span>
@@ -107,7 +100,7 @@ export const StudentDashboard: React.FC = () => {
 
           <button
             onClick={() => setCurrentView('recommendations')}
-            className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-purple-600 text-white text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer"
+            className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-purple-600 text-white text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer"
           >
             <Code2 className="w-4 h-4" />
             <span>Practice Sandbox</span>
@@ -195,116 +188,89 @@ export const StudentDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. Main Grid: Recent Submissions & Weak Topics Diagnostic */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Recent Submissions Table */}
-        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-            <div>
-              <h2 className="text-base font-bold text-slate-900">Recent Evaluations</h2>
-              <p className="text-xs text-slate-400">Your latest AI assessment reports and grades</p>
+      {/* 4. Quick Portal Launchpads */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div
+          onClick={() => setCurrentView('problems')}
+          className="bg-white p-6 rounded-3xl border border-slate-200/80 hover:border-indigo-500 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+        >
+          <div>
+            <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+              <GraduationCap className="w-5 h-5" />
             </div>
-            <button
-              onClick={() => setCurrentView('submissions')}
-              className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
-            >
-              <span>View All Records</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+              Assigned Coursework
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Solve mandatory coding questions assigned by Prof. Sarah Miller.
+            </p>
           </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="text-slate-400 border-b border-slate-100 font-medium">
-                  <th className="pb-3 font-semibold">Problem</th>
-                  <th className="pb-3 font-semibold">Score</th>
-                  <th className="pb-3 font-semibold">Status</th>
-                  <th className="pb-3 font-semibold">Date & Time</th>
-                  <th className="pb-3 font-semibold text-right">Report</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {submissions.slice(0, 5).map((sub) => (
-                  <tr key={sub.id} className="hover:bg-slate-50/70 transition-colors group">
-                    <td className="py-3.5 font-bold text-slate-800">
-                      <div className="flex items-center gap-2">
-                        <span>{sub.problemTitle}</span>
-                        <span className="text-[10px] text-slate-400 font-mono font-normal">({sub.language})</span>
-                      </div>
-                    </td>
-                    <td className="py-3.5 font-mono font-bold">
-                      <span className={sub.score >= 80 ? 'text-emerald-600' : 'text-indigo-600'}>
-                        {sub.score} / 100
-                      </span>
-                    </td>
-                    <td className="py-3.5">
-                      <StatusBadge status={sub.status} />
-                    </td>
-                    <td className="py-3.5 text-slate-500 font-mono text-[11px]">
-                      {sub.date}
-                    </td>
-                    <td className="py-3.5 text-right">
-                      <button
-                        onClick={() => openAssessmentResult(sub.id)}
-                        className="px-2.5 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                      >
-                        Inspect AI Report
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-indigo-600">
+            <span>View Tasks ({instructorAssignedProblems.length})</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
           </div>
         </div>
 
-        {/* Right 1 Col: Weak Topics Diagnostic & Learning Summary */}
-        <div className="space-y-6">
-          {/* Weak Topics Diagnostic */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900">Concept Diagnostics</h3>
-              <Target className="w-4 h-4 text-amber-500" />
+        <div
+          onClick={() => setCurrentView('recommendations')}
+          className="bg-white p-6 rounded-3xl border border-slate-200/80 hover:border-purple-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+        >
+          <div>
+            <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+              <Code2 className="w-5 h-5" />
             </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Targeted concepts identified by multi-agent analysis for reinforcement:
+            <h3 className="text-sm font-bold text-slate-900 group-hover:text-purple-600 transition-colors">
+              Practice Sandbox
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Explore self-paced algorithmic challenges without deadlines.
             </p>
-            <div className="flex flex-wrap gap-2 pt-1">
-              {studentProgress.weakTopics.map((topic, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentView('recommendations')}
-                  className="px-3 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200/80 transition-colors"
-                >
-                  {topic}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => setCurrentView('recommendations')}
-              className="w-full py-2 text-xs font-bold text-indigo-600 bg-indigo-50/50 hover:bg-indigo-50 rounded-xl transition-colors text-center block mt-2 cursor-pointer"
-            >
-              View Targeted AI Practice →
-            </button>
           </div>
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-purple-600">
+            <span>Start Practice ({selfPracticeProblems.length})</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </div>
 
-          {/* Learning Summary */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900">Practice Activity</h3>
-              <span className="text-[11px] font-mono text-slate-400">This Month</span>
+        <div
+          onClick={() => setCurrentView('scores')}
+          className="bg-white p-6 rounded-3xl border border-slate-200/80 hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+        >
+          <div>
+            <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+              <LineChart className="w-5 h-5" />
             </div>
-            <div className="my-1">
-              <LearningSummarySparkline />
+            <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+              Problem Scorecard
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Inspect multi-agent rubric breakdown and attempt progression.
+            </p>
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-indigo-600">
+            <span>Open Scorecard</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </div>
+
+        <div
+          onClick={() => setCurrentView('submissions')}
+          className="bg-white p-6 rounded-3xl border border-slate-200/80 hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+        >
+          <div>
+            <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+              <ListOrdered className="w-5 h-5" />
             </div>
-            <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
-              <div className="flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-slate-400" />
-                <span>{studentProgress.hoursSpent}</span>
-              </div>
-              <span className="font-semibold text-indigo-600">85% Accuracy Target</span>
-            </div>
+            <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+              Submissions History
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Review full AI evaluation reports and test pass records.
+            </p>
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-indigo-600">
+            <span>View Records</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
           </div>
         </div>
       </div>
