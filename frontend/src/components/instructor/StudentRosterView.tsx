@@ -39,16 +39,17 @@ export const StudentRosterView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-            Student Performance Details
+            Assigned Student Roster
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Cohort roster, algorithmic diagnostics, individual score trends, and weak topic alerts.
+            Assigned cohort of 48 students for <strong>CSE-301 Section A</strong> • Prof. Sarah Miller.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
-            Total Enrolled: <strong className="text-slate-900 font-mono">{studentRoster.length}</strong>
+          <span className="text-xs font-semibold text-slate-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span>Assigned Cohort: <strong className="text-emerald-800 font-mono">48 Students</strong></span>
           </span>
         </div>
       </div>

@@ -64,20 +64,18 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
 
-        {/* Right: Role Switcher, Alerts & Profile */}
+        {/* Right: Role Indicator, Alerts & Profile */}
         <div className="flex items-center gap-3">
-          {/* Quick Role Toggle */}
-          <button
-            onClick={() => switchRole(currentRole === 'student' ? 'instructor' : 'student')}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200 transition-all active:scale-95"
-            title={`Switch to ${currentRole === 'student' ? 'Instructor' : 'Student'} view`}
-          >
-            <ArrowRightLeft className="w-3.5 h-3.5 text-indigo-600" />
-            <span className="hidden sm:inline">
-              Switch to <strong className="text-indigo-600 capitalize">{currentRole === 'student' ? 'Instructor' : 'Student'}</strong>
-            </span>
-            <span className="sm:hidden capitalize">{currentRole === 'student' ? 'Inst' : 'Stud'}</span>
-          </button>
+          {/* Active Role Indicator Badge */}
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100/90 border border-slate-200 text-xs font-semibold text-slate-700">
+            <span className={`w-2 h-2 rounded-full ${currentRole === 'student' ? 'bg-indigo-600' : 'bg-emerald-600'}`} />
+            <span className="capitalize font-bold text-slate-800">{currentRole} Account</span>
+            {currentRole === 'instructor' && (
+              <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-mono font-bold">
+                48 Students Assigned
+              </span>
+            )}
+          </div>
 
           {/* Notifications Dropdown */}
           <div className="relative">
