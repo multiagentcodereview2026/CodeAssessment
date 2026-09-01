@@ -12,6 +12,7 @@ import {
   Share2,
   Play
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { CircularGauge } from '../common/CircularGauge';
 import { ScoreBar } from '../common/ScoreBar';
@@ -19,9 +20,9 @@ import { CodeDiffViewer } from '../common/CodeDiffViewer';
 import { DifficultyBadge } from '../common/Badge';
 
 export const AssessmentResultView: React.FC = () => {
+  const navigate = useNavigate();
   const {
     activeAssessment,
-    setCurrentView,
     openProblemWorkspace
   } = useApp();
 
@@ -47,8 +48,8 @@ export const AssessmentResultView: React.FC = () => {
       {/* Top Header & Breadcrumb */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <button
-          onClick={() => setCurrentView('submissions')}
-          className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors"
+          onClick={() => navigate('/submissions')}
+          className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back to Submissions</span>
@@ -57,14 +58,17 @@ export const AssessmentResultView: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => window.print()}
-            className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Share2 className="w-3.5 h-3.5 text-slate-500" />
             <span>Export Report</span>
           </button>
           <button
-            onClick={() => openProblemWorkspace(activeAssessment.problemId)}
-            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center gap-1.5 transition-all"
+            onClick={() => {
+              openProblemWorkspace(activeAssessment.problemId);
+              navigate(`/problems/${activeAssessment.problemId}`);
+            }}
+            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
           >
             <Play className="w-3.5 h-3.5" />
             <span>Iterate & Re-Submit</span>

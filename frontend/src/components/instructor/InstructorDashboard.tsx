@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Users,
   CalendarCheck,
@@ -18,11 +19,11 @@ import { useApp } from '../../context/AppContext';
 import { ScoreDistributionBarChart } from '../common/ChartComponents';
 
 export const InstructorDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const {
     currentUser,
     instructorStats,
     assignments,
-    setCurrentView,
     similarityAlerts
   } = useApp();
 
@@ -40,14 +41,14 @@ export const InstructorDashboard: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-3 relative z-10">
           <button
-            onClick={() => setCurrentView('instructor-assignments')}
+            onClick={() => navigate('/instructor/assignments')}
             className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Create Assignment</span>
           </button>
           <button
-            onClick={() => setCurrentView('instructor-reports')}
+            onClick={() => navigate('/instructor/reports')}
             className="px-5 py-3 bg-slate-800/90 hover:bg-slate-700 text-slate-200 rounded-2xl text-xs font-bold border border-slate-700/80 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
           >
             <Download className="w-4 h-4" />
@@ -60,7 +61,7 @@ export const InstructorDashboard: React.FC = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Students */}
         <div
-          onClick={() => setCurrentView('instructor-students')}
+          onClick={() => navigate('/instructor/students')}
           className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs hover:border-emerald-300 card-hover cursor-pointer transition-all"
         >
           <div className="flex items-center justify-between text-slate-500 mb-2">
@@ -82,7 +83,7 @@ export const InstructorDashboard: React.FC = () => {
 
         {/* Active Assignments */}
         <div
-          onClick={() => setCurrentView('instructor-assignments')}
+          onClick={() => navigate('/instructor/assignments')}
           className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs hover:border-emerald-300 card-hover cursor-pointer transition-all"
         >
           <div className="flex items-center justify-between text-slate-500 mb-2">
@@ -103,7 +104,10 @@ export const InstructorDashboard: React.FC = () => {
         </div>
 
         {/* Submissions */}
-        <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs hover:border-emerald-300 card-hover transition-all">
+        <div
+          onClick={() => navigate('/instructor/reports')}
+          className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs hover:border-emerald-300 card-hover cursor-pointer transition-all"
+        >
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-semibold text-slate-500">Submissions Evaluated</span>
             <div className="p-2 bg-purple-50 text-purple-600 rounded-xl">
@@ -114,13 +118,13 @@ export const InstructorDashboard: React.FC = () => {
             {instructorStats.totalSubmissions}
           </div>
           <div className="mt-2 text-xs text-purple-600 font-semibold">
-            +38 automated AI evaluations
+            Automated AI evaluations
           </div>
         </div>
 
         {/* Avg Score */}
         <div
-          onClick={() => setCurrentView('instructor-analytics')}
+          onClick={() => navigate('/instructor/analytics')}
           className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs hover:border-emerald-300 card-hover cursor-pointer transition-all"
         >
           <div className="flex items-center justify-between text-slate-500 mb-2">
@@ -132,9 +136,8 @@ export const InstructorDashboard: React.FC = () => {
           <div className="text-3xl font-extrabold text-slate-900 font-mono">
             {instructorStats.averageScore}%
           </div>
-          <div className="mt-2 text-xs text-emerald-600 font-semibold flex items-center gap-1">
-            <TrendingUp className="w-3.5 h-3.5" />
-            <span>+4.1% vs previous term</span>
+          <div className="mt-2 text-xs text-slate-500 font-medium">
+            Cohort Average
           </div>
         </div>
       </div>
@@ -142,7 +145,7 @@ export const InstructorDashboard: React.FC = () => {
       {/* Similarity Alert Banner (Von Restorff Effect: High contrast standout for priority alerts) */}
       {similarityAlerts.length > 0 && (
         <div
-          onClick={() => setCurrentView('instructor-similarity')}
+          onClick={() => navigate('/instructor/similarity')}
           className="p-5 rounded-3xl bg-gradient-to-r from-rose-50 via-rose-100/60 to-rose-50 border border-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:bg-rose-100/90 transition-all card-hover"
         >
           <div className="flex items-center gap-3.5">
@@ -175,7 +178,7 @@ export const InstructorDashboard: React.FC = () => {
               <p className="text-xs text-slate-400 mt-0.5">Score distribution across {instructorStats.totalStudents} enrolled students</p>
             </div>
             <button
-              onClick={() => setCurrentView('instructor-analytics')}
+              onClick={() => navigate('/instructor/analytics')}
               className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 cursor-pointer"
             >
               <span>Detailed Analytics</span>
@@ -219,7 +222,7 @@ export const InstructorDashboard: React.FC = () => {
                 <p className="text-xs text-slate-400 mt-0.5">Real-time submission & grading progress</p>
               </div>
               <button
-                onClick={() => setCurrentView('instructor-assignments')}
+                onClick={() => navigate('/instructor/assignments')}
                 className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 cursor-pointer"
               >
                 <span>View All</span>
@@ -263,7 +266,7 @@ export const InstructorDashboard: React.FC = () => {
 
           {/* Serial Position Effect: Concluding high-impact primary action at the end */}
           <button
-            onClick={() => setCurrentView('instructor-students')}
+            onClick={() => navigate('/instructor/students')}
             className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-bold shadow-md flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer mt-5"
           >
             <span>Open Full Student Roster ({instructorStats.totalStudents} Students)</span>

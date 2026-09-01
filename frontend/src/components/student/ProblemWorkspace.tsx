@@ -16,11 +16,13 @@ import {
   ShieldCheck,
   Check
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { DifficultyBadge } from '../common/Badge';
 import { AssessmentResult, SubmissionItem } from '../../types';
 
 export const ProblemWorkspace: React.FC = () => {
+  const navigate = useNavigate();
   const {
     selectedProblem,
     setCurrentView,
@@ -241,6 +243,7 @@ public:
       };
 
       addSubmission(newSubItem, newAssessment);
+      navigate(`/submissions/${newSubmissionId}`);
     }, 3400);
 
     return () => {
@@ -260,7 +263,7 @@ public:
       <div className="flex items-center justify-between">
         <button
           onClick={() => {
-            setCurrentView('problems');
+            navigate('/problems');
           }}
           className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer py-1.5 px-3 rounded-xl hover:bg-slate-100 active:scale-95"
         >

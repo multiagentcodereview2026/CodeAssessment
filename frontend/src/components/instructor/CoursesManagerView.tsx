@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   BookOpen,
   Users,
@@ -14,7 +15,8 @@ import { useApp } from '../../context/AppContext';
 import { Modal } from '../common/Modal';
 
 export const CoursesManagerView: React.FC = () => {
-  const { courses, addCourse, deleteCourse, setCurrentView } = useApp();
+  const navigate = useNavigate();
+  const { courses, addCourse, deleteCourse } = useApp();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCode, setNewCode] = useState('');
@@ -79,7 +81,7 @@ export const CoursesManagerView: React.FC = () => {
                   <button
                     onClick={() => deleteCourse(course.id)}
                     title="Delete Course"
-                    className="text-slate-300 hover:text-rose-600 p-1 transition-colors"
+                    className="text-slate-300 hover:text-rose-600 p-1 transition-colors cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -92,7 +94,7 @@ export const CoursesManagerView: React.FC = () => {
 
               <div className="grid grid-cols-3 gap-3 pt-4 border-t border-slate-100 text-center">
                 <div
-                  onClick={() => setCurrentView('instructor-students')}
+                  onClick={() => navigate('/instructor/students')}
                   className="p-3 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-emerald-50/50 cursor-pointer transition-colors"
                 >
                   <span className="text-[10px] text-slate-400 font-semibold block">Students</span>
@@ -102,7 +104,7 @@ export const CoursesManagerView: React.FC = () => {
                 </div>
 
                 <div
-                  onClick={() => setCurrentView('instructor-assignments')}
+                  onClick={() => navigate('/instructor/assignments')}
                   className="p-3 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-emerald-50/50 cursor-pointer transition-colors"
                 >
                   <span className="text-[10px] text-slate-400 font-semibold block">Assignments</span>
@@ -112,7 +114,7 @@ export const CoursesManagerView: React.FC = () => {
                 </div>
 
                 <div
-                  onClick={() => setCurrentView('instructor-analytics')}
+                  onClick={() => navigate('/instructor/analytics')}
                   className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100 hover:bg-emerald-100/60 cursor-pointer transition-colors"
                 >
                   <span className="text-[10px] text-emerald-700 font-semibold block">Avg Score</span>
@@ -125,7 +127,7 @@ export const CoursesManagerView: React.FC = () => {
 
             <div className="flex items-center justify-between pt-4 border-t border-slate-100">
               <button
-                onClick={() => setCurrentView('instructor-students')}
+                onClick={() => navigate('/instructor/students')}
                 className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 cursor-pointer"
               >
                 <span>View Cohort Roster</span>
@@ -133,7 +135,7 @@ export const CoursesManagerView: React.FC = () => {
               </button>
 
               <button
-                onClick={() => setCurrentView('instructor-assignments')}
+                onClick={() => navigate('/instructor/assignments')}
                 className="px-4 py-2 bg-slate-900 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer"
               >
                 Manage Class
