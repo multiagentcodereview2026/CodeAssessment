@@ -326,11 +326,20 @@ public:
             }}
             className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer"
           >
-            {problems.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title} ({p.difficulty}) {p.origin === 'instructor_assigned' ? '• 🎓 Coursework' : '• 💡 Practice'}
-              </option>
-            ))}
+            <optgroup label="🎓 Instructor Coursework">
+              {problems.filter(p => p.origin === 'instructor_assigned').map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title} ({p.difficulty})
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="💡 Self-Paced Practice">
+              {problems.filter(p => p.origin !== 'instructor_assigned').map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title} ({p.difficulty})
+                </option>
+              ))}
+            </optgroup>
           </select>
         </div>
 

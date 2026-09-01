@@ -173,7 +173,9 @@ export interface StudentProgress {
   problemsSolved: number;
   totalProblems: number;
   currentStreak: number;
-  rankPercentile: string;
+  rankDisplay: string;
+  rankNumber: number;
+  totalStudents: number;
   progressPercent: number;
   topicsCovered: number;
   totalTopics: number;

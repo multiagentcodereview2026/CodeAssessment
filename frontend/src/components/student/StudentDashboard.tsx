@@ -193,12 +193,12 @@ export const StudentDashboard: React.FC = () => {
             </div>
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl font-extrabold text-purple-700 font-sans">
-              {studentProgress.rankPercentile}
+            <span className="text-xl font-extrabold text-purple-700 font-sans">
+              {studentProgress.rankDisplay}
             </span>
           </div>
           <div className="mt-2 text-xs text-purple-600 font-medium">
-            CSE-301 Section A (48 peers)
+            CSE-301 Section A (48 Students)
           </div>
         </div>
       </div>

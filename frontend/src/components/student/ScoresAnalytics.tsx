@@ -27,8 +27,8 @@ export const ScoresAnalytics: React.FC = () => {
   const { problems, submissions, selectedProblemId, setSelectedProblemId, openProblemWorkspace, setCurrentView } = useApp();
   
   // Active selected problem for specific analysis
+  const [modeFilter, setModeFilter] = useState<'assigned' | 'self'>('assigned');
   const [activeProblemId, setActiveProblemId] = useState<string>(selectedProblemId || 'prob-1');
-  const [modeFilter, setModeFilter] = useState<'all' | 'assigned' | 'self'>('all');
 
   const selectedProblem = problems.find(p => p.id === activeProblemId) || problems[0];
   const isAssigned = selectedProblem.origin === 'instructor_assigned';
@@ -115,33 +115,39 @@ export const ScoresAnalytics: React.FC = () => {
           </select>
         </div>
 
-        {/* Mode Filter Pills */}
-        <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-100/80 rounded-2xl border border-slate-200/80">
+        {/* Mode Filter Pills - Strictly 2 Independent Modes */}
+        <div className="flex items-center gap-1.5 p-1.5 bg-slate-100/80 rounded-2xl border border-slate-200/80">
           <button
-            onClick={() => setModeFilter('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              modeFilter === 'all' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            All Challenges
-          </button>
-          <button
-            onClick={() => setModeFilter('assigned')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+            onClick={() => {
+              setModeFilter('assigned');
+              const firstAssigned = problems.find(p => p.origin === 'instructor_assigned');
+              if (firstAssigned) {
+                setActiveProblemId(firstAssigned.id);
+                setSelectedProblemId(firstAssigned.id);
+              }
+            }}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               modeFilter === 'assigned' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <GraduationCap className="w-3.5 h-3.5" />
-            <span>Instructor Coursework</span>
+            <span>Coursework Scorecards</span>
           </button>
           <button
-            onClick={() => setModeFilter('self')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+            onClick={() => {
+              setModeFilter('self');
+              const firstSelf = problems.find(p => p.origin !== 'instructor_assigned');
+              if (firstSelf) {
+                setActiveProblemId(firstSelf.id);
+                setSelectedProblemId(firstSelf.id);
+              }
+            }}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               modeFilter === 'self' ? 'bg-purple-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <Code2 className="w-3.5 h-3.5" />
-            <span>Self-Paced Practice</span>
+            <span>Practice Scorecards</span>
           </button>
         </div>
       </div>
