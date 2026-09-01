@@ -1,4 +1,6 @@
+import { motion } from 'framer-motion';
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useAuth } from '../context/AuthContext';
 
 const progressData = [
   { date: 'Apr 1', score: 30 }, { date: 'Apr 8', score: 45 }, { date: 'Apr 15', score: 42 }, 
@@ -14,15 +16,23 @@ const categoryScores = [
 ];
 
 const StudentAnalytics = () => {
+  const { user } = useAuth();
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <div className="mb-6">
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
+        className="mb-6"
+      >
         <h1 className="text-2xl font-bold text-slate-800">Detailed Analytics</h1>
         <p className="text-slate-500 text-sm mt-1">Deep dive into your performance metrics and AI evaluation breakdown.</p>
-      </div>
+      </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <motion.div 
+          initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }}
+          className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-lg transition-all duration-300"
+        >
           <h2 className="text-base font-semibold text-slate-800 mb-6">Overall Score Trend</h2>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -35,9 +45,12 @@ const StudentAnalytics = () => {
               </LineChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <motion.div 
+          initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.4 }}
+          className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-lg transition-all duration-300"
+        >
           <h2 className="text-base font-semibold text-slate-800 mb-6">Multi-Agent Category Averages</h2>
           <div className="flex items-center h-64">
             <div className="w-1/2 h-full">
@@ -53,15 +66,19 @@ const StudentAnalytics = () => {
             </div>
             <div className="w-1/2 pl-4 space-y-2.5">
               {categoryScores.map((entry, idx) => (
-                <div key={idx} className="flex items-center text-xs">
+                <motion.div 
+                  key={idx} 
+                  initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 + idx * 0.1 }}
+                  className="flex items-center text-xs hover:bg-slate-50 p-1.5 rounded transition-colors"
+                >
                   <div className="w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: entry.color }}></div>
                   <span className="text-slate-600 flex-1">{entry.name}</span>
                   <span className="font-semibold text-slate-800">{entry.value}%</span>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     </div>
   );

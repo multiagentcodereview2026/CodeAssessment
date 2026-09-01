@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
+import { motion } from 'framer-motion';
 import { Play, Send, ArrowLeft, Code } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -8,7 +9,7 @@ const CodeEditor = () => {
   const { id } = useParams();
   const problemId = id || "two-sum";
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, authFetch } = useAuth();
 
   const [problem, setProblem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,7 +21,7 @@ const CodeEditor = () => {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/problems/${problemId}`)
+    authFetch(`/api/problems/${problemId}`)
       .then(res => res.json())
       .then(data => {
         setProblem(data);
@@ -45,7 +46,7 @@ const CodeEditor = () => {
         setCode(fallback.starter_codes[language]);
         setLoading(false);
       });
-  }, [problemId]);
+  }, [problemId, language, authFetch]);
 
   const handleLanguageChange = (newLang) => {
     setLanguage(newLang);
@@ -58,7 +59,7 @@ const CodeEditor = () => {
     setIsRunning(true);
     setConsoleOutput(null);
     try {
-      const response = await fetch('/api/submissions/run', {
+      const response = await authFetch('/api/submissions/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -84,11 +85,11 @@ const CodeEditor = () => {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/submissions/submit', {
+      const response = await authFetch('/api/submissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          student_id: user?.id || "24BD1A058Z",
+          student_id: user?.username || "24BD1A058Z",
           problem_id: problemId,
           language,
           code
@@ -105,15 +106,27 @@ const CodeEditor = () => {
   };
 
   if (loading) {
-    return <div className="p-8 text-center text-slate-500 font-medium">Loading Problem Environment...</div>;
+    return (
+      <div className="p-8 text-center text-slate-500 font-medium h-[calc(100vh-6rem)] flex items-center justify-center">
+        <div className="animate-pulse flex flex-col items-center">
+          <Code className="w-8 h-8 text-indigo-400 mb-4 animate-bounce" />
+          Loading Problem Environment...
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="h-[calc(100vh-6rem)] flex flex-col md:flex-row gap-6 max-w-7xl mx-auto">
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.98 }} 
+      animate={{ opacity: 1, scale: 1 }} 
+      transition={{ duration: 0.4 }}
+      className="h-[calc(100vh-6rem)] flex flex-col md:flex-row gap-6 max-w-7xl mx-auto"
+    >
       {/* Left: Problem Details */}
-      <div className="w-full md:w-1/2 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+      <div className="w-full md:w-1/2 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden hover:shadow-lg transition-all duration-300">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center">
-          <button onClick={() => navigate('/problems')} className="text-slate-400 hover:text-slate-600 mr-4">
+          <button onClick={() => navigate('/problems')} className="text-slate-400 hover:text-slate-600 mr-4 transition-colors">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h2 className="font-semibold text-slate-800 text-sm">Problem Details</h2>
@@ -134,11 +147,15 @@ const CodeEditor = () => {
 
           <h3 className="font-semibold text-slate-800 mb-3 text-sm">Examples:</h3>
           {problem.examples?.map((ex, idx) => (
-            <div key={idx} className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 mb-4 font-mono text-xs">
+            <motion.div 
+              key={idx} 
+              initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 * idx }}
+              className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 mb-4 font-mono text-xs hover:border-indigo-100 transition-colors"
+            >
               <div className="mb-1"><span className="text-slate-500 font-semibold">Input:</span> <span className="text-slate-700">{ex.input}</span></div>
               <div className="mb-1"><span className="text-slate-500 font-semibold">Output:</span> <span className="text-slate-700">{ex.output}</span></div>
               {ex.explanation && <div><span className="text-slate-500 font-semibold">Explanation:</span> <span className="text-slate-700">{ex.explanation}</span></div>}
-            </div>
+            </motion.div>
           ))}
 
           <h3 className="font-semibold text-slate-800 mb-2 text-sm">Constraints:</h3>
@@ -149,18 +166,21 @@ const CodeEditor = () => {
           </ul>
 
           {consoleOutput && (
-            <div className="mt-4 p-4 bg-slate-900 text-slate-200 rounded-xl font-mono text-xs">
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              className="mt-4 p-4 bg-slate-900 text-slate-200 rounded-xl font-mono text-xs shadow-inner"
+            >
               <div className="text-emerald-400 font-bold mb-1">
                 ✓ Test Result: {consoleOutput.passed_cases}/{consoleOutput.passed_cases + consoleOutput.failed_cases} Passed ({consoleOutput.runtime_ms} ms)
               </div>
               <div className="text-slate-400">Stdout: {consoleOutput.stdout}</div>
-            </div>
+            </motion.div>
           )}
         </div>
       </div>
 
       {/* Right: Monaco Editor */}
-      <div className="w-full md:w-1/2 bg-[#1e1e1e] rounded-2xl flex flex-col overflow-hidden shadow-lg border border-slate-800">
+      <div className="w-full md:w-1/2 bg-[#1e1e1e] rounded-2xl flex flex-col overflow-hidden shadow-lg border border-slate-800 hover:shadow-2xl transition-all duration-300">
         <div className="px-4 py-3 bg-[#2d2d2d] flex justify-between items-center border-b border-[#404040]">
           <div className="flex items-center text-slate-300 text-sm font-medium">
             <Code className="w-4 h-4 mr-2" /> Code Editor
@@ -168,7 +188,7 @@ const CodeEditor = () => {
           <select 
             value={language}
             onChange={(e) => handleLanguageChange(e.target.value)}
-            className="bg-[#1e1e1e] border border-[#404040] text-xs rounded-md px-2.5 py-1 text-slate-300 focus:outline-none"
+            className="bg-[#1e1e1e] border border-[#404040] text-xs rounded-md px-2.5 py-1 text-slate-300 focus:outline-none focus:border-indigo-500 transition-colors"
           >
             <option value="python">Python 3.12</option>
             <option value="cpp">C++ (GCC 11.3)</option>
@@ -196,9 +216,9 @@ const CodeEditor = () => {
           <button 
             onClick={handleQuickRun}
             disabled={isRunning}
-            className="flex-1 py-2.5 bg-[#404040] hover:bg-[#4a4a4a] text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center"
+            className="flex-1 py-2.5 bg-[#404040] hover:bg-[#4a4a4a] text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center disabled:opacity-70"
           >
-            <Play className="w-4 h-4 mr-2 text-emerald-400" />
+            <Play className={`w-4 h-4 mr-2 ${isRunning ? 'text-slate-400 animate-pulse' : 'text-emerald-400'}`} />
             {isRunning ? 'Executing...' : 'Run Code'}
           </button>
           <button 
@@ -206,12 +226,12 @@ const CodeEditor = () => {
             disabled={isSubmitting}
             className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-70 flex items-center justify-center shadow-md shadow-indigo-600/30"
           >
-            <Send className="w-4 h-4 mr-2" />
+            <Send className={`w-4 h-4 mr-2 ${isSubmitting ? 'animate-pulse' : ''}`} />
             {isSubmitting ? 'Evaluating (10 LangGraph Agents)...' : 'Submit Code'}
           </button>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { BookOpen, Users, FileText, ArrowUp, ArrowDown } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { motion } from 'framer-motion';
 
 const scoreDistribution = [
   { range: '0-20', count: 0 },
@@ -12,13 +14,17 @@ const scoreDistribution = [
 
 const InstructorDashboard = () => {
   const [overview, setOverview] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const { authFetch } = useAuth();
 
   useEffect(() => {
-    fetch('/api/instructor/overview')
+    setLoading(true);
+    authFetch('/api/instructor/overview')
       .then(res => res.json())
       .then(data => setOverview(data))
-      .catch(() => {});
-  }, []);
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [authFetch]);
 
   const totalStudents = overview?.total_students ?? 5;
   const activeAssignments = overview?.active_assignments ?? 6;
@@ -32,29 +38,63 @@ const InstructorDashboard = () => {
     { name: 'Karthikeya (24BD1A059V)', subs: 1, avg: '82.7%', trend: 'up' },
   ];
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: { staggerChildren: 0.1 }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-pulse">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="bg-slate-200 rounded-2xl h-24 border border-slate-200"></div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-slate-200 rounded-2xl h-72"></div>
+          <div className="bg-slate-200 rounded-2xl h-72"></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-12">
+    <motion.div 
+      className="max-w-7xl mx-auto space-y-6 pb-12"
+      variants={containerVariants}
+      initial="hidden"
+      animate="show"
+    >
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        <motion.div variants={itemVariants} whileHover={{ y: -5 }} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all">
           <div className="text-xs font-semibold text-slate-500 mb-1">Total Enrolled Students</div>
           <div className="text-2xl font-bold text-slate-800 flex items-center"><Users className="w-5 h-5 mr-2 text-indigo-500" /> {totalStudents}</div>
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        </motion.div>
+        <motion.div variants={itemVariants} whileHover={{ y: -5 }} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all">
           <div className="text-xs font-semibold text-slate-500 mb-1">Active Curriculums</div>
           <div className="text-2xl font-bold text-slate-800 flex items-center"><FileText className="w-5 h-5 mr-2 text-emerald-500" /> {activeAssignments}</div>
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        </motion.div>
+        <motion.div variants={itemVariants} whileHover={{ y: -5 }} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all">
           <div className="text-xs font-semibold text-slate-500 mb-1">Submissions Evaluated</div>
           <div className="text-2xl font-bold text-slate-800 flex items-center"><BookOpen className="w-5 h-5 mr-2 text-blue-500" /> {totalSubmissions}</div>
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        </motion.div>
+        <motion.div variants={itemVariants} whileHover={{ y: -5 }} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all">
           <div className="text-xs font-semibold text-slate-500 mb-1">Class Aggregate Score</div>
           <div className="text-2xl font-bold text-emerald-600">{classAvg}</div>
-        </div>
+        </motion.div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <motion.div variants={itemVariants} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition-all">
           <h2 className="font-semibold text-slate-800 text-sm mb-4">Class Performance Distribution</h2>
           <div className="h-52 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -67,11 +107,11 @@ const InstructorDashboard = () => {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col">
+        <motion.div variants={itemVariants} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col hover:shadow-md transition-all">
           <h2 className="font-semibold text-slate-800 mb-4 text-sm">Student Roster Performance</h2>
-          <div className="overflow-x-auto flex-1">
+          <div className="overflow-x-auto flex-1 custom-scrollbar">
             <table className="w-full text-xs text-left">
               <thead className="text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
                 <tr>
@@ -83,7 +123,13 @@ const InstructorDashboard = () => {
               </thead>
               <tbody>
                 {students.map((s, idx) => (
-                  <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
+                  <motion.tr 
+                    key={idx} 
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 * idx }}
+                    className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
+                  >
                     <td className="px-3 py-2.5 font-medium text-slate-800">{s.name}</td>
                     <td className="px-3 py-2.5 text-slate-600">{s.subs}</td>
                     <td className="px-3 py-2.5 font-bold text-slate-700">{s.avg}</td>
@@ -92,14 +138,14 @@ const InstructorDashboard = () => {
                         {s.status || "Active"}
                       </span>
                     </td>
-                  </tr>
+                  </motion.tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
