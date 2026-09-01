@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Linear Search",
+    "problem": "Find a target element in an unsorted array.",
+    "code": "def search(arr, target):\n    for x in arr:\n        if x == target:\n            return True\n    return False",
+    "language": "Python",
+    "expected_time": "O(n)",
+    "expected_space": "O(1)"
+  },
+  {
+    "name": "Binary Search",
+    "problem": "Find a target element in a sorted array using binary search.",
+    "code": "def binary_search(arr, target):\n    left = 0\n    right = len(arr) - 1\n    while left <= right:\n        mid = (left + right) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            left = mid + 1\n        else:\n            right = mid - 1\n    return -1",
+    "language": "Python",
+    "expected_time": "O(log n)",
+    "expected_space": "O(1)"
+  },
+  {
+    "name": "Nested Loop",
+    "problem": "Print every pair of elements in an array.",
+    "code": "def pairs(arr):\n    for i in range(len(arr)):\n        for j in range(len(arr)):\n            print(arr[i], arr[j])",
+    "language": "Python",
+    "expected_time": "O(n^2)",
+    "expected_space": "O(1)"
+  },
+  {
+    "name": "Merge Sort",
+    "problem": "Sort an array using merge sort.",
+    "code": "def merge_sort(arr):\n    if len(arr) <= 1:\n        return arr\n    mid = len(arr) // 2\n    left = merge_sort(arr[:mid])\n    right = merge_sort(arr[mid:])\n    return merge(left, right)",
+    "language": "Python",
+    "expected_time": "O(n log n)",
+    "expected_space": "O(n)"
+  },
+  {
+    "name": "Hash Map Lookup",
+    "problem": "Check whether a target exists in an array using a hash set.",
+    "code": "def contains(arr, target):\n    values = set(arr)\n    return target in values",
+    "language": "Python",
+    "expected_time": "O(n)",
+    "expected_space": "O(n)"
+  }
+]
