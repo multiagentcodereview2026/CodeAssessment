@@ -1,0 +1,49 @@
+services:
+  engine-service:
+    build:
+      context: .
+      dockerfile: docker/engine.Dockerfile
+    image: codeassessment-execution-engine:latest
+    ports:
+      - "8001:8001"
+    environment:
+      - EXECUTION_CPU_LIMIT=1.0
+      - EXECUTION_MEMORY_LIMIT=256m
+      - EXECUTION_TIMEOUT_SECONDS=5
+      - SANDBOX_VOLUME=execution-work
+      - SANDBOX_WORKSPACE_ROOT=/sandbox
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - execution-work:/sandbox
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8001/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  runner-python:
+    build:
+      context: .
+      dockerfile: docker/python.Dockerfile
+    image: codeassessment-python:latest
+
+  runner-c:
+    build:
+      context: .
+      dockerfile: docker/c.Dockerfile
+    image: codeassessment-c:latest
+
+  runner-cpp:
+    build:
+      context: .
+      dockerfile: docker/cpp.Dockerfile
+    image: codeassessment-cpp:latest
+
+  runner-java:
+    build:
+      context: .
+      dockerfile: docker/java.Dockerfile
+    image: codeassessment-java:latest
+
+volumes:
+  execution-work:

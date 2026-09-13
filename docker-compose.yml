@@ -97,7 +97,7 @@ services:
 
   execution-engine:
     build:
-      context: ../docker-execution-engine
+      context: ./docker-execution-engine
       dockerfile: docker/engine.Dockerfile
     environment:
       - EXECUTION_CPU_LIMIT=1.0
