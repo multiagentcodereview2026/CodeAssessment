@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   CheckCircle2,
   Clock,
@@ -13,20 +13,105 @@ import {
   Play,
   Lightbulb,
   CheckSquare2
+  ,XCircle
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { CircularGauge } from '../common/CircularGauge';
 import { CodeDiffViewer } from '../common/CodeDiffViewer';
 import { DifficultyBadge } from '../common/Badge';
+import { MOCK_DEFAULT_ASSESSMENT } from '../../mock/data';
 
 export const AssessmentResultView: React.FC = () => {
   const navigate = useNavigate();
+  const { id: routeSubmissionId } = useParams();
   const {
     activeAssessment,
     openProblemWorkspace,
-    setCurrentView
+    setCurrentView,
+    setActiveAssessment
   } = useApp();
+
+  // A submission can be opened directly by URL, before the API data finishes
+  // loading.  Normalise every optional collection so incomplete API data can
+  // never crash this page into a blank screen.
+  const assessment = {
+    ...MOCK_DEFAULT_ASSESSMENT,
+    ...activeAssessment,
+    multiScores: {
+      ...MOCK_DEFAULT_ASSESSMENT.multiScores,
+      ...(activeAssessment?.multiScores || {})
+    },
+    suggestedImprovements: Array.isArray(activeAssessment?.suggestedImprovements)
+      ? activeAssessment.suggestedImprovements : MOCK_DEFAULT_ASSESSMENT.suggestedImprovements,
+    recommendedTopics: Array.isArray(activeAssessment?.recommendedTopics)
+      ? activeAssessment.recommendedTopics : MOCK_DEFAULT_ASSESSMENT.recommendedTopics,
+    practiceProblems: Array.isArray(activeAssessment?.practiceProblems)
+      ? activeAssessment.practiceProblems : MOCK_DEFAULT_ASSESSMENT.practiceProblems,
+    testResults: Array.isArray(activeAssessment?.testResults) ? activeAssessment.testResults : [],
+    scoreProjection: {
+      ...MOCK_DEFAULT_ASSESSMENT.scoreProjection,
+      ...(activeAssessment?.scoreProjection || {}),
+      focusAreas: Array.isArray(activeAssessment?.scoreProjection?.focusAreas)
+        ? activeAssessment.scoreProjection.focusAreas : MOCK_DEFAULT_ASSESSMENT.scoreProjection.focusAreas,
+      iterationTimeline: Array.isArray(activeAssessment?.scoreProjection?.iterationTimeline)
+        ? activeAssessment.scoreProjection.iterationTimeline : MOCK_DEFAULT_ASSESSMENT.scoreProjection.iterationTimeline
+    }
+  };
+
+  useEffect(() => {
+    if (!routeSubmissionId) return;
+    let active = true;
+    const loadSubmission = async () => {
+      try {
+        const response = await fetch(`/api/submissions/${routeSubmissionId}`, { cache: 'no-store' });
+        if (!response.ok) return;
+        const submission = await response.json();
+        const execution = submission.execution_result || {};
+        const total = Number(execution.total_cases || (Number(execution.passed_cases || 0) + Number(execution.failed_cases || 0)));
+        const passed = Number(execution.passed_cases || 0);
+        const accepted = total > 0 && passed === total;
+        const problemResponse = await fetch(`/api/problems/${submission.problem_id}`, { cache: 'no-store' });
+        const problem = problemResponse.ok ? await problemResponse.json() : null;
+        if (!active) return;
+        setActiveAssessment({
+          ...activeAssessment,
+          submissionId: submission.submission_id,
+          problemId: submission.problem_id,
+          problemTitle: problem?.title || submission.problem_id,
+          language: submission.language,
+          code: submission.code,
+          aiRevisedCode: typeof submission.improved_code === 'string'
+            ? submission.improved_code
+            : typeof submission.improved_code?.improved_code === 'string'
+              ? submission.improved_code.improved_code
+              : submission.code,
+          status: accepted ? 'Accepted' : 'Wrong Answer',
+          executionTime: `${execution.runtime_ms || 0} ms`,
+          totalTestCases: total,
+          explainableFeedback: accepted
+            ? `Accepted: ${passed}/${total} test cases passed.`
+            : `Not accepted: ${passed}/${total} test cases passed. ${execution.results?.find((result: any) => result.status !== 'accepted' && result.status !== 'ACCEPTED')?.stderr || 'The first failing case did not match the expected output.'}`,
+          testResults: (execution.results || []).map((result: any, index: number) => {
+            const hidden = Boolean(result.is_hidden);
+            return {
+              id: String(result.test_case_id || index + 1), testCaseNumber: index + 1,
+              input: hidden ? 'Hidden test case' : (result.input || ''),
+              expectedOutput: hidden ? 'Hidden test case' : (result.expected_output || ''),
+              actualOutput: hidden ? 'Hidden test case' : (result.actual_output || ''),
+              passed: result.status === 'accepted' || result.status === 'ACCEPTED',
+              executionTimeMs: Number(result.runtime_ms || 0), memoryMb: Number(result.memory_kb || 0) / 1024,
+              stderr: hidden ? undefined : (result.stderr || result.error_message || undefined)
+            };
+          })
+        });
+      } catch (error) {
+        console.error('Unable to load submission result:', error);
+      }
+    };
+    void loadSubmission();
+    return () => { active = false; };
+  }, [routeSubmissionId]);
 
   const {
     submissionId,
@@ -34,6 +119,7 @@ export const AssessmentResultView: React.FC = () => {
     language,
     executionTime,
     memory,
+    status,
     multiScores,
     explainableFeedback,
     suggestedImprovements,
@@ -42,8 +128,14 @@ export const AssessmentResultView: React.FC = () => {
     scoreProjection,
     aiRevisedCode,
     code,
-    testResults
-  } = activeAssessment;
+    testResults = [],
+    totalTestCases
+  } = assessment;
+  const passedTests = testResults.filter((test) => test.passed).length;
+  const totalTests = totalTestCases || testResults.length;
+  const accepted = status === 'Accepted' && totalTests > 0 && passedTests === totalTests;
+  const firstFailure = testResults.find((test) => !test.passed);
+  const revisedCode = typeof aiRevisedCode === 'string' ? aiRevisedCode : code;
 
   const scoreItems = [
     {
@@ -121,9 +213,9 @@ export const AssessmentResultView: React.FC = () => {
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           {/* Left info */}
           <div className="space-y-3 flex-1">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Accepted • All test cases passed!</span>
+            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold ${accepted ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-rose-50 border border-rose-200 text-rose-700'}`}>
+              {accepted ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <XCircle className="w-4 h-4 text-rose-600" />}
+              <span>{accepted ? `Accepted • ${passedTests}/${totalTests} test cases passed` : `Not accepted • ${passedTests}/${totalTests} test cases passed`}</span>
             </div>
 
             <div>
@@ -145,7 +237,10 @@ export const AssessmentResultView: React.FC = () => {
               </span>
               <span className="bg-slate-100 px-2.5 py-1 rounded-lg flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5 text-slate-400" />
-                Time: <strong className="text-slate-800">{executionTime}</strong>
+                Runtime: <strong className="text-slate-800">{executionTime}</strong>
+              </span>
+              <span className="bg-slate-100 px-2.5 py-1 rounded-lg">
+                Time complexity: <strong className="text-slate-800">{multiScores.timeComplexity.detected}</strong>
               </span>
               <span className="bg-slate-100 px-2.5 py-1 rounded-lg flex items-center gap-1">
                 <HardDrive className="w-3.5 h-3.5 text-slate-400" />
@@ -274,10 +369,11 @@ export const AssessmentResultView: React.FC = () => {
           <div className="pt-3 border-t border-slate-100">
             <div className="flex items-center justify-between text-xs">
               <span className="font-bold text-slate-800">Test Case Results:</span>
-              <span className="font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                Passed {testResults.length} / {testResults.length}
+              <span className={`font-semibold px-2 py-0.5 rounded border ${accepted ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 'text-rose-600 bg-rose-50 border-rose-200'}`}>
+                Passed {passedTests} / {totalTests}
               </span>
             </div>
+            {firstFailure && <p className="mt-2 text-[11px] text-rose-600">First failed case: {firstFailure.input === 'Hidden test case' ? 'hidden test case' : `public case ${firstFailure.testCaseNumber}`}. {firstFailure.stderr || 'Your output did not match the expected output.'}</p>}
           </div>
         </div>
       </div>
@@ -331,7 +427,7 @@ export const AssessmentResultView: React.FC = () => {
         <div className="rounded-3xl bg-white border border-slate-200/80 p-3 shadow-xs">
           <CodeDiffViewer
             originalCode={code}
-            revisedCode={aiRevisedCode}
+            revisedCode={revisedCode}
             language={language}
             currentScore={scoreProjection.currentScore}
             projectedScore={scoreProjection.projectedScore}

@@ -50,6 +50,11 @@ export const INITIAL_COURSES: CourseItem[] = [
   }
 ];
 
+// Bump this whenever the server-side practice corpus changes.  It prevents a
+// browser from mixing an obsolete local CodeContests cache or draft with the
+// replacement problem bank.
+const PROBLEM_BANK_VERSION = 'newfacade-stdio-v2-empty-editors';
+
 interface ToastInfo {
   id: string;
   message: string;
@@ -112,6 +117,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Shared persistent problems state
   const [problems, setProblems] = useState<Problem[]>(() => {
     try {
+      if (localStorage.getItem('codevedha_problem_bank_version') !== PROBLEM_BANK_VERSION) {
+        localStorage.removeItem('codevedha_problems');
+        for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+          const key = localStorage.key(index);
+          if (key?.startsWith('codevedha_editor_draft:')) localStorage.removeItem(key);
+        }
+        localStorage.setItem('codevedha_problem_bank_version', PROBLEM_BANK_VERSION);
+      }
       const saved = localStorage.getItem('codevedha_problems');
       if (saved) return JSON.parse(saved);
     } catch {}
@@ -120,7 +133,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const [selectedProblemId, setSelectedProblemId] = useState<string>('prob-1');
   const [activeAssessment, setActiveAssessment] = useState<AssessmentResult>(MOCK_DEFAULT_ASSESSMENT);
-  const [submissions, setSubmissions] = useState<SubmissionItem[]>(MOCK_RECENT_SUBMISSIONS);
+  const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
   const [studentProgress, setStudentProgress] = useState<StudentProgress>(MOCK_STUDENT_PROGRESS);
   const [courses, setCourses] = useState<CourseItem[]>(INITIAL_COURSES);
   const [studentRoster, setStudentRoster] = useState<StudentRosterItem[]>(MOCK_STUDENT_ROSTER);
@@ -155,6 +168,64 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
     setIsAuthenticated(true);
   }, [auth?.user]);
+
+  // Submission history, accepted ticks, and attempted markers come from
+  // PostgreSQL—not mock state—so they survive a browser reload and restart.
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSavedSubmissions = async () => {
+      try {
+        // This is the student identity used by the current assessment flow.
+        // When production auth is connected, it should be replaced with the
+        // authenticated student identifier sent on submission as well.
+        const response = await fetch('/api/submissions?student_id=24BD1A058Z', { cache: 'no-store' });
+        if (!response.ok) throw new Error('Could not load saved submissions.');
+        const records = await response.json();
+        if (!Array.isArray(records) || cancelled) return;
+
+        const problemIds = [...new Set(records.map((record: any) => record.problem_id).filter(Boolean))];
+        const titles = new Map<string, string>();
+        await Promise.all(problemIds.map(async (problemId: string) => {
+          try {
+            const problemResponse = await fetch(`/api/problems/${encodeURIComponent(problemId)}`, { cache: 'no-store' });
+            if (problemResponse.ok) {
+              const problem = await problemResponse.json();
+              titles.set(problemId, problem.title || problemId);
+            }
+          } catch {
+            // The record remains usable even if a historical problem was removed.
+          }
+        }));
+
+        if (cancelled) return;
+        setSubmissions(records.map((record: any): SubmissionItem => {
+          const execution = record.execution_result || {};
+          const passed = Number(execution.passed_cases || 0);
+          const total = Number(execution.total_cases || (passed + Number(execution.failed_cases || 0)));
+          const passedAll = total > 0 && passed === total;
+          return {
+            id: record.submission_id,
+            problemId: record.problem_id,
+            problemSlug: record.problem_id,
+            problemTitle: titles.get(record.problem_id) || record.problem_id,
+            score: Math.round(Number(record.overall_score || 0)),
+            status: passedAll ? 'Passed' : passed > 0 ? 'Partial' : 'Failed',
+            language: record.language || '—',
+            date: record.created_at ? new Date(record.created_at).toLocaleString() : 'Saved submission',
+            executionTime: `${execution.runtime_ms || 0} ms`,
+            passedTestCases: passed,
+            totalTestCases: total
+          };
+        }));
+      } catch (error) {
+        console.error('Unable to restore submission history:', error);
+      }
+    };
+
+    void loadSavedSubmissions();
+    return () => { cancelled = true; };
+  }, []);
 
   // Sync problems to localStorage on change
   useEffect(() => {

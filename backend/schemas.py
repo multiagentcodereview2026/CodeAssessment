@@ -20,6 +20,9 @@ class ProblemListItem(BaseModel):
     title: str
     difficulty: str
     category: str
+    is_instructor_assigned: bool = False
+    course_code: Optional[str] = None
+    due_date: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -34,6 +37,9 @@ class ProblemDetail(BaseModel):
     constraints: List[str]
     starter_codes: Dict[str, str]
     test_cases: Optional[List[Dict[str, Any]]] = None
+    is_instructor_assigned: bool = False
+    course_code: Optional[str] = None
+    due_date: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -44,12 +50,13 @@ class SubmissionRequest(BaseModel):
     problem_id: str
     language: str
     code: str
-    test_cases: Optional[List[Dict[str, str]]] = None
+    test_cases: Optional[List[Dict[str, Any]]] = None
 
 class QuickRunRequest(BaseModel):
     language: str
     code: str
-    test_cases: Optional[List[Dict[str, str]]] = None
+    problem_id: Optional[str] = None
+    test_cases: Optional[List[Dict[str, Any]]] = None
 
 class QuickRunResponse(BaseModel):
     compile_status: str
@@ -61,6 +68,8 @@ class QuickRunResponse(BaseModel):
     memory_kb: int
     passed_cases: int
     failed_cases: int
+    total_cases: int
+    results: List[Dict[str, Any]] = []
 
 class SubmissionResponse(BaseModel):
     submission_id: str
@@ -71,6 +80,7 @@ class SubmissionResponse(BaseModel):
     overall_score: Optional[float] = None
     correctness_score: Optional[float] = None
     complexity_score: Optional[float] = None
+    complexity_details: Optional[Dict[str, Any]] = None
     style_score: Optional[float] = None
     similarity_score: Optional[float] = None
     execution_result: Optional[Dict[str, Any]] = None
