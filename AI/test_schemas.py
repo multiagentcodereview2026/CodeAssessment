@@ -23,26 +23,27 @@ problem = Problem(
 
 test_result = TestResult(
     test_case_id="TC001",
-    input="[1, 2, 3], 2",
-    expected_output="1",
-    actual_output="1",
-    passed=True,
+    status="PASSED",
+    input="5",
+    expected_output="10",
+    actual_output="10",
     runtime_ms=15,
-    memory_kb=12000
+    memory_kb=12000,
+    is_hidden=False
 )
 
 
 execution_result = ExecutionResult(
     status="ACCEPTED",
-    passed_tests=1,
-    failed_tests=0,
-    total_tests=1,
-    test_results=[test_result],
     runtime_ms=15,
     memory_kb=12000,
-    exit_code=0
+    compile_success=True,
+    compile_stderr=None,
+    tests_total=1,
+    tests_passed=1,
+    tests_failed=0,
+    results=[test_result]
 )
-
 
 print("Problem:")
 print(problem)

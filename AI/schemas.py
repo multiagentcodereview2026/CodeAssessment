@@ -90,39 +90,31 @@ class Problem(BaseModel):
 
 
 class TestResult(BaseModel):
-    test_case_id: str
+    test_case_id: int | str
+    status: str
+
+    runtime_ms: int = 0
+    memory_kb: int = 0
+
+    is_hidden: bool = False
 
     input: Optional[str] = None
     expected_output: Optional[str] = None
     actual_output: Optional[str] = None
-
-    passed: bool
-
-    runtime_ms: int = 0
-    memory_kb: int = 0
-
-    error: str = ""
-
-    is_hidden: bool = False
+    stderr: Optional[str] = None
 
 
 class ExecutionResult(BaseModel):
-    status: str = "ACCEPTED"
-
-    passed_tests: int = Field(ge=0)
-    failed_tests: int = Field(ge=0)
-    total_tests: int = Field(ge=0)
-
-    test_results: list[TestResult]
-
-    stdout: str = ""
-    stderr: str = ""
+    status: str
 
     runtime_ms: int = 0
     memory_kb: int = 0
 
-    timed_out: bool = False
-    runtime_error: bool = False
-    compilation_error: bool = False
+    compile_success: bool
+    compile_stderr: Optional[str] = None
 
-    exit_code: Optional[int] = None
+    tests_total: int = Field(ge=0)
+    tests_passed: int = Field(ge=0)
+    tests_failed: int = Field(ge=0)
+
+    results: list[TestResult] = []
