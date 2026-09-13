@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float, JSON, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, JSON, Boolean, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -30,9 +30,31 @@ class Problem(Base):
     constraints = Column(JSON, nullable=False) # list of constraint strings
     starter_codes = Column(JSON, nullable=False) # {cpp, python, javascript}
     test_cases = Column(JSON, nullable=False) # list of {input, expected_output, is_hidden}
+    source_url = Column(String(1000), nullable=True)
+    source_license = Column(String(200), nullable=True)
+    content_hash = Column(String(64), nullable=True, unique=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     submissions = relationship("Submission", back_populates="problem")
+    test_case_records = relationship("ProblemTestCase", back_populates="problem", cascade="all, delete-orphan")
+
+
+class ProblemTestCase(Base):
+    __tablename__ = "problem_test_cases"
+    __table_args__ = (UniqueConstraint("problem_id", "position", name="uq_problem_test_case_position"),)
+
+    id = Column(String(100), primary_key=True)
+    problem_id = Column(String(100), ForeignKey("problems.id"), nullable=False, index=True)
+    position = Column(Integer, nullable=False)
+    visibility = Column(String(20), nullable=False, default="HIDDEN", index=True)
+    input_data = Column(Text, nullable=False)
+    expected_output = Column(Text, nullable=False)
+    time_limit_seconds = Column(Integer, nullable=False, default=2)
+    memory_limit_mb = Column(Integer, nullable=False, default=256)
+    content_hash = Column(String(64), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    problem = relationship("Problem", back_populates="test_case_records")
 
 class Submission(Base):
     __tablename__ = "submissions"

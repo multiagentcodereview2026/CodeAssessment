@@ -1,0 +1,157 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: codeassessment
+      POSTGRES_USER: codeassessment
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-before-production}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codeassessment -d codeassessment"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_PROXY_TARGET=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_started
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+psycopg://codeassessment:${POSTGRES_PASSWORD:-change-this-before-production}@postgres:5432/codeassessment
+      - DOCKER_ENGINE_URL=http://execution-engine:8001/execute
+      - EXECUTION_CPU_LIMIT=1.0
+      - EXECUTION_MEMORY_LIMIT=256m
+      - EXECUTION_TIMEOUT_SECONDS=5
+      - DOCKER_ENGINE_REQUEST_TIMEOUT_SECONDS=120
+    depends_on:
+      postgres:
+        condition: service_healthy
+      execution-engine:
+        condition: service_healthy
+
+  dataset-importer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    profiles: ["tools"]
+    environment:
+      - DATABASE_URL=postgresql+psycopg://codeassessment:${POSTGRES_PASSWORD:-change-this-before-production}@postgres:5432/codeassessment
+    volumes:
+      - ../datasets/apps:/datasets:ro
+    command: ["python", "-m", "dataset.import_apps", "--dataset-path", "/datasets/apps-first-100", "--limit", "100"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  dataset-processor:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    profiles: ["tools"]
+    volumes:
+      - ../datasets/apps:/datasets
+    command: ["python", "-m", "dataset.merge_apps", "--input-root", "/datasets", "--output-path", "/datasets/apps-merged-0-1199"]
+
+  codecontests-importer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    profiles: ["tools"]
+    environment:
+      - DATABASE_URL=postgresql+psycopg://codeassessment:${POSTGRES_PASSWORD:-change-this-before-production}@postgres:5432/codeassessment
+    volumes:
+      - ../datasets/code_assessment_1000:/codecontests:ro
+    command: ["python", "-m", "dataset.import_codecontests", "--dataset-path", "/codecontests/dataset.jsonl"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  newfacade-importer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    profiles: ["tools"]
+    environment:
+      - DATABASE_URL=postgresql+psycopg://codeassessment:${POSTGRES_PASSWORD:-change-this-before-production}@postgres:5432/codeassessment
+    volumes:
+      - ../datasets/newfacade-staging:/newfacade:ro
+    command: ["python", "-m", "dataset.import_newfacade", "--dataset-path", "/newfacade/normalized-newfacade.jsonl"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  execution-engine:
+    build:
+      context: ../docker-execution-engine
+      dockerfile: docker/engine.Dockerfile
+    environment:
+      - EXECUTION_CPU_LIMIT=1.0
+      - EXECUTION_MEMORY_LIMIT=256m
+      - EXECUTION_TIMEOUT_SECONDS=5
+      # Submit runs can include 60–200 hidden cases. Eight isolated runners
+      # are allowed per submission; each runner still retains its own limits.
+      - EXECUTION_MAX_CONCURRENT_JOBS=8
+      - EXECUTION_DOCKER_SCHEDULING_GRACE_SECONDS=3
+      # This grace covers Docker Desktop's container creation only. The
+      # program itself is still stopped by its own 2-second judge limit.
+      - EXECUTION_DOCKER_STARTUP_GRACE_SECONDS=20
+      # This must be the Docker daemon volume name (not Compose's YAML alias),
+      # because the engine invokes nested `docker run` commands via the socket.
+      - SANDBOX_VOLUME=${EXECUTION_SANDBOX_VOLUME:-codeassessment_execution-work}
+      - SANDBOX_WORKSPACE_ROOT=/sandbox
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - execution-work:/sandbox
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8001/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  runner-python:
+    build:
+      context: .
+      dockerfile: docker/python.Dockerfile
+    image: codeassessment-python:latest
+    profiles: ["tools"]
+
+  runner-c:
+    build:
+      context: .
+      dockerfile: docker/c.Dockerfile
+    image: codeassessment-c:latest
+    profiles: ["tools"]
+
+  runner-cpp:
+    build:
+      context: .
+      dockerfile: docker/cpp.Dockerfile
+    image: codeassessment-cpp:latest
+    profiles: ["tools"]
+
+  runner-java:
+    build:
+      context: .
+      dockerfile: docker/java.Dockerfile
+    image: codeassessment-java:latest
+    profiles: ["tools"]
+
+volumes:
+  execution-work:
+    name: ${EXECUTION_SANDBOX_VOLUME:-codeassessment_execution-work}
+  postgres-data:

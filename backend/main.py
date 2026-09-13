@@ -1,3 +1,5 @@
+import copy
+import json
 import logging
 from uuid import uuid4
 from typing import List, Optional
@@ -7,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 import models
-from database import Base, engine, get_db
+from database import Base, SessionLocal, engine, get_db
 from schemas import (
     LoginRequest,
     AuthUser,
@@ -23,9 +25,39 @@ from schemas import (
 from docker_runner.executor import execute_code_sandboxed
 from workflow.graph import evaluation_graph
 from workflow.state import EvaluationState
+from instructor_repository import (
+    INSTRUCTOR_PROBLEM_IDS,
+    assignment_metadata,
+    canonical_problem_id,
+    load_problem_cases,
+    provision_instructor_problems,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("evaluator_backend")
+
+
+def redact_hidden_execution(execution_result):
+    """Keep hidden judge data out of API responses and persisted submissions.
+
+    The execution engine needs the input and expected output to judge a case,
+    but students must never receive those values through the submission APIs.
+    Public-case diagnostics remain unchanged.
+    """
+    if not isinstance(execution_result, dict):
+        return execution_result
+
+    safe_result = copy.deepcopy(execution_result)
+    results = safe_result.get("results")
+    if not isinstance(results, list):
+        return safe_result
+
+    for case_result in results:
+        if isinstance(case_result, dict) and case_result.get("is_hidden"):
+            for field in ("input", "expected_output", "actual_output", "stderr"):
+                case_result.pop(field, None)
+
+    return safe_result
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -43,6 +75,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def seed_instructor_assignments():
+    """Ensure instructor assignments and their private judge data exist."""
+    db = SessionLocal()
+    try:
+        created = provision_instructor_problems(db)
+        if created:
+            logger.info("Provisioned %s instructor assignments", created)
+    finally:
+        db.close()
 
 @app.post("/api/auth/login", response_model=AuthUser)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
@@ -82,28 +126,74 @@ def health():
 
 @app.get("/api/problems", response_model=List[ProblemListItem])
 def list_problems(db: Session = Depends(get_db)):
-    """Fetch all available coding problems."""
-    return db.query(models.Problem).all()
+    """Fetch the DSA practice catalogue, excluding course assignments."""
+    problems = (
+        db.query(models.Problem)
+        .filter(~models.Problem.id.in_(INSTRUCTOR_PROBLEM_IDS))
+        .order_by(models.Problem.id)
+        .all()
+    )
+    return [{
+        "id": problem.id,
+        "title": problem.title,
+        "difficulty": problem.difficulty,
+        "category": problem.category,
+    } for problem in problems]
+
+
+@app.get("/api/instructor-problems", response_model=List[ProblemListItem])
+def list_instructor_problems(db: Session = Depends(get_db)):
+    """Fetch course assignments without exposing their hidden cases."""
+    problems = (
+        db.query(models.Problem)
+        .filter(models.Problem.id.in_(INSTRUCTOR_PROBLEM_IDS))
+        .all()
+    )
+    by_id = {problem.id: problem for problem in problems}
+    return [{
+        "id": problem.id,
+        "title": problem.title,
+        "difficulty": problem.difficulty,
+        "category": problem.category,
+        **assignment_metadata(problem.id),
+    } for problem_id in INSTRUCTOR_PROBLEM_IDS if (problem := by_id.get(problem_id))]
 
 @app.get("/api/problems/{problem_id}", response_model=ProblemDetail)
 def get_problem(problem_id: str, db: Session = Depends(get_db)):
     """Fetch a specific problem with its description, examples, constraints, and starter codes."""
+    problem_id = canonical_problem_id(problem_id)
     problem = db.query(models.Problem).filter(models.Problem.id == problem_id).first()
     if not problem:
         raise HTTPException(status_code=404, detail=f"Problem '{problem_id}' not found.")
-    return problem
+    public_cases = load_problem_cases(db, problem, public_only=True)
+    return {
+        "id": problem.id, "title": problem.title, "difficulty": problem.difficulty,
+        "category": problem.category, "description": problem.description,
+        "examples": problem.examples, "constraints": problem.constraints,
+        "starter_codes": problem.starter_codes, "test_cases": public_cases,
+        **assignment_metadata(problem.id),
+    }
 
 # ==========================================
 # Code Execution & Submission Endpoints
 # ==========================================
 
 @app.post("/api/submissions/run", response_model=QuickRunResponse)
-async def quick_run_code(payload: QuickRunRequest):
+async def quick_run_code(payload: QuickRunRequest, db: Session = Depends(get_db)):
     """Executes code against test cases in the sandbox without triggering AI evaluation."""
+    test_cases = payload.test_cases
+    if payload.problem_id:
+        problem_id = canonical_problem_id(payload.problem_id)
+        problem = db.query(models.Problem).filter(models.Problem.id == problem_id).first()
+        if not problem:
+            raise HTTPException(status_code=404, detail="Problem not found")
+        test_cases = load_problem_cases(db, problem, public_only=True)
+    if not test_cases:
+        raise HTTPException(status_code=400, detail="No public test cases are available for this problem")
     res = await execute_code_sandboxed(
         source_code=payload.code,
         language=payload.language,
-        test_cases=payload.test_cases
+        test_cases=test_cases
     )
     return res
 
@@ -119,17 +209,51 @@ async def submit_and_evaluate_code(
     3. LangGraph 10-Agent Evaluation (Groq).
     4. Atomic DB Persistence.
     """
-    logger.info(f"Received submission for student '{payload.student_id}' on problem '{payload.problem_id}'")
+    problem_id = canonical_problem_id(payload.problem_id)
+    logger.info(f"Received submission for student '{payload.student_id}' on problem '{problem_id}'")
 
     # Fetch problem details
-    problem = db.query(models.Problem).filter(models.Problem.id == payload.problem_id).first()
-    test_cases = payload.test_cases or (problem.test_cases if problem else None)
+    problem = db.query(models.Problem).filter(models.Problem.id == problem_id).first()
+    if not problem:
+        raise HTTPException(status_code=404, detail="Problem not found")
+
+    stored_cases = (
+        db.query(models.ProblemTestCase)
+        .filter(models.ProblemTestCase.problem_id == problem_id)
+        .order_by(models.ProblemTestCase.position)
+        .all()
+    )
+    if stored_cases:
+        test_cases = [
+            {
+                "id": case.id,
+                "input": case.input_data,
+                "expected_output": case.expected_output,
+                "is_hidden": case.visibility == "HIDDEN",
+                "time_limit": case.time_limit_seconds,
+                "memory_limit": case.memory_limit_mb,
+            }
+            for case in stored_cases
+        ]
+    else:
+        tc_raw = problem.test_cases
+        if isinstance(tc_raw, str):
+            try:
+                test_cases = json.loads(tc_raw)
+            except Exception:
+                test_cases = []
+        elif isinstance(tc_raw, list):
+            test_cases = tc_raw
     
     # 1. Sandboxed Test Execution
     exec_result = await execute_code_sandboxed(
         source_code=payload.code,
         language=payload.language,
-        test_cases=test_cases
+        test_cases=test_cases,
+        # A final submission must produce an accurate passed/total result.
+        # The engine still uses bounded parallelism, so this does not run all
+        # containers at once and exhaust the host.
+        stop_on_first_failure=False
     )
 
     # 2. Build LangGraph State
@@ -168,6 +292,7 @@ async def submit_and_evaluate_code(
 
     # 3. Execute LangGraph Multi-Agent Engine
     final_state = await evaluation_graph.ainvoke(initial_state)
+    safe_execution_result = redact_hidden_execution(final_state.get("execution_result"))
 
     # 4. Save into Database
     submission_id = f"SUB-{uuid4().hex[:8].upper()}"
@@ -182,7 +307,7 @@ async def submit_and_evaluate_code(
     new_submission = models.Submission(
         submission_id=submission_id,
         student_id=payload.student_id,
-        problem_id=payload.problem_id,
+        problem_id=problem_id,
         language=payload.language,
         code=payload.code,
         status="EVALUATED",
@@ -191,7 +316,7 @@ async def submit_and_evaluate_code(
         complexity_score=final_state.get("complexity_score"),
         style_score=final_state.get("style_score"),
         similarity_score=final_state.get("similarity_score"),
-        execution_result=final_state.get("execution_result"),
+        execution_result=safe_execution_result,
         feedback=final_state.get("feedback"),
         recommendations=final_state.get("recommendations"),
         improved_code=final_state.get("improved_code"),
@@ -211,6 +336,7 @@ async def submit_and_evaluate_code(
         overall_score=new_submission.overall_score,
         correctness_score=new_submission.correctness_score,
         complexity_score=new_submission.complexity_score,
+        complexity_details=final_state.get("complexity_details"),
         style_score=new_submission.style_score,
         similarity_score=new_submission.similarity_score,
         execution_result=new_submission.execution_result,

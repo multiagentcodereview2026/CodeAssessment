@@ -27,6 +27,18 @@ export interface TestCase {
   isHidden?: boolean;
 }
 
+export type InputValueKind = 'int' | 'float' | 'str' | 'bool' | 'list' | 'optional';
+
+export interface InputValueSchema {
+  kind: InputValueKind;
+  item?: InputValueSchema;
+}
+
+export interface ProblemInputField {
+  name: string;
+  schema: InputValueSchema;
+}
+
 export interface Problem {
   id: string;
   title: string;
@@ -44,6 +56,8 @@ export interface Problem {
     time: string;
     space: string;
   };
+  /** Display metadata only. TestCase.input remains the untouched judge stdin. */
+  inputSchema?: ProblemInputField[];
   isInstructorAssigned?: boolean;
   courseCode?: string;
   dueDate?: string;
@@ -137,11 +151,13 @@ export interface AssessmentResult {
   scoreProjection: ScoreProjection;
   aiRevisedCode: string;
   testResults: TestCaseResult[];
+  totalTestCases?: number;
 }
 
 export interface SubmissionItem {
   id: string;
   problemId: string;
+  problemSlug?: string;
   problemTitle: string;
   score: number;
   status: 'Passed' | 'Partial' | 'Failed';

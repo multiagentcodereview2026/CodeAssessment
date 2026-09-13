@@ -26,7 +26,7 @@ export const SubmissionsList: React.FC = () => {
 
   const handleOpenReport = (subId: string) => {
     openAssessmentResult(subId);
-    navigate('/result');
+    navigate(`/submissions/${subId}`);
   };
 
   const handleOpenCode = (problemId: string) => {
