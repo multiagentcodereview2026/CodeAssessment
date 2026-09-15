@@ -35,6 +35,16 @@ const DEFAULT_PROGRAM_SKELETONS: Record<string, string> = {
   javascript: "'use strict';\n\n"
 };
 
+const EDITOR_DRAFT_VERSION = 2;
+const EDITOR_DRAFT_RETENTION_MS = 60 * 24 * 60 * 60 * 1000;
+const EDITOR_DRAFT_PREFIX = 'codevedha_editor_draft:v2:';
+
+type StoredEditorDraft = {
+  version: number;
+  code: string;
+  updatedAt: number;
+};
+
 type PublicRunCaseResult = {
   caseNum: number;
   passed: boolean;
@@ -52,6 +62,7 @@ export const ProblemWorkspace: React.FC = () => {
   const { id: routeProblemId } = useParams<{ id: string }>();
   const isInstructorProblem = new URLSearchParams(location.search).get('view') === 'instructor';
   const {
+    currentUser,
     selectedProblem: fallbackProblem,
     setCurrentView,
     addSubmission
@@ -132,11 +143,62 @@ export const ProblemWorkspace: React.FC = () => {
     results: PublicRunCaseResult[];
   } | null>(null);
 
-  // A draft belongs to one problem and one language.  It stays in this
-  // browser even if the student returns to the catalogue or refreshes.
-  // Drafts are never sent anywhere until the student explicitly runs/submits.
+  // A draft belongs to one user, problem, and language. It remains in this
+  // browser for 60 days after the last edit, including across reloads,
+  // navigation, Run Code, Submit Code, and frontend deployments.
   const draftKey = (problemId: string, selectedLanguage: string) =>
+    `${EDITOR_DRAFT_PREFIX}${encodeURIComponent(currentUser.id)}:${encodeURIComponent(problemId)}:${selectedLanguage}`;
+
+  const legacyDraftKey = (problemId: string, selectedLanguage: string) =>
     `codevedha_editor_draft:${problemId}:${selectedLanguage}`;
+
+  const saveDraft = (problemId: string, selectedLanguage: string, value: string) => {
+    try {
+      const draft: StoredEditorDraft = {
+        version: EDITOR_DRAFT_VERSION,
+        code: value,
+        updatedAt: Date.now()
+      };
+      localStorage.setItem(draftKey(problemId, selectedLanguage), JSON.stringify(draft));
+      return true;
+    } catch (error) {
+      console.warn('Unable to save editor draft:', error);
+      return false;
+    }
+  };
+
+  const loadDraft = (problemId: string, selectedLanguage: string): string | null => {
+    const storageKey = draftKey(problemId, selectedLanguage);
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved !== null) {
+        try {
+          const parsed = JSON.parse(saved) as Partial<StoredEditorDraft>;
+          if (typeof parsed.code === 'string' && typeof parsed.updatedAt === 'number') {
+            if (Date.now() - parsed.updatedAt <= EDITOR_DRAFT_RETENTION_MS) return parsed.code;
+            localStorage.removeItem(storageKey);
+          }
+        } catch {
+          // Drafts from the older format were stored as plain source text.
+          if (saveDraft(problemId, selectedLanguage, saved)) return saved;
+        }
+      }
+
+      const legacyKey = legacyDraftKey(problemId, selectedLanguage);
+      const legacyDraft = localStorage.getItem(legacyKey);
+      if (legacyDraft !== null) {
+        if (saveDraft(problemId, selectedLanguage, legacyDraft)) {
+          localStorage.removeItem(legacyKey);
+        }
+        return legacyDraft;
+      }
+    } catch (error) {
+      console.warn('Unable to load editor draft:', error);
+    }
+    return null;
+  };
+
+  const skipNextDraftWriteRef = useRef(true);
 
   const getStarterCode = (selectedLanguage: string) =>
     DEFAULT_PROGRAM_SKELETONS[selectedLanguage]
@@ -144,21 +206,23 @@ export const ProblemWorkspace: React.FC = () => {
     || DEFAULT_PROGRAM_SKELETONS.cpp;
 
   useEffect(() => {
-    const savedDraft = localStorage.getItem(draftKey(workspaceProblemId, language));
-    // A non-empty draft belongs to its language and is never replaced on a
-    // language switch. Empty legacy drafts get the new full-program skeleton.
-    setCode(savedDraft && savedDraft.trim() ? savedDraft : getStarterCode(language));
+    skipNextDraftWriteRef.current = true;
+    const savedDraft = loadDraft(workspaceProblemId, language);
+    // An intentionally empty draft is valid and must not be replaced by a
+    // starter program. Only a missing or expired draft receives a skeleton.
+    setCode(savedDraft !== null ? savedDraft : getStarterCode(language));
     setRunOutput(null);
-  }, [workspaceProblemId, language]);
+  }, [workspaceProblemId, language, currentUser.id]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(draftKey(workspaceProblemId, language), code);
-    } catch (error) {
-      // A full/disabled browser store must not stop the coding workspace.
-      console.warn('Unable to save editor draft:', error);
+    // The problem/language change render still contains the previous editor
+    // value. Skip that write so it cannot overwrite the draft being restored.
+    if (skipNextDraftWriteRef.current) {
+      skipNextDraftWriteRef.current = false;
+      return;
     }
-  }, [code, language, workspaceProblemId]);
+    saveDraft(workspaceProblemId, language, code);
+  }, [code, language, workspaceProblemId, currentUser.id]);
 
   // When language changes, update starter code
   const handleLanguageChange = (newLang: string) => {
@@ -168,6 +232,7 @@ export const ProblemWorkspace: React.FC = () => {
   const handleResetCode = () => {
     if (window.confirm('Reset code to initial template?')) {
       localStorage.removeItem(draftKey(workspaceProblemId, language));
+      localStorage.removeItem(legacyDraftKey(workspaceProblemId, language));
       setCode(getStarterCode(language));
       setRunOutput(null);
     }
@@ -241,6 +306,7 @@ export const ProblemWorkspace: React.FC = () => {
 
   // Run Code (Sandbox Test Cases via Live FastAPI Backend)
   const handleRunCode = async () => {
+    saveDraft(workspaceProblemId, language, code);
     if (!remoteProblem) {
       setRunOutput({
         status: 'error',
@@ -353,6 +419,7 @@ export const ProblemWorkspace: React.FC = () => {
 
   // Submit Code (Live 10-Agent LangGraph AI Assessment Pipeline)
   const handleSubmitCode = async () => {
+    saveDraft(workspaceProblemId, language, code);
     if (!remoteProblem) {
       setRunOutput({
         status: 'error',
