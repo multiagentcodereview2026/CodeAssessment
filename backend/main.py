@@ -37,6 +37,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("evaluator_backend")
 
 
+FAILED_CASE_REASONS = {
+    "WRONG_ANSWER": "Your output did not match the expected output.",
+    "RUNTIME_ERROR": "Your program ended with a runtime error.",
+    "TIME_LIMIT_EXCEEDED": "Your program exceeded the time limit.",
+    "MEMORY_LIMIT_EXCEEDED": "Your program exceeded the memory limit.",
+    "OUTPUT_LIMIT_EXCEEDED": "Your program produced too much output.",
+    "SYSTEM_ERROR": "The test could not be evaluated because of a system error.",
+}
+
+
 def redact_hidden_execution(execution_result):
     """Keep hidden judge data out of API responses and persisted submissions.
 
@@ -49,13 +59,29 @@ def redact_hidden_execution(execution_result):
 
     safe_result = copy.deepcopy(execution_result)
     results = safe_result.get("results")
-    if not isinstance(results, list):
-        return safe_result
+    if isinstance(results, list):
+        for case_result in results:
+            if isinstance(case_result, dict) and case_result.get("is_hidden"):
+                for field in ("input", "expected_output", "actual_output", "stderr", "error_message"):
+                    case_result.pop(field, None)
 
-    for case_result in results:
-        if isinstance(case_result, dict) and case_result.get("is_hidden"):
-            for field in ("input", "expected_output", "actual_output", "stderr"):
-                case_result.pop(field, None)
+    # The execution layer deliberately provides only fixed metadata for the
+    # final failed hidden test. Keep the stored/API shape allowlisted even if
+    # a future runner adds diagnostic fields to this object.
+    last_failed_case = safe_result.get("last_failed_case")
+    if isinstance(last_failed_case, dict):
+        try:
+            ordinal = max(1, int(last_failed_case.get("ordinal")))
+        except (TypeError, ValueError):
+            safe_result["last_failed_case"] = None
+        else:
+            status = str(last_failed_case.get("status") or "SYSTEM_ERROR").upper()
+            safe_result["last_failed_case"] = {
+                "ordinal": ordinal,
+                "status": status,
+                "reason": FAILED_CASE_REASONS.get(status, "This test did not pass."),
+                "is_hidden": bool(last_failed_case.get("is_hidden")),
+            }
 
     return safe_result
 
@@ -255,6 +281,9 @@ async def submit_and_evaluate_code(
         # containers at once and exhaust the host.
         stop_on_first_failure=False
     )
+    # The agent workflow needs verdicts and counts, not the input/output of a
+    # private judge case. Redact before invoking any downstream service too.
+    safe_exec_result = redact_hidden_execution(exec_result)
 
     # 2. Build LangGraph State
     initial_state: EvaluationState = {
@@ -268,7 +297,7 @@ async def submit_and_evaluate_code(
             "source_code": payload.code,
             "language": payload.language
         },
-        "execution_result": exec_result,
+        "execution_result": safe_exec_result,
         "validation_result": None,
         "correctness_score": None,
         "correctness_details": None,

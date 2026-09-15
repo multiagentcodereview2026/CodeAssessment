@@ -118,6 +118,89 @@ def compare_outputs(actual: str, expected: str) -> bool:
     return False
 
 
+VERDICT_REASONS = {
+    "WRONG_ANSWER": "Your output did not match the expected output.",
+    "RUNTIME_ERROR": "Your program ended with a runtime error.",
+    "TIME_LIMIT_EXCEEDED": "Your program exceeded the time limit.",
+    "MEMORY_LIMIT_EXCEEDED": "Your program exceeded the memory limit.",
+    "OUTPUT_LIMIT_EXCEEDED": "Your program produced too much output.",
+    "SYSTEM_ERROR": "The test could not be evaluated because of a system error.",
+}
+
+
+def _failed_case_summary(ordinal: int, status: Any, is_hidden: bool) -> Dict[str, Any] | None:
+    """Create student-safe failure metadata without any test data."""
+    normalized_status = str(status or "SYSTEM_ERROR").strip().upper()
+    if normalized_status in {"ACCEPTED", "COMPLETED"}:
+        return None
+
+    return {
+        "ordinal": max(1, int(ordinal)),
+        "status": normalized_status,
+        "reason": VERDICT_REASONS.get(normalized_status, "This test did not pass."),
+        "is_hidden": bool(is_hidden),
+    }
+
+
+def _last_failed_case_summary(
+    results: List[Dict[str, Any]],
+    test_cases: List[Dict[str, Any]],
+) -> Dict[str, Any] | None:
+    """Find the last failure in stored testcase order, not runner finish order."""
+    ordinal_by_id = {
+        str(case.get("id", index)): index
+        for index, case in enumerate(test_cases, start=1)
+    }
+    last_failure = None
+
+    for fallback_ordinal, result in enumerate(results, start=1):
+        if not isinstance(result, dict):
+            continue
+        ordinal = ordinal_by_id.get(
+            str(result.get("test_case_id", "")),
+            fallback_ordinal,
+        )
+        summary = _failed_case_summary(
+            ordinal=ordinal,
+            status=result.get("status"),
+            is_hidden=bool(result.get("is_hidden")),
+        )
+        if summary is not None:
+            last_failure = summary
+
+    return last_failure
+
+
+def _sanitize_engine_failed_case_summary(value: Any) -> Dict[str, Any] | None:
+    """Keep only the fixed, safe fields from the execution-service summary."""
+    if not isinstance(value, dict):
+        return None
+    try:
+        ordinal = int(value.get("ordinal"))
+    except (TypeError, ValueError):
+        return None
+    return _failed_case_summary(
+        ordinal=ordinal,
+        status=value.get("status"),
+        is_hidden=bool(value.get("is_hidden")),
+    )
+
+
+def _redact_hidden_case_result(result: Dict[str, Any]) -> Dict[str, Any]:
+    """Remove raw judge diagnostics from a hidden testcase result."""
+    safe_result = dict(result)
+    if safe_result.get("is_hidden"):
+        for field in (
+            "input",
+            "expected_output",
+            "actual_output",
+            "stderr",
+            "error_message",
+        ):
+            safe_result.pop(field, None)
+    return safe_result
+
+
 def _sync_request_docker(payload: Dict[str, Any]) -> Dict[str, Any] | None:
     try:
         response = requests.post(
@@ -240,7 +323,9 @@ def execute_locally(
             total_runtime_ms += elapsed_ms
 
             actual_out = out
-            if not first_stdout and actual_out:
+            # A top-level stdout preview must never accidentally contain the
+            # output of a hidden test in the local fallback path.
+            if not is_hidden and not first_stdout and actual_out:
                 first_stdout = actual_out
 
             if proc.returncode != 0:
@@ -249,10 +334,10 @@ def execute_locally(
                     "test_case_id": tc_id,
                     "status": "runtime_error",
                     "runtime_ms": elapsed_ms,
-                    "actual_output": actual_out,
-                    "expected_output": expected_output,
+                    "actual_output": None if is_hidden else actual_out,
+                    "expected_output": None if is_hidden else expected_output,
                     "is_hidden": is_hidden,
-                    "error_message": err.strip() or f"Exit code {proc.returncode}"
+                    "error_message": None if is_hidden else (err.strip() or f"Exit code {proc.returncode}")
                 })
             elif compare_outputs(actual_out, expected_output):
                 passed_count += 1
@@ -260,8 +345,8 @@ def execute_locally(
                     "test_case_id": tc_id,
                     "status": "accepted",
                     "runtime_ms": elapsed_ms,
-                    "actual_output": actual_out,
-                    "expected_output": expected_output,
+                    "actual_output": None if is_hidden else actual_out,
+                    "expected_output": None if is_hidden else expected_output,
                     "is_hidden": is_hidden,
                     "error_message": None
                 })
@@ -271,8 +356,8 @@ def execute_locally(
                     "test_case_id": tc_id,
                     "status": "wrong_answer",
                     "runtime_ms": elapsed_ms,
-                    "actual_output": actual_out,
-                    "expected_output": expected_output,
+                    "actual_output": None if is_hidden else actual_out,
+                    "expected_output": None if is_hidden else expected_output,
                     "is_hidden": is_hidden,
                     "error_message": None
                 })
@@ -283,10 +368,10 @@ def execute_locally(
                 "test_case_id": tc_id,
                 "status": "time_limit_exceeded",
                 "runtime_ms": 2500,
-                "actual_output": "",
-                "expected_output": expected_output,
+                "actual_output": None if is_hidden else "",
+                "expected_output": None if is_hidden else expected_output,
                 "is_hidden": is_hidden,
-                "error_message": "Execution timed out (2.5s)"
+                "error_message": None if is_hidden else "Execution timed out (2.5s)"
             })
         except Exception as e:
             failed_count += 1
@@ -294,10 +379,10 @@ def execute_locally(
                 "test_case_id": tc_id,
                 "status": "system_error",
                 "runtime_ms": 0,
-                "actual_output": "",
-                "expected_output": expected_output,
+                "actual_output": None if is_hidden else "",
+                "expected_output": None if is_hidden else expected_output,
                 "is_hidden": is_hidden,
-                "error_message": str(e)
+                "error_message": None if is_hidden else str(e)
             })
 
     status_str = "completed" if failed_count == 0 else next(
@@ -318,7 +403,8 @@ def execute_locally(
         "passed_cases": passed_count,
         "failed_cases": failed_count,
         "total_cases": len(test_cases),
-        "results": results
+        "results": results,
+        "last_failed_case": _last_failed_case_summary(results, test_cases),
     }
 
 
@@ -394,7 +480,8 @@ async def execute_code_sandboxed(
                 "passed_cases": 0,
                 "failed_cases": 0,
                 "total_cases": data.get("tests_total", len(formatted_cases)),
-                "results": []
+                "results": [],
+                "last_failed_case": None,
             }
 
         stdout_str = ""
@@ -402,10 +489,11 @@ async def execute_code_sandboxed(
         failed_count = 0
         normalized_results = []
 
-        for r in data.get("results", []):
+        for raw_result in data.get("results", []):
+            r = _redact_hidden_case_result(raw_result)
             act = str(r.get("actual_output") or "")
             exp = str(r.get("expected_output") or "")
-            if not stdout_str and act:
+            if not bool(r.get("is_hidden")) and not stdout_str and act:
                 stdout_str = act
 
             is_match = compare_outputs(act, exp)
@@ -436,7 +524,11 @@ async def execute_code_sandboxed(
             "passed_cases": passed_count,
             "failed_cases": failed_count,
             "total_cases": data.get("tests_total", len(formatted_cases)),
-            "results": normalized_results
+            "results": normalized_results,
+            "last_failed_case": (
+                _sanitize_engine_failed_case_summary(data.get("last_failed_case"))
+                or _last_failed_case_summary(normalized_results, formatted_cases)
+            ),
         }
 
     # 2. Local execution fallback

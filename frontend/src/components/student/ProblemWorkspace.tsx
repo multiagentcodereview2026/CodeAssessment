@@ -35,6 +35,16 @@ const DEFAULT_PROGRAM_SKELETONS: Record<string, string> = {
   javascript: "'use strict';\n\n"
 };
 
+const EDITOR_DRAFT_VERSION = 2;
+const EDITOR_DRAFT_RETENTION_MS = 60 * 24 * 60 * 60 * 1000;
+const EDITOR_DRAFT_PREFIX = 'codevedha_editor_draft:v2:';
+
+type StoredEditorDraft = {
+  version: number;
+  code: string;
+  updatedAt: number;
+};
+
 type PublicRunCaseResult = {
   caseNum: number;
   passed: boolean;
@@ -52,6 +62,7 @@ export const ProblemWorkspace: React.FC = () => {
   const { id: routeProblemId } = useParams<{ id: string }>();
   const isInstructorProblem = new URLSearchParams(location.search).get('view') === 'instructor';
   const {
+    currentUser,
     selectedProblem: fallbackProblem,
     setCurrentView,
     addSubmission
@@ -132,11 +143,62 @@ export const ProblemWorkspace: React.FC = () => {
     results: PublicRunCaseResult[];
   } | null>(null);
 
-  // A draft belongs to one problem and one language.  It stays in this
-  // browser even if the student returns to the catalogue or refreshes.
-  // Drafts are never sent anywhere until the student explicitly runs/submits.
+  // A draft belongs to one user, problem, and language. It remains in this
+  // browser for 60 days after the last edit, including across reloads,
+  // navigation, Run Code, Submit Code, and frontend deployments.
   const draftKey = (problemId: string, selectedLanguage: string) =>
+    `${EDITOR_DRAFT_PREFIX}${encodeURIComponent(currentUser.id)}:${encodeURIComponent(problemId)}:${selectedLanguage}`;
+
+  const legacyDraftKey = (problemId: string, selectedLanguage: string) =>
     `codevedha_editor_draft:${problemId}:${selectedLanguage}`;
+
+  const saveDraft = (problemId: string, selectedLanguage: string, value: string) => {
+    try {
+      const draft: StoredEditorDraft = {
+        version: EDITOR_DRAFT_VERSION,
+        code: value,
+        updatedAt: Date.now()
+      };
+      localStorage.setItem(draftKey(problemId, selectedLanguage), JSON.stringify(draft));
+      return true;
+    } catch (error) {
+      console.warn('Unable to save editor draft:', error);
+      return false;
+    }
+  };
+
+  const loadDraft = (problemId: string, selectedLanguage: string): string | null => {
+    const storageKey = draftKey(problemId, selectedLanguage);
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved !== null) {
+        try {
+          const parsed = JSON.parse(saved) as Partial<StoredEditorDraft>;
+          if (typeof parsed.code === 'string' && typeof parsed.updatedAt === 'number') {
+            if (Date.now() - parsed.updatedAt <= EDITOR_DRAFT_RETENTION_MS) return parsed.code;
+            localStorage.removeItem(storageKey);
+          }
+        } catch {
+          // Drafts from the older format were stored as plain source text.
+          if (saveDraft(problemId, selectedLanguage, saved)) return saved;
+        }
+      }
+
+      const legacyKey = legacyDraftKey(problemId, selectedLanguage);
+      const legacyDraft = localStorage.getItem(legacyKey);
+      if (legacyDraft !== null) {
+        if (saveDraft(problemId, selectedLanguage, legacyDraft)) {
+          localStorage.removeItem(legacyKey);
+        }
+        return legacyDraft;
+      }
+    } catch (error) {
+      console.warn('Unable to load editor draft:', error);
+    }
+    return null;
+  };
+
+  const skipNextDraftWriteRef = useRef(true);
 
   const getStarterCode = (selectedLanguage: string) =>
     DEFAULT_PROGRAM_SKELETONS[selectedLanguage]
@@ -144,21 +206,23 @@ export const ProblemWorkspace: React.FC = () => {
     || DEFAULT_PROGRAM_SKELETONS.cpp;
 
   useEffect(() => {
-    const savedDraft = localStorage.getItem(draftKey(workspaceProblemId, language));
-    // A non-empty draft belongs to its language and is never replaced on a
-    // language switch. Empty legacy drafts get the new full-program skeleton.
-    setCode(savedDraft && savedDraft.trim() ? savedDraft : getStarterCode(language));
+    skipNextDraftWriteRef.current = true;
+    const savedDraft = loadDraft(workspaceProblemId, language);
+    // An intentionally empty draft is valid and must not be replaced by a
+    // starter program. Only a missing or expired draft receives a skeleton.
+    setCode(savedDraft !== null ? savedDraft : getStarterCode(language));
     setRunOutput(null);
-  }, [workspaceProblemId, language]);
+  }, [workspaceProblemId, language, currentUser.id]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(draftKey(workspaceProblemId, language), code);
-    } catch (error) {
-      // A full/disabled browser store must not stop the coding workspace.
-      console.warn('Unable to save editor draft:', error);
+    // The problem/language change render still contains the previous editor
+    // value. Skip that write so it cannot overwrite the draft being restored.
+    if (skipNextDraftWriteRef.current) {
+      skipNextDraftWriteRef.current = false;
+      return;
     }
-  }, [code, language, workspaceProblemId]);
+    saveDraft(workspaceProblemId, language, code);
+  }, [code, language, workspaceProblemId, currentUser.id]);
 
   // When language changes, update starter code
   const handleLanguageChange = (newLang: string) => {
@@ -168,6 +232,7 @@ export const ProblemWorkspace: React.FC = () => {
   const handleResetCode = () => {
     if (window.confirm('Reset code to initial template?')) {
       localStorage.removeItem(draftKey(workspaceProblemId, language));
+      localStorage.removeItem(legacyDraftKey(workspaceProblemId, language));
       setCode(getStarterCode(language));
       setRunOutput(null);
     }
@@ -241,6 +306,7 @@ export const ProblemWorkspace: React.FC = () => {
 
   // Run Code (Sandbox Test Cases via Live FastAPI Backend)
   const handleRunCode = async () => {
+    saveDraft(workspaceProblemId, language, code);
     if (!remoteProblem) {
       setRunOutput({
         status: 'error',
@@ -272,10 +338,7 @@ export const ProblemWorkspace: React.FC = () => {
           }))
         })
       });
-      if (!res.ok) {
-        const errorPayload = await res.json().catch(() => null);
-        throw new Error(errorPayload?.detail || errorPayload?.compile_error || `Sandbox request failed (${res.status}).`);
-      }
+      if (!res.ok) throw new Error('Sandbox request failed.');
       const data = await res.json();
       const compilationFailed = data.compile_status === 'error';
       if (compilationFailed) showCompilerMarker(data.compile_error || data.stderr || 'Compilation failed.');
@@ -333,13 +396,12 @@ export const ProblemWorkspace: React.FC = () => {
         compileError: compilationFailed ? (data.compile_error || data.stderr || 'Compilation failed.') : undefined,
         results
       });
-    } catch (err: any) {
-      const errMsg = err?.message || 'The execution service could not run this code.';
+    } catch (err) {
       setRunOutput({
         status: 'error',
         time: '—',
         memory: '—',
-        reason: errMsg,
+        reason: 'The execution service could not run this code.',
         results: selectedProblem.testCases.slice(0, 3).map((tc, idx) => ({
           caseNum: idx + 1,
           passed: false,
@@ -347,7 +409,7 @@ export const ProblemWorkspace: React.FC = () => {
           expected: tc.expectedOutput,
           output: '',
           status: 'system_error',
-          error: errMsg
+          error: 'Unable to run this case because the execution service was unavailable.'
         }))
       });
     } finally {
@@ -357,6 +419,7 @@ export const ProblemWorkspace: React.FC = () => {
 
   // Submit Code (Live 10-Agent LangGraph AI Assessment Pipeline)
   const handleSubmitCode = async () => {
+    saveDraft(workspaceProblemId, language, code);
     if (!remoteProblem) {
       setRunOutput({
         status: 'error',
@@ -418,9 +481,27 @@ export const ProblemWorkspace: React.FC = () => {
           passed: result.status === 'accepted' || result.status === 'ACCEPTED',
           executionTimeMs: Number(result.runtime_ms || 0),
           memoryMb: Number(result.memory_kb || 0) / 1024,
+          isHidden: hidden,
+          verdict: typeof result.status === 'string' ? result.status : undefined,
+          reason: hidden ? undefined : (result.stderr || result.error_message || undefined),
           stderr: hidden ? undefined : (result.stderr || result.error_message || undefined)
         };
       });
+      const rawLastFailedCase = execution.last_failed_case;
+      const lastFailedCaseOrdinal = Number(
+        rawLastFailedCase?.ordinal ?? rawLastFailedCase?.test_case_number ?? rawLastFailedCase?.case_number
+      );
+      const lastFailedCase = rawLastFailedCase && Number.isFinite(lastFailedCaseOrdinal) && lastFailedCaseOrdinal > 0
+        ? {
+            ordinal: lastFailedCaseOrdinal,
+            isHidden: Boolean(rawLastFailedCase.is_hidden ?? rawLastFailedCase.isHidden),
+            status: typeof rawLastFailedCase.status === 'string' ? rawLastFailedCase.status : undefined,
+            // Hidden diagnostics remain intentionally unavailable in browser state.
+            reason: Boolean(rawLastFailedCase.is_hidden ?? rawLastFailedCase.isHidden)
+              ? undefined
+              : typeof rawLastFailedCase.reason === 'string' ? rawLastFailedCase.reason : undefined
+          }
+        : undefined;
 
       const newAssessment: AssessmentResult = {
         submissionId: newSubmissionId,
@@ -438,7 +519,7 @@ export const ProblemWorkspace: React.FC = () => {
             max: 25,
             notes: accepted
               ? `Accepted: ${passedCases}/${totalCases} public and hidden tests passed.`
-              : `Judge result: ${passedCases}/${totalCases} tests passed. Review the first failing test below.`
+              : `Judge result: ${passedCases}/${totalCases} tests passed. Review the last failed test below.`
           },
           timeComplexity: {
             score: Math.round(((data.complexity_score ?? 85) / 100) * 25),
@@ -503,7 +584,8 @@ export const ProblemWorkspace: React.FC = () => {
             ? data.improved_code.improved_code
             : code,
         testResults,
-        totalTestCases: totalCases
+        totalTestCases: totalCases,
+        lastFailedCase
       };
 
       const newSubItem: SubmissionItem = {

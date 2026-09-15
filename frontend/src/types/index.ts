@@ -72,8 +72,23 @@ export interface TestCaseResult {
   passed: boolean;
   executionTimeMs: number;
   memoryMb: number;
+  /** Never render input/output for a hidden test, even if an API regresses. */
+  isHidden?: boolean;
+  /** Raw sandbox verdict, used for a student-friendly failed-case summary. */
+  verdict?: string;
+  /** Public-case diagnostic only. */
+  reason?: string;
   stdout?: string;
   stderr?: string;
+}
+
+export interface FailedTestCaseSummary {
+  /** One-based position in the full public + hidden judge suite. */
+  ordinal: number;
+  isHidden: boolean;
+  status?: string;
+  /** The backend must keep this generic for a hidden test. */
+  reason?: string;
 }
 
 export interface MultiDimensionalScore {
@@ -152,6 +167,7 @@ export interface AssessmentResult {
   aiRevisedCode: string;
   testResults: TestCaseResult[];
   totalTestCases?: number;
+  lastFailedCase?: FailedTestCaseSummary;
 }
 
 export interface SubmissionItem {
