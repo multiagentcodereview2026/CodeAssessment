@@ -15,8 +15,6 @@ from agents.projection import score_projection_node
 def check_compilation_failure(state: EvaluationState) -> str:
     """Conditional Edge: Skip in-depth complexity/style if compilation broke."""
     exec_res = state.get("execution_result") or {}
-    if exec_res.get("compile_status") == "error":
-        return "explainability_node"
     return "correctness_node"
 
 def build_graph():

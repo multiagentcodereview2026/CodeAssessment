@@ -38,6 +38,10 @@ services:
       - EXECUTION_MEMORY_LIMIT=256m
       - EXECUTION_TIMEOUT_SECONDS=5
       - DOCKER_ENGINE_REQUEST_TIMEOUT_SECONDS=120
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in the root .env file}
+      - ALLOW_LOCAL_EXECUTION=false
     depends_on:
       postgres:
         condition: service_healthy

@@ -3,6 +3,8 @@ import json
 import logging
 import os
 import subprocess
+import tempfile
+import shutil
 import sys
 import time
 from typing import Any, Dict, List
@@ -531,6 +533,9 @@ async def execute_code_sandboxed(
             ),
         }
 
+    # Local subprocesses are for trusted development samples, never public submissions.
+    if os.getenv("ALLOW_LOCAL_EXECUTION", "false").lower() != "true":
+        raise RuntimeError("Docker execution engine unavailable")
     # 2. Local execution fallback
     local_res = await asyncio.to_thread(execute_locally, source_code, language, formatted_cases)
     return local_res

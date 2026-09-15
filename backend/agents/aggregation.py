@@ -26,8 +26,7 @@ async def aggregation_node(state: EvaluationState) -> Dict[str, Any]:
         ("correctness", correctness, 0.40),
         ("complexity", complexity, 0.20),
         ("style", style, 0.20),
-        ("originality", None if similarity is None else max(0.0, 100.0 - similarity), 0.10),
-        ("execution", 100.0 if state.get("execution_result", {}).get("compile_status") == "success" else 0.0, 0.10),
+        ("originality", None if similarity is None else max(0.0, 100.0 - similarity), 0.20),
     ]
     available_weight = sum(weight for _, score, weight in scored_components if score is not None)
     if available_weight == 0:
@@ -69,13 +68,12 @@ async def aggregation_node(state: EvaluationState) -> Dict[str, Any]:
             "complexity": {"score": complexity, "weight": effective_weights["complexity"], "weighted": round(effective_weights["complexity"] * complexity, 1)},
             "style": {"score": style, "weight": effective_weights["style"], "weighted": round(effective_weights["style"] * style, 1)},
             "originality": {"score": originality, "weight": effective_weights["originality"], "weighted": round(effective_weights["originality"] * originality, 1)},
-            "execution": {"score": execution, "weight": effective_weights["execution"], "weighted": round(effective_weights["execution"] * execution, 1)}
         },
         "confidence": 0.94,
         "reasoning": f"Calculated composite score of {overall} from the available assessment evidence."
     }
 
-    result = await invoke_agent(prompt, payload, AggregationOutput, fallback)
+    result = fallback
     return {
         "overall_score": overall,
         "score_breakdown": result.get("breakdown", fallback["breakdown"]),

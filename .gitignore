@@ -10,3 +10,7 @@ frontend/README.md
 backend/.env
 frontend/.env
 backend_local_backup/
+backend/.venv/
+*.db
+.pytest_cache/
+artifacts/

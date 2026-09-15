@@ -1,6 +1,28 @@
 from datetime import datetime
 from typing import Optional, Dict, Any, List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Literal
+
+class RegisterRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=100, pattern=r"^[a-zA-Z0-9_.-]+$")
+    email: str = Field(min_length=3, max_length=200)
+    password: str = Field(min_length=8, max_length=128)
+    role: Literal['student', 'instructor'] = 'student'
+    name: Optional[str] = None
+
+class ProblemWrite(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(min_length=1)
+    difficulty: Literal['Easy', 'Medium', 'Hard'] = 'Easy'
+    category: str = 'Programming'
+    course_code: str = Field(min_length=1, max_length=100)
+    due_date: Optional[str] = None
+    examples: List[Dict[str, str]] = Field(default_factory=list)
+    constraints: List[str] = Field(default_factory=list)
+    starter_codes: Dict[str, str] = Field(default_factory=dict)
+    test_cases: List[Dict[str, Any]] = Field(min_length=1, max_length=200)
+    optimal_time: str = 'Not assessed'
+    optimal_space: str = 'Not assessed'
 
 # Auth Schemas
 class LoginRequest(BaseModel):
@@ -46,15 +68,15 @@ class ProblemDetail(BaseModel):
 
 # Submission Schemas
 class SubmissionRequest(BaseModel):
-    student_id: str
+    student_id: Optional[str] = None
     problem_id: str
     language: str
-    code: str
+    code: str = Field(min_length=1, max_length=100000)
     test_cases: Optional[List[Dict[str, Any]]] = None
 
 class QuickRunRequest(BaseModel):
     language: str
-    code: str
+    code: str = Field(min_length=1, max_length=100000)
     problem_id: Optional[str] = None
     test_cases: Optional[List[Dict[str, Any]]] = None
 

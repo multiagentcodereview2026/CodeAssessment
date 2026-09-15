@@ -1,4 +1,6 @@
 import React, { useEffect } from 'react';
+import { apiFetch as fetch } from '../../services/api';
+import { toAssessment } from '../../services/assessmentAdapter';
 import {
   CheckCircle2,
   Clock,
@@ -107,48 +109,9 @@ export const AssessmentResultView: React.FC = () => {
         const response = await fetch(`/api/submissions/${routeSubmissionId}`, { cache: 'no-store' });
         if (!response.ok) return;
         const submission = await response.json();
-        const execution = submission.execution_result || {};
-        const total = Number(execution.total_cases || (Number(execution.passed_cases || 0) + Number(execution.failed_cases || 0)));
-        const passed = Number(execution.passed_cases || 0);
-        const accepted = total > 0 && passed === total;
-        const problemResponse = await fetch(`/api/problems/${submission.problem_id}`, { cache: 'no-store' });
+        const problemResponse = await fetch(`/api/problems/${submission.problem_id}`);
         const problem = problemResponse.ok ? await problemResponse.json() : null;
-        if (!active) return;
-        setActiveAssessment({
-          ...activeAssessment,
-          submissionId: submission.submission_id,
-          problemId: submission.problem_id,
-          problemTitle: problem?.title || submission.problem_id,
-          language: submission.language,
-          code: submission.code,
-          aiRevisedCode: typeof submission.improved_code === 'string'
-            ? submission.improved_code
-            : typeof submission.improved_code?.improved_code === 'string'
-              ? submission.improved_code.improved_code
-              : submission.code,
-          status: accepted ? 'Accepted' : 'Wrong Answer',
-          executionTime: `${execution.runtime_ms || 0} ms`,
-          totalTestCases: total,
-          explainableFeedback: accepted
-            ? `Accepted: ${passed}/${total} test cases passed.`
-            : `Not accepted: ${passed}/${total} test cases passed. Review the last failed case below.`,
-          testResults: (execution.results || []).map((result: any, index: number) => {
-            const hidden = Boolean(result.is_hidden);
-            return {
-              id: String(result.test_case_id || index + 1), testCaseNumber: index + 1,
-              input: hidden ? 'Hidden test case' : (result.input || ''),
-              expectedOutput: hidden ? 'Hidden test case' : (result.expected_output || ''),
-              actualOutput: hidden ? 'Hidden test case' : (result.actual_output || ''),
-              passed: result.status === 'accepted' || result.status === 'ACCEPTED',
-              executionTimeMs: Number(result.runtime_ms || 0), memoryMb: Number(result.memory_kb || 0) / 1024,
-              isHidden: hidden,
-              verdict: typeof result.status === 'string' ? result.status : undefined,
-              reason: hidden ? undefined : (result.stderr || result.error_message || undefined),
-              stderr: hidden ? undefined : (result.stderr || result.error_message || undefined)
-            };
-          }),
-          lastFailedCase: normaliseFailedCase(execution.last_failed_case)
-        });
+        if (active) setActiveAssessment(toAssessment(submission, problem));
       } catch (error) {
         console.error('Unable to load submission result:', error);
       }
@@ -227,7 +190,7 @@ export const AssessmentResultView: React.FC = () => {
       score: multiScores.similarity.score,
       max: multiScores.similarity.max,
       color: 'bg-emerald-500',
-      detail: `${multiScores.similarity.originalityPercent}% original, ${multiScores.similarity.plagiarismRisk.toLowerCase()} risk`
+      detail: multiScores.similarity.max ? `${multiScores.similarity.originalityPercent}% original` : 'No comparison corpus configured'
     }
   ];
 
@@ -320,10 +283,10 @@ export const AssessmentResultView: React.FC = () => {
                 Overall Grade
               </span>
               <span className="text-lg font-extrabold text-emerald-600 block">
-                Excellent (A)
+                {accepted ? 'Tests accepted' : 'Needs revision'}
               </span>
               <span className="text-xs text-slate-500 font-medium">
-                Top 15% in cohort
+                Based on assessed criteria
               </span>
             </div>
           </div>
@@ -368,7 +331,7 @@ export const AssessmentResultView: React.FC = () => {
             </div>
 
             <div className="w-full lg:w-64 rounded-2xl bg-white/8 border border-white/10 p-4 flex-shrink-0">
-              <span className="text-[11px] font-bold uppercase text-slate-300">Projected Gain</span>
+              <span className="text-[11px] font-bold uppercase text-slate-300">Next Assessment</span>
               <div className="mt-3 flex items-end justify-between">
                 <div>
                   <span className="text-4xl font-extrabold text-emerald-300 font-mono">
@@ -385,7 +348,7 @@ export const AssessmentResultView: React.FC = () => {
                 />
               </div>
               <p className="mt-3 text-xs text-slate-300 leading-relaxed">
-                Current {scoreProjection.currentScore}/100. Target {scoreProjection.projectedScore}/100 after revision.
+                Re-submit your revision to measure improvement. AI revisions are suggestions, not verified solutions.
               </p>
             </div>
           </div>
@@ -395,7 +358,7 @@ export const AssessmentResultView: React.FC = () => {
         <div className="xl:col-span-4 bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div>
-              <h3 className="text-base font-bold text-slate-900">5D Score Evidence</h3>
+              <h3 className="text-base font-bold text-slate-900">Assessment Evidence</h3>
               <p className="text-xs text-slate-400">Compact rubric signals</p>
             </div>
             <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg">
@@ -405,12 +368,12 @@ export const AssessmentResultView: React.FC = () => {
 
           <div className="space-y-2.5">
             {scoreItems.map((item) => {
-              const width = Math.min(100, Math.round((item.score / item.max) * 100));
+              const width = item.max ? Math.min(100, Math.round((item.score / item.max) * 100)) : 0;
               return (
                 <div key={item.label} className="rounded-2xl bg-slate-50 border border-slate-200/70 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-xs font-bold text-slate-800">{item.label}</span>
-                    <span className="text-xs font-mono font-extrabold text-slate-800">{item.score}/{item.max}</span>
+                    <span className="text-xs font-mono font-extrabold text-slate-800">{item.max ? `${item.score}/${item.max}` : 'Not scored'}</span>
                   </div>
                   <div className="mt-2 h-1.5 bg-slate-200 rounded-full overflow-hidden">
                     <div className={`h-full rounded-full ${item.color}`} style={{ width: `${width}%` }} />

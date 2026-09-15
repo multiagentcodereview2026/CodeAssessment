@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { apiFetch as fetch } from '../../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Code2,
@@ -49,7 +50,7 @@ export const ProblemsListView: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isInstructor = location.pathname.startsWith('/instructor');
-  const { openProblemWorkspace, submissions, courses, problems, addProblem, updateProblem, deleteProblem } = useApp();
+  const { openProblemWorkspace, submissions, courses, problems, addProblem, updateProblem, deleteProblem, showToast } = useApp();
 
   const [activeTab, setActiveTab] = useState<'instructor' | 'practice'>(() =>
     new URLSearchParams(location.search).get('view') === 'instructor' ? 'instructor' : 'practice'
@@ -271,7 +272,7 @@ export const ProblemsListView: React.FC = () => {
   };
 
   // Handle Save Question
-  const handleSaveQuestion = (e: React.FormEvent) => {
+  const handleSaveQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim()) return;
 
@@ -282,16 +283,17 @@ export const ProblemsListView: React.FC = () => {
 
     const formattedTestCases = formTestCases.map((tc, idx) => ({
       id: tc.id || `tc-${Date.now()}-${idx + 1}`,
-      input: tc.input || 'nums = [1, 2, 3]',
-      expectedOutput: tc.output || '[0, 1]',
+      input: tc.input,
+      expectedOutput: tc.output,
       isHidden: tc.isHidden
     }));
 
+    try {
     if (editingProblemId) {
       // Update existing problem
       const existing = problems.find(p => p.id === editingProblemId);
       if (existing) {
-        updateProblem({
+        await updateProblem({
           ...existing,
           title: formTitle.trim(),
           description: formDescription.trim(),
@@ -334,16 +336,18 @@ export const ProblemsListView: React.FC = () => {
         testCases: formattedTestCases
       };
 
-      addProblem(newProblem);
+      await addProblem(newProblem);
     }
 
     setIsQuestionModalOpen(false);
+    } catch (error) { showToast(error instanceof Error ? error.message : 'Could not save question', 'error'); }
   };
 
   // Delete Problem
-  const handleDeleteProblem = (probId: string) => {
+  const handleDeleteProblem = async (probId: string) => {
     if (window.confirm('Are you sure you want to remove this problem from the problem bank?')) {
-      deleteProblem(probId);
+      try { await deleteProblem(probId); }
+      catch (error) { showToast(error instanceof Error ? error.message : 'Could not delete question', 'error'); }
     }
   };
 

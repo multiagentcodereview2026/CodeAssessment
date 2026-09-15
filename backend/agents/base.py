@@ -18,6 +18,8 @@ try:
         model_name=settings.GROQ_MODEL,
         temperature=0.0,
         groq_api_key=groq_api_key,
+        timeout=15,
+        max_retries=0,
         model_kwargs={"response_format": {"type": "json_object"}}
     )
 except Exception as e:

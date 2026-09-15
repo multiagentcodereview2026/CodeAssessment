@@ -106,6 +106,8 @@ interface AppContextType {
   showToast: (message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
 }
 
+import { apiFetch as fetch, apiJson } from '../services/api';
+import { toProblem } from '../services/assessmentAdapter';
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -114,37 +116,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentUser, setCurrentUser] = useState<UserProfile>(MOCK_STUDENT_USER);
   const [currentView, setCurrentView] = useState<string>('dashboard');
 
-  // Shared persistent problems state
-  const [problems, setProblems] = useState<Problem[]>(() => {
-    try {
-      if (localStorage.getItem('codevedha_problem_bank_version') !== PROBLEM_BANK_VERSION) {
-        localStorage.removeItem('codevedha_problems');
-        localStorage.setItem('codevedha_problem_bank_version', PROBLEM_BANK_VERSION);
-      }
-      const saved = localStorage.getItem('codevedha_problems');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return MOCK_PROBLEMS;
-  });
+  const [problems, setProblems] = useState<Problem[]>([]);
 
   const [selectedProblemId, setSelectedProblemId] = useState<string>('prob-1');
   const [activeAssessment, setActiveAssessment] = useState<AssessmentResult>(MOCK_DEFAULT_ASSESSMENT);
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
   const [studentProgress, setStudentProgress] = useState<StudentProgress>(MOCK_STUDENT_PROGRESS);
   const [courses, setCourses] = useState<CourseItem[]>(INITIAL_COURSES);
-  const [studentRoster, setStudentRoster] = useState<StudentRosterItem[]>(MOCK_STUDENT_ROSTER);
+  const [studentRoster, setStudentRoster] = useState<StudentRosterItem[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<StudentRosterItem | null>(null);
-  const [assignments, setAssignments] = useState<Assignment[]>(MOCK_ASSIGNMENTS);
-  const [similarityAlerts, setSimilarityAlerts] = useState<SimilarityAlert[]>(MOCK_SIMILARITY_ALERTS);
-  const [reports, setReports] = useState<ReportItem[]>(MOCK_REPORTS);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [similarityAlerts, setSimilarityAlerts] = useState<SimilarityAlert[]>([]);
+  const [reports, setReports] = useState<ReportItem[]>([]);
   const [instructorStats, setInstructorStats] = useState(MOCK_INSTRUCTOR_STATS);
-  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('codevedha_announcements');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return [];
-  });
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [toasts, setToasts] = useState<ToastInfo[]>([]);
 
@@ -175,7 +160,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         // This is the student identity used by the current assessment flow.
         // When production auth is connected, it should be replaced with the
         // authenticated student identifier sent on submission as well.
-        const response = await fetch('/api/submissions?student_id=24BD1A058Z', { cache: 'no-store' });
+        const response = await fetch('/api/submissions', { cache: 'no-store' });
         if (!response.ok) throw new Error('Could not load saved submissions.');
         const records = await response.json();
         if (!Array.isArray(records) || cancelled) return;
@@ -219,22 +204,48 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     };
 
-    void loadSavedSubmissions();
+    if (auth?.user) void loadSavedSubmissions();
+    else setSubmissions([]);
     return () => { cancelled = true; };
-  }, []);
-
-  // Sync problems to localStorage on change
-  useEffect(() => {
-    try {
-      localStorage.setItem('codevedha_problems', JSON.stringify(problems));
-    } catch {}
-  }, [problems]);
+  }, [auth?.user]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('codevedha_announcements', JSON.stringify(announcements));
-    } catch {}
-  }, [announcements]);
+    if (!auth?.user) { setProblems([]); setAnnouncements([]); return; }
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const [practice, assigned, notices] = await Promise.all([
+          apiJson('/api/problems'), apiJson('/api/instructor-problems'), apiJson('/api/announcements')
+        ]);
+        if (cancelled) return;
+        setProblems([...assigned, ...practice].map(toProblem));
+        setAnnouncements(notices);
+        if (auth.user.role === 'student') {
+          const stats = await apiJson(`/api/analytics/student/${encodeURIComponent(auth.user.username)}`);
+          if (cancelled) return;
+          setStudentProgress({ overallScore: stats.overall_score, problemsSolved: stats.problems_solved,
+            totalProblems: stats.total_problems, currentStreak: stats.streak_days, rankPercentile: 'Not ranked',
+            progressPercent: stats.total_problems ? Math.round(stats.problems_solved / stats.total_problems * 100) : 0,
+            topicsCovered: stats.category_breakdown.length, totalTopics: stats.category_breakdown.length,
+            hoursSpent: 'Not tracked', weakTopics: stats.weak_topics, scoreTrend: stats.score_trend,
+            categoryWiseScores: stats.category_breakdown.map((c: any) => ({ name: c.name, percentage: c.value, color: c.color, scoreDisplay: `${c.value}/100` })) });
+        } else {
+          const stats = await apiJson('/api/instructor/overview');
+          if (cancelled) return;
+          setStudentRoster(stats.students);
+          setInstructorStats({ totalStudents: stats.total_students, activeAssignments: stats.active_assignments,
+            totalSubmissions: stats.total_submissions, averageScore: stats.class_avg_score,
+            highestScore: Math.max(0, ...stats.students.map((s: any) => s.avgScore)),
+            lowestScore: stats.students.length ? Math.min(...stats.students.map((s: any) => s.avgScore)) : 0,
+            scoreDistribution: [] });
+        }
+      } catch (error) { console.error('Could not refresh classroom data:', error); }
+    };
+    void refresh();
+    const timer = window.setInterval(refresh, 15000);
+    window.addEventListener('focus', refresh);
+    return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, [auth?.user]);
 
   const showToast = (message: string, type: 'success' | 'info' | 'warning' | 'error' = 'success') => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
@@ -275,38 +286,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     showToast('Signed out successfully', 'info');
   };
 
-  const addProblem = (newProb: Problem) => {
-    setProblems(prev => [newProb, ...prev]);
-    setAnnouncements(prev => [
-      {
-        id: `ann-${Date.now()}`,
-        title: 'New question posted',
-        message: `${newProb.title} has been posted${newProb.courseCode ? ` for ${newProb.courseCode}` : ''}.`,
-        problemId: newProb.id,
-        courseCode: newProb.courseCode,
-        dueDate: newProb.dueDate,
-        createdAt: 'Just now',
-        read: false
-      },
-      ...prev
-    ]);
-    showToast(`Question "${newProb.title}" published to Problem Bank!`, 'success');
+  const problemPayload = (problem: Problem) => ({
+    title: problem.title, description: problem.description, difficulty: problem.difficulty,
+    category: problem.tags.join(', '), course_code: problem.courseCode || 'General', due_date: problem.dueDate || null,
+    examples: problem.examples, constraints: problem.constraints, starter_codes: problem.starterCode,
+    optimal_time: problem.optimalComplexity.time, optimal_space: problem.optimalComplexity.space,
+    test_cases: problem.testCases.map(tc => ({ input: tc.input, expected_output: tc.expectedOutput, is_hidden: !!tc.isHidden }))
+  });
+  const addProblem = async (problem: Problem) => {
+    const saved = toProblem(await apiJson('/api/problems', { method: 'POST', body: JSON.stringify(problemPayload(problem)) }));
+    setProblems(prev => [saved, ...prev]);
+    showToast('Question published. Students will receive an announcement.');
   };
-
-  const dismissAnnouncement = (id: string) => {
-    setAnnouncements(prev => prev.map(item => (
-      item.id === id ? { ...item, read: true } : item
-    )));
+  const updateProblem = async (problem: Problem) => {
+    const saved = toProblem(await apiJson(`/api/problems/${problem.id}`, { method: 'PUT', body: JSON.stringify(problemPayload(problem)) }));
+    setProblems(prev => prev.map(p => p.id === saved.id ? saved : p));
+    showToast('Question updated.');
   };
-
-  const updateProblem = (updatedProb: Problem) => {
-    setProblems(prev => prev.map(p => (p.id === updatedProb.id ? updatedProb : p)));
-    showToast(`Question "${updatedProb.title}" updated successfully!`, 'success');
-  };
-
-  const deleteProblem = (id: string) => {
+  const deleteProblem = async (id: string) => {
+    await apiJson(`/api/problems/${id}`, { method: 'DELETE' });
     setProblems(prev => prev.filter(p => p.id !== id));
-    showToast('Question removed from Problem Bank', 'info');
+    showToast('Question removed.');
+  };
+  const dismissAnnouncement = async (id: string) => {
+    try {
+      await apiJson(`/api/announcements/${id}/read`, { method: 'PATCH' });
+      setAnnouncements(prev => prev.map(item => item.id === id ? { ...item, read: true } : item));
+    } catch (error) { showToast(error instanceof Error ? error.message : 'Could not mark announcement read', 'error'); }
   };
 
   const selectedProblem = problems.find(p => p.id === selectedProblemId) || problems[0] || MOCK_PROBLEMS[0];

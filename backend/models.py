@@ -3,6 +3,37 @@ from sqlalchemy import Column, Integer, String, Text, DateTime, Float, JSON, Boo
 from sqlalchemy.orm import relationship
 from database import Base
 
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    username = Column(String(100), unique=True, nullable=False)
+    email = Column(String(200), unique=True, nullable=False)
+    hashed_password = Column(Text, nullable=False)
+    role = Column(String(20), nullable=False)
+    name = Column(String(200), nullable=False)
+    student_id = Column(String(100), nullable=True, unique=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class PublishedProblem(Base):
+    __tablename__ = "published_problems"
+    problem_id = Column(String(100), ForeignKey("problems.id"), primary_key=True)
+    instructor_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    course_code = Column(String(100), nullable=False)
+    due_date = Column(String(40), nullable=True)
+    optimal_time = Column(String(100), default="Not assessed")
+    optimal_space = Column(String(100), default="Not assessed")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class AnnouncementRead(Base):
+    __tablename__ = "announcement_reads"
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    problem_id = Column(String(100), ForeignKey("published_problems.problem_id"), primary_key=True)
+
+class AssessmentEvidence(Base):
+    __tablename__ = "assessment_evidence"
+    submission_id = Column(String(100), primary_key=True)
+    details = Column(JSON, nullable=False)
+
 class Student(Base):
     __tablename__ = "students"
 

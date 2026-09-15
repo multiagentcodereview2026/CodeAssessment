@@ -19,15 +19,16 @@ async def similarity_node(state: EvaluationState) -> Dict[str, Any]:
     }
 
     fallback = {
-        "similarity_score": 15.0,
-        "originality_score": 85.0,
-        "risk_level": "Low",
+        "similarity_score": None,
+        "originality_score": None,
+        "risk_level": "Not assessed",
         "similar_submission_ids": [],
-        "reasoning": "Standard algorithmic solution with unique variable declaration structure.",
+        "reasoning": "No comparison corpus is configured. Originality has not been assessed.",
         "flag_for_review": False
     }
 
-    result = await invoke_agent(prompt, payload, SimilarityOutput, fallback)
+    # Source code alone cannot establish similarity to other submissions.
+    result = fallback
     return {
         "similarity_score": result.get("similarity_score", 15.0),
         "similarity_details": result

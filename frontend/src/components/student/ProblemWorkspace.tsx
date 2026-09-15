@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Editor from '@monaco-editor/react';
+import { apiFetch as fetch } from '../../services/api';
+import { toAssessment } from '../../services/assessmentAdapter';
 import {
   Play,
   Send,
@@ -442,7 +444,6 @@ export const ProblemWorkspace: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          student_id: '24BD1A058Z',
           problem_id: remoteProblem.id,
           language,
           code
@@ -455,138 +456,12 @@ export const ProblemWorkspace: React.FC = () => {
       const data = await res.json();
       setSubmissionStep(5);
 
-      const newSubmissionId = data.submission_id || `SUB${Math.floor(100000 + Math.random() * 900000)}`;
+      const newSubmissionId = data.submission_id;
       const execution = data.execution_result || {};
-      const totalCases = Number(execution.total_cases || (Number(execution.passed_cases || 0) + Number(execution.failed_cases || 0)));
+      const totalCases = Number(execution.total_cases || 0);
       const passedCases = Number(execution.passed_cases || 0);
       const accepted = totalCases > 0 && passedCases === totalCases;
-      const timeComplexity = typeof data.complexity_details?.time_complexity === 'string'
-        ? data.complexity_details.time_complexity
-        : selectedProblem.optimalComplexity?.time !== '—'
-          ? selectedProblem.optimalComplexity?.time
-          : 'Not available';
-      const spaceComplexity = typeof data.complexity_details?.space_complexity === 'string'
-        ? data.complexity_details.space_complexity
-        : selectedProblem.optimalComplexity?.space !== '—'
-          ? selectedProblem.optimalComplexity?.space
-          : 'Not available';
-      const testResults: TestCaseResult[] = (execution.results || []).map((result: any, index: number) => {
-        const hidden = Boolean(result.is_hidden);
-        return {
-          id: String(result.test_case_id || index + 1),
-          testCaseNumber: index + 1,
-          input: hidden ? 'Hidden test case' : (result.input || ''),
-          expectedOutput: hidden ? 'Hidden test case' : (result.expected_output || ''),
-          actualOutput: hidden ? 'Hidden test case' : (result.actual_output || ''),
-          passed: result.status === 'accepted' || result.status === 'ACCEPTED',
-          executionTimeMs: Number(result.runtime_ms || 0),
-          memoryMb: Number(result.memory_kb || 0) / 1024,
-          isHidden: hidden,
-          verdict: typeof result.status === 'string' ? result.status : undefined,
-          reason: hidden ? undefined : (result.stderr || result.error_message || undefined),
-          stderr: hidden ? undefined : (result.stderr || result.error_message || undefined)
-        };
-      });
-      const rawLastFailedCase = execution.last_failed_case;
-      const lastFailedCaseOrdinal = Number(
-        rawLastFailedCase?.ordinal ?? rawLastFailedCase?.test_case_number ?? rawLastFailedCase?.case_number
-      );
-      const lastFailedCase = rawLastFailedCase && Number.isFinite(lastFailedCaseOrdinal) && lastFailedCaseOrdinal > 0
-        ? {
-            ordinal: lastFailedCaseOrdinal,
-            isHidden: Boolean(rawLastFailedCase.is_hidden ?? rawLastFailedCase.isHidden),
-            status: typeof rawLastFailedCase.status === 'string' ? rawLastFailedCase.status : undefined,
-            // Hidden diagnostics remain intentionally unavailable in browser state.
-            reason: Boolean(rawLastFailedCase.is_hidden ?? rawLastFailedCase.isHidden)
-              ? undefined
-              : typeof rawLastFailedCase.reason === 'string' ? rawLastFailedCase.reason : undefined
-          }
-        : undefined;
-
-      const newAssessment: AssessmentResult = {
-        submissionId: newSubmissionId,
-        problemId: selectedProblem.id,
-        problemTitle: selectedProblem.title,
-        timestamp: 'Just now',
-        language: language === 'cpp' ? 'C++' : language === 'c' ? 'C' : language === 'python' ? 'Python 3' : language === 'java' ? 'Java' : 'JavaScript',
-        code: code,
-        status: accepted ? 'Accepted' : 'Wrong Answer',
-        executionTime: `${execution.runtime_ms || 0} ms`,
-        memory: '5.2 MB',
-        multiScores: {
-          correctness: {
-            score: Math.round(((data.correctness_score ?? 100) / 100) * 25),
-            max: 25,
-            notes: accepted
-              ? `Accepted: ${passedCases}/${totalCases} public and hidden tests passed.`
-              : `Judge result: ${passedCases}/${totalCases} tests passed. Review the last failed test below.`
-          },
-          timeComplexity: {
-            score: Math.round(((data.complexity_score ?? 85) / 100) * 25),
-            max: 25,
-            detected: timeComplexity,
-            optimal: timeComplexity,
-            notes: `AST complexity analysis reported ${timeComplexity}.`
-          },
-          spaceComplexity: {
-            score: 13,
-            max: 15,
-            detected: spaceComplexity,
-            optimal: spaceComplexity,
-            notes: `AST complexity analysis reported ${spaceComplexity}.`
-          },
-          codeQuality: {
-            score: Math.round(((data.style_score ?? 90) / 100) * 20),
-            max: 20,
-            styleScore: 9,
-            structureScore: 9,
-            notes: 'Clean idiomatic code and modular structure.'
-          },
-          similarity: {
-            score: Math.round(((data.similarity_score ?? 90) / 100) * 20),
-            max: 20,
-            originalityPercent: 92,
-            plagiarismRisk: 'Low',
-            notes: 'Original logic pattern. Low semantic overlap.'
-          },
-          overallScore: Math.round(data.overall_score ?? 85)
-        },
-        explainableFeedback: accepted
-          ? (data.feedback?.summary || `Accepted: all ${totalCases} test cases passed.`)
-          : `Not accepted: ${passedCases} of ${totalCases} test cases passed. ${testResults.find((result) => !result.passed)?.stderr || 'The output did not match the expected result.'}`,
-        suggestedImprovements: Array.isArray(data.recommendations?.steps) ? data.recommendations.steps : [
-          'Use descriptive variable names (e.g. `numToIndexMap`, `complement`)',
-          'Add structured comments to document hash map lookup edge cases'
-        ],
-        recommendedTopics: selectedProblem.tags || ['Arrays & Hashing', 'Two Pointers'],
-        practiceProblems: [
-          { id: 'p1', title: 'Two Sum II', difficulty: 'Medium', tags: ['Array', 'Two Pointers'] },
-          { id: 'p2', title: 'Subarray Sum Equals K', difficulty: 'Medium', tags: ['Hash Table', 'Prefix Sum'] }
-        ],
-        scoreProjection: {
-          currentScore: Math.round(data.overall_score ?? 85),
-          projectedScore: Math.min(100, Math.round((data.overall_score ?? 85) + (data.projected_score?.score_improvement_delta ?? 7))),
-          improvementDelta: data.projected_score?.score_improvement_delta ?? 7,
-          focusAreas: [
-            'Optimize Space Complexity & bucket allocation',
-            'Improve Code Readability & variable naming standards'
-          ],
-          iterationTimeline: [
-            { stage: 'Initial Submission', score: Math.round(data.overall_score ?? 85), note: 'Current solution evaluated' },
-            { stage: 'AI Projected Score', score: Math.min(100, Math.round((data.overall_score ?? 85) + 7)), note: 'Target with recommended optimizations' }
-          ]
-        },
-        // Some analysis providers return an object with an `improved_code`
-        // property rather than the source text directly.
-        aiRevisedCode: typeof data.improved_code === 'string'
-          ? data.improved_code
-          : typeof data.improved_code?.improved_code === 'string'
-            ? data.improved_code.improved_code
-            : code,
-        testResults,
-        totalTestCases: totalCases,
-        lastFailedCase
-      };
+      const newAssessment = toAssessment({ ...data, code }, selectedProblem);
 
       const newSubItem: SubmissionItem = {
         id: newSubmissionId,

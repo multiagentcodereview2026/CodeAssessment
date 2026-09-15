@@ -19,12 +19,12 @@ async def style_node(state: EvaluationState) -> Dict[str, Any]:
     }
 
     fallback = {
-        "style_score": 90.0,
-        "naming_issues": ["Consider renaming variable `mp` to `seen_elements` for improved clarity."],
-        "readability_issues": ["Add comments explaining the complement lookup logic."],
+        "style_score": None,
+        "naming_issues": [],
+        "readability_issues": [],
         "modularity_issues": [],
-        "positive_aspects": ["Clean indentation and modern STL usage.", "Concise and readable implementation."],
-        "summary": "Clean, idiomatic structure with good spacing and formatting."
+        "positive_aspects": [],
+        "summary": "Style assessment unavailable; no style score was assigned."
     }
 
     result = await invoke_agent(prompt, payload, StyleOutput, fallback)
