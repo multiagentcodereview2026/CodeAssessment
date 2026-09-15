@@ -17,7 +17,7 @@ export const MOCK_STUDENT_USER: UserProfile = {
   role: 'student',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
   rollNumber: '21C51234',
-  institution: 'Keshav Memorial Institute of Technology',
+  institution: 'Geethanjali College of Engg',
   department: 'CSE',
   year: '3rd Year'
 };
@@ -29,7 +29,7 @@ export const MOCK_INSTRUCTOR_USER: UserProfile = {
   role: 'instructor',
   avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
   rollNumber: 'FAC-9082',
-  institution: 'Keshav Memorial Institute of Technology',
+  institution: 'Geethanjali College of Engg',
   department: 'Computer Science & Engineering',
   year: 'Associate Professor'
 };

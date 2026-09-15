@@ -56,15 +56,6 @@ class ProblemTestCase(Base):
 
     problem = relationship("Problem", back_populates="test_case_records")
 
-
-class InstructorAssignment(Base):
-    __tablename__ = "instructor_assignments"
-
-    problem_id = Column(String(100), ForeignKey("problems.id"), primary_key=True)
-    course_code = Column(String(100), nullable=False)
-    due_date = Column(String(100), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
 class Submission(Base):
     __tablename__ = "submissions"
 

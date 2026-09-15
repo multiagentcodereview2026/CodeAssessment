@@ -61,7 +61,7 @@ const InstructorLayout = () => {
   };
 
   const displayName = user?.name || user?.username || 'Prof. Pavithra K.';
-  const displayEmail = user?.email || 'pavithra.k@kmit.in';
+  const displayEmail = user?.email || 'pavithra.k@geethanjali.edu.in';
 
   return (
     <div className="min-h-screen bg-slate-50 flex">

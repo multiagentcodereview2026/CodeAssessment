@@ -21,22 +21,11 @@ import { TOPIC_MASTERY, RUBRIC_AGENTS } from '../../data/learningInsights';
 
 export const AnalyticsProgressView: React.FC = () => {
   const navigate = useNavigate();
-  const { studentProgress, submissions } = useApp();
+  const { studentProgress } = useApp();
   const [timeframe, setTimeframe] = useState<'month' | 'semester' | 'all'>('month');
 
   const topicMastery = TOPIC_MASTERY;
   const lowestTopic = [...topicMastery].sort((a, b) => a.mastery - b.mastery)[0];
-
-  if (submissions.length === 0) {
-    return (
-      <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-xs">
-        <Award className="mx-auto h-10 w-10 text-slate-300" />
-        <h1 className="mt-4 text-xl font-extrabold text-slate-900">No scores yet</h1>
-        <p className="mt-2 text-sm text-slate-500">Submit a solution to generate your analytics and learning progress.</p>
-        <button onClick={() => navigate('/problems')} className="mt-5 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white">Choose a problem</button>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">

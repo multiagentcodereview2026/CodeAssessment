@@ -64,7 +64,7 @@ const StudentLayout = () => {
 
   const displayName = user?.name || user?.username || 'Vignesh Reddy';
   const displayId = user?.username || user?.id || '24BD1A058Z';
-  const displayEmail = user?.email || '24bd1a058z@kmit.in';
+  const displayEmail = user?.email || '24bd1a058z@geethanjali.edu.in';
   const unreadAnnouncements = announcements.filter((item) => !item.read);
   const notificationCount = unreadNotifs + unreadAnnouncements.length;
 

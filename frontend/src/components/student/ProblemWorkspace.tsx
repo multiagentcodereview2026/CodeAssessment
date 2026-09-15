@@ -52,7 +52,6 @@ export const ProblemWorkspace: React.FC = () => {
   const { id: routeProblemId } = useParams<{ id: string }>();
   const isInstructorProblem = new URLSearchParams(location.search).get('view') === 'instructor';
   const {
-    currentUser,
     selectedProblem: fallbackProblem,
     setCurrentView,
     addSubmission
@@ -368,16 +367,6 @@ export const ProblemWorkspace: React.FC = () => {
       });
       return;
     }
-    if (!code.trim()) {
-      setRunOutput({
-        status: 'error',
-        time: '—',
-        memory: '—',
-        reason: 'Enter code before submitting.',
-        results: []
-      });
-      return;
-    }
     setIsSubmitting(true);
     setSubmissionStep(1);
 
@@ -390,7 +379,7 @@ export const ProblemWorkspace: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          student_id: currentUser.id,
+          student_id: '24BD1A058Z',
           problem_id: remoteProblem.id,
           language,
           code
