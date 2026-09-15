@@ -4,6 +4,20 @@ An explainable, multi-agent code assessment platform for programming education. 
 
 The interface also uses the names **CodeVedha** and **Kodacharya**. The project combines working backend features with demo interfaces and fallback AI responses.
 
+## Contents
+
+- [Features](#features)
+- [Technology and architecture](#technology-and-architecture)
+- [Complete project workflow](#complete-project-workflow)
+- [Assessment workflow and scoring](#assessment-workflow)
+- [Data and frontend structure](#data-and-frontend-structure)
+- [Setup and configuration](#quick-start)
+- [API reference](#api-reference)
+- [Repository map](#repository-map)
+- [Tests and datasets](#tests-and-datasets)
+- [Implementation limits](#important-implementation-limits)
+- [Troubleshooting and maintenance](#troubleshooting-and-maintenance)
+
 ## Features
 
 - **Student workspace:** problem catalogue, Monaco editor, public test runs, submissions, feedback, and history.
@@ -34,24 +48,102 @@ FastAPI backend :8000 ──── PostgreSQL
         └── LangGraph workflow ──────── Groq / fallback responses
 ```
 
-## How it works
+## Complete project workflow
 
-1. A student opens a problem and writes a solution in the editor.
-2. **Run** executes public cases without AI assessment or saving a submission.
-3. **Submit** loads the server's full judge cases, including hidden cases, and executes all of them.
-4. The backend passes the problem, source, language, and execution results into the assessment graph.
-5. Agents generate scores and teaching feedback. Selected hidden-case details are removed before model use and before persistence/API responses.
-6. The backend saves the source, scores, execution results, and feedback as an `EVALUATED` submission.
-7. The frontend displays the result; saved submissions can be retrieved later.
+### 1. Start services and prepare data
 
-Submission processing happens within the HTTP request. `EVALUATED` means assessment finished, not that every test passed. Revised code is not automatically retested.
+Docker Compose starts PostgreSQL, the execution service, the backend, and the frontend. The backend creates missing database tables and inserts missing built-in instructor problems and their judge cases. Additional practice problems come from dataset imports or an existing database. Restarting does not overwrite existing instructor assignments.
+
+The frontend sends `/api` requests through Vite to FastAPI. FastAPI owns problem retrieval, execution requests, assessment orchestration, and database writes; the browser does not directly access PostgreSQL or Groq.
+
+### 2. Sign in and select a problem
+
+`AuthContext.jsx` calls `/api/auth/login` with an identifier and role. The demo backend creates an unknown student if needed and returns profile information. The browser stores a session marker and routes the user to student or instructor views.
+
+The student catalogue calls `/api/problems`; the instructor catalogue calls `/api/instructor-problems`. Opening a problem calls `/api/problems/{id}` for its statement, constraints, examples, starter code, and public cases. Private judge cases stay server-side.
+
+This is demo identity handling: passwords are not validated, and the current editor/history paths use a fixed student ID. Browser role routing is not backend authorization.
+
+### 3. Write code and run public tests
+
+The Monaco workspace collects the language and source. **Run** calls `/api/submissions/run`. When a problem ID is supplied, the backend loads its public cases; otherwise the endpoint can accept supplied cases for a custom run.
+
+The backend execution client prepares supported solution wrappers, calls the execution engine, and returns compilation status, verdicts, output, errors, timing, and case counts. This path does not call the assessment graph or create a saved submission.
+
+### 4. Submit for full judging
+
+**Submit** sends `student_id`, `problem_id`, `language`, and `code` to `/api/submissions/submit`. The backend loads authoritative cases from `problem_test_cases`, falling back to legacy problem JSON when normalized records are absent. Request-supplied cases do not replace the final judge cases.
+
+The backend asks the execution engine to run all cases, including hidden cases, without stopping after the first failure. The engine resolves the language, compiles when necessary, executes cases with bounded concurrency, and reports results. Docker runners apply network, filesystem, process, CPU, and memory restrictions.
+
+Programs must follow the selected problem's input/output format. The backend has wrappers for some function/class-style solutions, but these are not universal. Local-process fallback paths also exist when engine/Docker execution is unavailable; see the implementation limits below.
+
+### 5. Evaluate and explain
+
+Execution results, source, language, student information, and the problem statement/constraints form `EvaluationState`. LangGraph runs the ten stages described below. Correctness comes from test results; complexity, style, and similarity branch in parallel before aggregation and teaching feedback.
+
+The shared agent helper loads prompts, calls Groq, parses JSON, and validates the response. If a call is unavailable or invalid, that agent uses its fallback. The correctness agent removes selected hidden-case details before constructing its model payload.
+
+### 6. Save and display the result
+
+After the graph finishes, the backend removes hidden-case input, expected output, actual output, and stderr from per-case execution records before persistence and response. It generates a `SUB-XXXXXXXX` ID and saves source, component scores, execution results, feedback, recommendations, revised code, and score projection.
+
+The frontend receives the assessment and shows the result. `EVALUATED` means the pipeline finished; it does not mean every case passed or every agent successfully called the model. Suggested revised code is not re-executed by this workflow.
+
+Submission processing completes within the original HTTP request. There is no durable background submission job or polling API in this path.
+
+### 7. Review history and instructor views
+
+History is retrieved through `/api/submissions?student_id=...`; a saved result and original source are available through `/api/submissions/{submission_id}`. The initial response includes some details, such as complexity analysis, that are not persisted as dedicated submission fields.
+
+Student analytics and the instructor overview query stored submissions but also include demonstration defaults. Courses, roster management, similarity alerts, and reports have interface/state implementations without a complete set of persistent management APIs. A change in one of these views may therefore remain only in browser or in-memory state.
+
+### Request sequence
+
+```mermaid
+sequenceDiagram
+    actor Student
+    participant UI as React workspace
+    participant API as FastAPI backend
+    participant DB as Database
+    participant Engine as Execution service
+    participant Graph as LangGraph agents
+    Student->>UI: Open problem
+    UI->>API: GET /api/problems/{id}
+    API->>DB: Load problem and public cases
+    API-->>UI: Statement, starter code, public cases
+    Student->>UI: Run code
+    UI->>API: POST /api/submissions/run
+    API->>Engine: Execute public cases
+    Engine-->>API: Execution results
+    API-->>UI: Run result (not saved)
+    Student->>UI: Submit code
+    UI->>API: POST /api/submissions/submit
+    API->>DB: Load public and hidden judge cases
+    API->>Engine: Execute all cases
+    Engine-->>API: Verdicts and execution evidence
+    API->>Graph: Evaluate source and execution evidence
+    Graph-->>API: Scores and teaching outputs
+    API->>DB: Save source and redacted assessment
+    API-->>UI: Submission ID and result
+    UI-->>Student: Scores, feedback, recommendations
+```
 
 ## Assessment workflow
 
-```text
-Supervisor → Correctness → Complexity ─┐
-                        → Style ──────┼→ Aggregation → Explainability
-                        → Similarity ─┘       → Recommendation → Revision → Projection
+```mermaid
+flowchart TD
+    S[Supervisor] --> C[Correctness]
+    C --> X[Complexity]
+    C --> Y[Style]
+    C --> Z[Similarity]
+    X --> A[Aggregation]
+    Y --> A
+    Z --> A
+    A --> E[Explainability]
+    E --> R[Recommendation]
+    R --> V[Revision]
+    V --> P[Score projection]
 ```
 
 | Stage | Role |
