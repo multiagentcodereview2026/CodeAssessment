@@ -272,7 +272,10 @@ export const ProblemWorkspace: React.FC = () => {
           }))
         })
       });
-      if (!res.ok) throw new Error('Sandbox request failed.');
+      if (!res.ok) {
+        const errorPayload = await res.json().catch(() => null);
+        throw new Error(errorPayload?.detail || errorPayload?.compile_error || `Sandbox request failed (${res.status}).`);
+      }
       const data = await res.json();
       const compilationFailed = data.compile_status === 'error';
       if (compilationFailed) showCompilerMarker(data.compile_error || data.stderr || 'Compilation failed.');
@@ -330,12 +333,13 @@ export const ProblemWorkspace: React.FC = () => {
         compileError: compilationFailed ? (data.compile_error || data.stderr || 'Compilation failed.') : undefined,
         results
       });
-    } catch (err) {
+    } catch (err: any) {
+      const errMsg = err?.message || 'The execution service could not run this code.';
       setRunOutput({
         status: 'error',
         time: '—',
         memory: '—',
-        reason: 'The execution service could not run this code.',
+        reason: errMsg,
         results: selectedProblem.testCases.slice(0, 3).map((tc, idx) => ({
           caseNum: idx + 1,
           passed: false,
@@ -343,7 +347,7 @@ export const ProblemWorkspace: React.FC = () => {
           expected: tc.expectedOutput,
           output: '',
           status: 'system_error',
-          error: 'Unable to run this case because the execution service was unavailable.'
+          error: errMsg
         }))
       });
     } finally {
