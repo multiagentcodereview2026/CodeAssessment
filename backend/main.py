@@ -271,6 +271,9 @@ async def submit_and_evaluate_code(
     3. LangGraph 10-Agent Evaluation (Groq).
     4. Atomic DB Persistence.
     """
+    if not payload.code.strip():
+        raise HTTPException(status_code=400, detail="Code is required before submission.")
+
     problem_id = canonical_problem_id(payload.problem_id)
     logger.info(f"Received submission for student '{payload.student_id}' on problem '{problem_id}'")
 
@@ -441,23 +444,24 @@ def get_student_analytics(student_id: str, db: Session = Depends(get_db)):
     unique_solved = len(set(s.problem_id for s in submissions if (s.overall_score or 0) >= 70))
 
     # Calculate category averages
-    avg_correctness = db.query(func.avg(models.Submission.correctness_score)).filter(models.Submission.student_id == student_id).scalar() or 85.0
-    avg_complexity = db.query(func.avg(models.Submission.complexity_score)).filter(models.Submission.student_id == student_id).scalar() or 80.0
-    avg_style = db.query(func.avg(models.Submission.style_score)).filter(models.Submission.student_id == student_id).scalar() or 85.0
-    avg_overall = db.query(func.avg(models.Submission.overall_score)).filter(models.Submission.student_id == student_id).scalar() or 88.5
+    avg_correctness = db.query(func.avg(models.Submission.correctness_score)).filter(models.Submission.student_id == student_id).scalar() or 0.0
+    avg_complexity = db.query(func.avg(models.Submission.complexity_score)).filter(models.Submission.student_id == student_id).scalar() or 0.0
+    avg_style = db.query(func.avg(models.Submission.style_score)).filter(models.Submission.student_id == student_id).scalar() or 0.0
+    avg_overall = db.query(func.avg(models.Submission.overall_score)).filter(models.Submission.student_id == student_id).scalar() or 0.0
 
     return StudentAnalyticsResponse(
         overall_score=round(avg_overall, 1),
         streak_days=student.streak_days,
         xp=student.xp,
-        problems_solved=max(unique_solved, 1),
+        problems_solved=unique_solved,
         total_problems=total_problems,
         score_trend=[
-            {"date": "Apr 1", "score": 30},
-            {"date": "Apr 8", "score": 45},
-            {"date": "Apr 15", "score": 42},
-            {"date": "Apr 22", "score": 65},
-            {"date": "Apr 29", "score": round(avg_overall, 1)}
+            {
+                "date": submission.created_at.strftime("%d %b"),
+                "score": round(submission.overall_score, 1),
+            }
+            for submission in sorted(submissions, key=lambda item: item.created_at)
+            if submission.overall_score is not None
         ],
         category_breakdown=[
             {"name": "Correctness", "value": round(avg_correctness, 1), "color": "#10b981"},

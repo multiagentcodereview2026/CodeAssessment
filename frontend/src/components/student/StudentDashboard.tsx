@@ -36,6 +36,7 @@ export const StudentDashboard: React.FC = () => {
 
   const activeProblem = problems[0] || MOCK_PROBLEMS[0];
   const latestSubmission = submissions[0];
+  const hasSubmissions = submissions.length > 0;
   const assignedProblems = problems.filter((problem) => problem.isInstructorAssigned);
   const weakTopic = studentProgress.weakTopics[0] || activeProblem.tags[0] || 'Algorithms';
   const solvedPercent = Math.round((studentProgress.problemsSolved / studentProgress.totalProblems) * 100);
@@ -48,6 +49,7 @@ export const StudentDashboard: React.FC = () => {
   };
 
   const handleInspectReport = (subId?: string) => {
+    if (!subId) return;
     openAssessmentResult(subId);
     navigate('/result');
   };
@@ -143,15 +145,18 @@ export const StudentDashboard: React.FC = () => {
 
         <button
           onClick={() => handleInspectReport(latestSubmission?.id)}
-          className="text-left bg-white rounded-2xl border border-emerald-200/80 p-5 shadow-xs hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer"
+          disabled={!latestSubmission}
+          className="text-left bg-white rounded-2xl border border-emerald-200/80 p-5 shadow-xs hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer disabled:cursor-default disabled:opacity-60"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-extrabold text-emerald-700 uppercase">2. Revise</span>
             <FileText className="w-4 h-4 text-emerald-500" />
           </div>
-          <h3 className="mt-2 text-sm font-bold text-slate-900">{latestSubmission?.problemTitle || activeAssessment.problemTitle}</h3>
+          <h3 className="mt-2 text-sm font-bold text-slate-900">{latestSubmission?.problemTitle || 'No assessment yet'}</h3>
           <p className="mt-1 text-xs text-slate-500 leading-relaxed">
-            AI projects +{projection.improvementDelta} points if you address {projection.focusAreas[0]?.toLowerCase() || 'the top rubric gap'}.
+            {latestSubmission
+              ? `AI projects +${projection.improvementDelta} points if you address ${projection.focusAreas[0]?.toLowerCase() || 'the top rubric gap'}.`
+              : 'Submit a solution to receive a score and revision feedback.'}
           </p>
         </button>
 
@@ -185,13 +190,13 @@ export const StudentDashboard: React.FC = () => {
           </div>
           <div className="flex items-baseline gap-1.5">
             <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-mono">
-              {studentProgress.overallScore}
+              {hasSubmissions ? studentProgress.overallScore : '—'}
             </span>
-            <span className="text-xs text-slate-400 font-mono">/ 100</span>
+            {hasSubmissions && <span className="text-xs text-slate-400 font-mono">/ 100</span>}
           </div>
-          <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600 font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span>Excellent</span>
+          <div className={`mt-2 flex items-center gap-1.5 text-xs font-semibold ${hasSubmissions ? 'text-emerald-600' : 'text-slate-500'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${hasSubmissions ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+            <span>{hasSubmissions ? 'Based on submitted solutions' : 'No submissions yet'}</span>
           </div>
         </div>
 
@@ -259,17 +264,17 @@ export const StudentDashboard: React.FC = () => {
           </div>
           <div className="flex items-baseline gap-1.5">
             <span className="text-2xl sm:text-3xl font-extrabold text-purple-700 font-mono">
-              #6
+              {hasSubmissions ? '#6' : '—'}
             </span>
           </div>
           <div className="mt-2 text-xs text-purple-600 font-medium truncate">
-            Rank #6 of 48 peers
+            {hasSubmissions ? 'Rank #6 of 48 peers' : 'Submit code to receive a rank'}
           </div>
         </div>
       </div>
 
       {/* AI Projected Score Action Card */}
-      <div className="p-6 rounded-3xl bg-gradient-to-r from-purple-900/10 via-indigo-900/10 to-transparent border border-purple-200/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
+      {latestSubmission && <div className="p-6 rounded-3xl bg-gradient-to-r from-purple-900/10 via-indigo-900/10 to-transparent border border-purple-200/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
         <div className="flex items-start gap-3.5">
           <div className="p-3 bg-purple-600 text-white rounded-2xl shadow-md shadow-purple-600/20">
             <Sparkles className="w-5 h-5" />
@@ -290,13 +295,13 @@ export const StudentDashboard: React.FC = () => {
         </div>
 
         <button
-          onClick={() => handleInspectReport()}
+          onClick={() => handleInspectReport(latestSubmission.id)}
           className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-2xl shadow-md shadow-purple-600/20 transition-all flex items-center gap-2 flex-shrink-0 cursor-pointer active:scale-95"
         >
           <span>View Detailed Feedback</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
-      </div>
+      </div>}
 
       {/* Middle Grid: Recent Submissions & Side Panels */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

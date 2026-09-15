@@ -55,6 +55,21 @@ export const INITIAL_COURSES: CourseItem[] = [
 // replacement problem bank.
 const PROBLEM_BANK_VERSION = 'newfacade-stdio-v2-empty-editors';
 
+const EMPTY_STUDENT_PROGRESS: StudentProgress = {
+  ...MOCK_STUDENT_PROGRESS,
+  overallScore: 0,
+  problemsSolved: 0,
+  progressPercent: 0,
+  topicsCovered: 0,
+  hoursSpent: '0 h',
+  categoryWiseScores: MOCK_STUDENT_PROGRESS.categoryWiseScores.map((category) => ({
+    ...category,
+    percentage: 0,
+    scoreDisplay: '—'
+  })),
+  scoreTrend: []
+};
+
 interface ToastInfo {
   id: string;
   message: string;
@@ -134,7 +149,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [selectedProblemId, setSelectedProblemId] = useState<string>('prob-1');
   const [activeAssessment, setActiveAssessment] = useState<AssessmentResult>(MOCK_DEFAULT_ASSESSMENT);
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
-  const [studentProgress, setStudentProgress] = useState<StudentProgress>(MOCK_STUDENT_PROGRESS);
+  const [studentProgress, setStudentProgress] = useState<StudentProgress>(EMPTY_STUDENT_PROGRESS);
   const [courses, setCourses] = useState<CourseItem[]>(INITIAL_COURSES);
   const [studentRoster, setStudentRoster] = useState<StudentRosterItem[]>(MOCK_STUDENT_ROSTER);
   const [selectedStudent, setSelectedStudent] = useState<StudentRosterItem | null>(null);
@@ -171,15 +186,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Submission history, accepted ticks, and attempted markers come from
   // PostgreSQL—not mock state—so they survive a browser reload and restart.
+  const authenticatedStudentId = auth?.user?.role === 'student'
+    ? (auth.user.id || auth.user.username)
+    : null;
+
   useEffect(() => {
     let cancelled = false;
 
     const loadSavedSubmissions = async () => {
+      if (!authenticatedStudentId) {
+        setSubmissions([]);
+        setStudentProgress(EMPTY_STUDENT_PROGRESS);
+        return;
+      }
       try {
-        // This is the student identity used by the current assessment flow.
-        // When production auth is connected, it should be replaced with the
-        // authenticated student identifier sent on submission as well.
-        const response = await fetch('/api/submissions?student_id=24BD1A058Z', { cache: 'no-store' });
+        const response = await fetch(`/api/submissions?student_id=${encodeURIComponent(authenticatedStudentId)}`, { cache: 'no-store' });
         if (!response.ok) throw new Error('Could not load saved submissions.');
         const records = await response.json();
         if (!Array.isArray(records) || cancelled) return;
@@ -199,7 +220,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }));
 
         if (cancelled) return;
-        setSubmissions(records.map((record: any): SubmissionItem => {
+        const restoredSubmissions = records.map((record: any): SubmissionItem => {
           const execution = record.execution_result || {};
           const passed = Number(execution.passed_cases || 0);
           const total = Number(execution.total_cases || (passed + Number(execution.failed_cases || 0)));
@@ -217,7 +238,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             passedTestCases: passed,
             totalTestCases: total
           };
-        }));
+        });
+        setSubmissions(restoredSubmissions);
+
+        const scoredRecords = records.filter((record: any) => record.overall_score != null);
+        const averageScore = scoredRecords.length
+          ? scoredRecords.reduce((sum: number, record: any) => sum + Number(record.overall_score), 0) / scoredRecords.length
+          : 0;
+        const solvedProblems = new Set(
+          restoredSubmissions.filter((submission) => submission.status === 'Passed').map((submission) => submission.problemId)
+        ).size;
+        setStudentProgress({
+          ...EMPTY_STUDENT_PROGRESS,
+          overallScore: Number(averageScore.toFixed(1)),
+          problemsSolved: solvedProblems,
+          progressPercent: Math.round((solvedProblems / EMPTY_STUDENT_PROGRESS.totalProblems) * 100),
+          scoreTrend: [...scoredRecords].reverse().map((record: any) => ({
+            date: record.created_at ? new Date(record.created_at).toLocaleDateString() : 'Submission',
+            score: Math.round(Number(record.overall_score))
+          }))
+        });
       } catch (error) {
         console.error('Unable to restore submission history:', error);
       }
@@ -225,7 +265,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     void loadSavedSubmissions();
     return () => { cancelled = true; };
-  }, []);
+  }, [authenticatedStudentId]);
 
   // Sync problems to localStorage on change
   useEffect(() => {
@@ -327,12 +367,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addSubmission = (newSub: SubmissionItem, newAssessment: AssessmentResult) => {
     setSubmissions(prev => [newSub, ...prev]);
     setActiveAssessment(newAssessment);
-    
-    // update student progress
+    const priorScores = submissions.map((submission) => submission.score);
+    const averageScore = (priorScores.reduce((sum, score) => sum + score, 0) + newSub.score) / (priorScores.length + 1);
+    const isNewlySolved = newSub.status === 'Passed' && !submissions.some(
+      (submission) => submission.problemId === newSub.problemId && submission.status === 'Passed'
+    );
+
     setStudentProgress(prev => ({
       ...prev,
-      overallScore: Number(((prev.overallScore * prev.problemsSolved + newSub.score) / (prev.problemsSolved + 1)).toFixed(1)),
-      problemsSolved: Math.min(prev.totalProblems, prev.problemsSolved + 1)
+      overallScore: Number(averageScore.toFixed(1)),
+      problemsSolved: isNewlySolved ? Math.min(prev.totalProblems, prev.problemsSolved + 1) : prev.problemsSolved
     }));
 
     // Update instructor submissions count
