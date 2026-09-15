@@ -13,10 +13,12 @@ from agents.revision import revision_node
 from agents.projection import score_projection_node
 
 def check_compilation_failure(state: EvaluationState) -> str:
-    """Conditional Edge: Skip in-depth complexity/style if compilation broke."""
-    exec_res = state.get("execution_result") or {}
-    if exec_res.get("compile_status") == "error":
-        return "explainability_node"
+    """
+    Always send execution results through the correctness node.
+
+    The correctness node calculates the score deterministically.
+    For compilation errors it will correctly produce 0 correctness.
+    """
     return "correctness_node"
 
 def build_graph():
