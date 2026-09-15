@@ -142,13 +142,77 @@ def execute_locally(
     language: str,
     test_cases: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
-    """Fallback execution for complete Python stdin/stdout programs."""
+    """Fallback execution for Python, C, C++, and Java stdin/stdout programs."""
     lang = language.lower()
-
-    if lang in ["python", "python3", "py"]:
-        runner_cmd = [sys.executable, "-c", source_code]
-    else:
-        runner_cmd = [sys.executable, "-c", source_code]
+    temp_dir = tempfile.mkdtemp()
+    
+    try:
+        if lang in ["python", "python3", "py"]:
+            runner_cmd = [sys.executable, "-c", source_code]
+        elif lang in ["cpp", "c++", "c"]:
+            compiler = "g++" if "cpp" in lang or "c++" in lang else "gcc"
+            ext = ".cpp" if "cpp" in lang or "c++" in lang else ".c"
+            src_path = os.path.join(temp_dir, f"solution{ext}")
+            bin_path = os.path.join(temp_dir, "solution.exe" if os.name == "nt" else "solution")
+            with open(src_path, "w", encoding="utf-8") as f:
+                f.write(source_code)
+            
+            comp_proc = subprocess.run([compiler, "-O2", src_path, "-o", bin_path], capture_output=True, text=True)
+            if comp_proc.returncode != 0:
+                return {
+                    "compile_status": "error",
+                    "compile_error": comp_proc.stderr or "Compilation failed.",
+                    "execution_status": "compilation_error",
+                    "exit_code": comp_proc.returncode,
+                    "stdout": "",
+                    "stderr": comp_proc.stderr or "Compilation failed.",
+                    "runtime_ms": 0,
+                    "memory_kb": 0,
+                    "passed_cases": 0,
+                    "failed_cases": len(test_cases),
+                    "total_cases": len(test_cases),
+                    "results": []
+                }
+            runner_cmd = [bin_path]
+        elif lang in ["java"]:
+            src_path = os.path.join(temp_dir, "Main.java")
+            with open(src_path, "w", encoding="utf-8") as f:
+                f.write(source_code)
+            comp_proc = subprocess.run(["javac", src_path], capture_output=True, text=True)
+            if comp_proc.returncode != 0:
+                return {
+                    "compile_status": "error",
+                    "compile_error": comp_proc.stderr or "Compilation failed.",
+                    "execution_status": "compilation_error",
+                    "exit_code": comp_proc.returncode,
+                    "stdout": "",
+                    "stderr": comp_proc.stderr or "Compilation failed.",
+                    "runtime_ms": 0,
+                    "memory_kb": 0,
+                    "passed_cases": 0,
+                    "failed_cases": len(test_cases),
+                    "total_cases": len(test_cases),
+                    "results": []
+                }
+            runner_cmd = ["java", "-cp", temp_dir, "Main"]
+        else:
+            runner_cmd = [sys.executable, "-c", source_code]
+    except Exception as e:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        return {
+            "compile_status": "error",
+            "compile_error": str(e),
+            "execution_status": "compilation_error",
+            "exit_code": 1,
+            "stdout": "",
+            "stderr": str(e),
+            "runtime_ms": 0,
+            "memory_kb": 0,
+            "passed_cases": 0,
+            "failed_cases": len(test_cases),
+            "total_cases": len(test_cases),
+            "results": []
+        }
 
     passed_count = 0
     failed_count = 0
@@ -241,6 +305,7 @@ def execute_locally(
         "wrong_answer"
     )
 
+    shutil.rmtree(temp_dir, ignore_errors=True)
     return {
         "compile_status": "success",
         "compile_error": None,
