@@ -22,6 +22,46 @@ import { CodeDiffViewer } from '../common/CodeDiffViewer';
 import { DifficultyBadge } from '../common/Badge';
 import { MOCK_DEFAULT_ASSESSMENT } from '../../mock/data';
 
+const normaliseFailedCase = (value: any) => {
+  if (!value || typeof value !== 'object') return undefined;
+
+  const ordinal = Number(value.ordinal ?? value.test_case_number ?? value.case_number);
+  if (!Number.isFinite(ordinal) || ordinal < 1) return undefined;
+
+  const isHidden = Boolean(value.is_hidden ?? value.isHidden);
+
+  return {
+    ordinal,
+    isHidden,
+    status: typeof value.status === 'string' ? value.status : undefined,
+    // The backend deliberately returns only a generic, redacted reason for a
+    // hidden test. The UI never renders it for hidden cases as an additional
+    // defence against accidental private input/output exposure.
+    reason: isHidden ? undefined : (typeof value.reason === 'string' ? value.reason : undefined)
+  };
+};
+
+const verdictLabel = (status?: string) => {
+  const normalized = String(status || '').trim().toUpperCase();
+  const labels: Record<string, string> = {
+    WRONG_ANSWER: 'Wrong answer',
+    WA: 'Wrong answer',
+    TIME_LIMIT_EXCEEDED: 'Time limit exceeded',
+    TLE: 'Time limit exceeded',
+    MEMORY_LIMIT_EXCEEDED: 'Memory limit exceeded',
+    MLE: 'Memory limit exceeded',
+    RUNTIME_ERROR: 'Runtime error',
+    RE: 'Runtime error',
+    COMPILATION_ERROR: 'Compilation error',
+    COMPILE_ERROR: 'Compilation error',
+    CE: 'Compilation error'
+  };
+
+  return labels[normalized] || (normalized
+    ? normalized.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : 'Output did not match the expected result');
+};
+
 export const AssessmentResultView: React.FC = () => {
   const navigate = useNavigate();
   const { id: routeSubmissionId } = useParams();
@@ -91,7 +131,7 @@ export const AssessmentResultView: React.FC = () => {
           totalTestCases: total,
           explainableFeedback: accepted
             ? `Accepted: ${passed}/${total} test cases passed.`
-            : `Not accepted: ${passed}/${total} test cases passed. ${execution.results?.find((result: any) => result.status !== 'accepted' && result.status !== 'ACCEPTED')?.stderr || 'The first failing case did not match the expected output.'}`,
+            : `Not accepted: ${passed}/${total} test cases passed. Review the last failed case below.`,
           testResults: (execution.results || []).map((result: any, index: number) => {
             const hidden = Boolean(result.is_hidden);
             return {
@@ -101,9 +141,13 @@ export const AssessmentResultView: React.FC = () => {
               actualOutput: hidden ? 'Hidden test case' : (result.actual_output || ''),
               passed: result.status === 'accepted' || result.status === 'ACCEPTED',
               executionTimeMs: Number(result.runtime_ms || 0), memoryMb: Number(result.memory_kb || 0) / 1024,
+              isHidden: hidden,
+              verdict: typeof result.status === 'string' ? result.status : undefined,
+              reason: hidden ? undefined : (result.stderr || result.error_message || undefined),
               stderr: hidden ? undefined : (result.stderr || result.error_message || undefined)
             };
-          })
+          }),
+          lastFailedCase: normaliseFailedCase(execution.last_failed_case)
         });
       } catch (error) {
         console.error('Unable to load submission result:', error);
@@ -129,12 +173,24 @@ export const AssessmentResultView: React.FC = () => {
     aiRevisedCode,
     code,
     testResults = [],
-    totalTestCases
+    totalTestCases,
+    lastFailedCase
   } = assessment;
   const passedTests = testResults.filter((test) => test.passed).length;
   const totalTests = totalTestCases || testResults.length;
   const accepted = status === 'Accepted' && totalTests > 0 && passedTests === totalTests;
-  const firstFailure = testResults.find((test) => !test.passed);
+  const lastFailedResult = [...testResults].reverse().find((test) => !test.passed);
+  const lastFailure = lastFailedCase || (lastFailedResult ? {
+    ordinal: lastFailedResult.testCaseNumber,
+    isHidden: Boolean(lastFailedResult.isHidden || lastFailedResult.input === 'Hidden test case'),
+    status: lastFailedResult.verdict,
+    reason: lastFailedResult.reason || lastFailedResult.stderr
+  } : undefined);
+  const lastFailureIsHidden = Boolean(lastFailure?.isHidden);
+  const lastFailurePublicResult = !lastFailureIsHidden && lastFailure
+    ? testResults.find((test) => test.testCaseNumber === lastFailure.ordinal && !test.isHidden)
+      || (!lastFailedResult?.isHidden ? lastFailedResult : undefined)
+    : undefined;
   const revisedCode = typeof aiRevisedCode === 'string' ? aiRevisedCode : code;
 
   const scoreItems = [
@@ -373,7 +429,41 @@ export const AssessmentResultView: React.FC = () => {
                 Passed {passedTests} / {totalTests}
               </span>
             </div>
-            {firstFailure && <p className="mt-2 text-[11px] text-rose-600">First failed case: {firstFailure.input === 'Hidden test case' ? 'hidden test case' : `public case ${firstFailure.testCaseNumber}`}. {firstFailure.stderr || 'Your output did not match the expected output.'}</p>}
+            {lastFailure && (
+              <div className="mt-2 rounded-xl border border-rose-200 bg-rose-50/70 p-3 text-[11px]">
+                <p className="font-semibold text-rose-700">
+                  Last failed case: {lastFailureIsHidden
+                    ? `hidden test case #${lastFailure.ordinal}`
+                    : `public case #${lastFailure.ordinal}`} — {verdictLabel(lastFailure.status)}
+                </p>
+
+                {lastFailureIsHidden ? (
+                  <p className="mt-1 text-rose-600">
+                    Hidden-test input, your output, and expected output are intentionally not displayed.
+                  </p>
+                ) : lastFailurePublicResult ? (
+                  <div className="mt-3 grid gap-2 font-mono text-slate-700">
+                    <div>
+                      <span className="font-sans text-slate-500">Input:</span>
+                      <pre className="mt-0.5 whitespace-pre-wrap break-words rounded bg-white px-2 py-1">{lastFailurePublicResult.input || '∅ (empty input)'}</pre>
+                    </div>
+                    <div>
+                      <span className="font-sans text-slate-500">Your output:</span>
+                      <pre className="mt-0.5 whitespace-pre-wrap break-words rounded bg-white px-2 py-1 text-rose-700">{lastFailurePublicResult.actualOutput || '∅ (no output produced)'}</pre>
+                    </div>
+                    <div>
+                      <span className="font-sans text-slate-500">Expected output:</span>
+                      <pre className="mt-0.5 whitespace-pre-wrap break-words rounded bg-white px-2 py-1">{lastFailurePublicResult.expectedOutput || '∅ (empty output)'}</pre>
+                    </div>
+                    {lastFailurePublicResult.reason && (
+                      <p className="font-sans text-rose-600">Reason: {lastFailurePublicResult.reason}</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-rose-600">Your output did not match the expected output.</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

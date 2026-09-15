@@ -17,6 +17,7 @@ from app.sandbox import prepare_submission_workspace
 from app.sandbox import cleanup_submission_workspace
 from app.schemas import ExecuteRequest
 from app.schemas import ExecutionResultResponse
+from app.schemas import FailedTestCaseSummaryResponse
 from app.schemas import TestCaseResultResponse
 
 
@@ -30,6 +31,21 @@ VERDICT_PRECEDENCE = [
     VERDICT_WRONG_ANSWER,
     VERDICT_ACCEPTED
 ]
+
+
+VERDICT_REASONS = {
+    VERDICT_WRONG_ANSWER: "Your output did not match the expected output.",
+    VERDICT_RUNTIME_ERROR: "Your program ended with a runtime error.",
+    VERDICT_TIME_LIMIT_EXCEEDED: "Your program exceeded the time limit.",
+    VERDICT_MEMORY_LIMIT_EXCEEDED: "Your program exceeded the memory limit.",
+    VERDICT_OUTPUT_LIMIT_EXCEEDED: "Your program produced too much output.",
+    VERDICT_SYSTEM_ERROR: "The test could not be evaluated because of a system error.",
+}
+
+
+def failure_reason(status: str) -> str:
+    """Return a fixed, student-safe explanation for a failed verdict."""
+    return VERDICT_REASONS.get(status, "This test did not pass.")
 
 
 def aggregate_verdict(current_status: str, new_status: str) -> str:
@@ -77,6 +93,7 @@ async def process_execution_request(req: ExecuteRequest) -> ExecutionResultRespo
     tests_passed = 0
     tests_failed = 0
     results_list = []
+    last_failed_case = None
 
     # Every test keeps its own disposable, network-isolated runner container.
     # Bounded parallelism prevents a 60–200 case submission from waiting for
@@ -165,10 +182,11 @@ async def process_execution_request(req: ExecuteRequest) -> ExecutionResultRespo
 
     # Tasks finish in timing-dependent order. Return them in the problem's
     # stored order so the first failed case is deterministic in the UI.
-    case_positions = {str(tc.id): position for position, tc in enumerate(req.test_cases)}
-    completed_cases.sort(key=lambda completed: case_positions.get(str(completed[0].id), len(case_positions)))
+    case_positions = {id(tc): position for position, tc in enumerate(req.test_cases)}
+    completed_cases.sort(key=lambda completed: case_positions.get(id(completed[0]), len(case_positions)))
 
     for tc, res in completed_cases:
+        case_ordinal = case_positions.get(id(tc), len(case_positions)) + 1
 
         if not res.compile_success:
             compile_success = False
@@ -200,6 +218,16 @@ async def process_execution_request(req: ExecuteRequest) -> ExecutionResultRespo
             tests_passed += 1
         else:
             tests_failed += 1
+            # This summary contains no source test data, so it is safe for
+            # public API responses even when the failed test is hidden.
+            # Keep overwriting it while iterating in stored order so it is
+            # always the last failed test, not the last runner to finish.
+            last_failed_case = FailedTestCaseSummaryResponse(
+                ordinal=case_ordinal,
+                status=res.status,
+                reason=failure_reason(res.status),
+                is_hidden=tc.is_hidden,
+            )
 
         results_list.append(
             TestCaseResultResponse(
@@ -227,5 +255,6 @@ async def process_execution_request(req: ExecuteRequest) -> ExecutionResultRespo
         tests_total=len(req.test_cases),
         tests_passed=tests_passed,
         tests_failed=tests_failed,
-        results=results_list
+        results=results_list,
+        last_failed_case=last_failed_case,
     )

@@ -481,9 +481,27 @@ export const ProblemWorkspace: React.FC = () => {
           passed: result.status === 'accepted' || result.status === 'ACCEPTED',
           executionTimeMs: Number(result.runtime_ms || 0),
           memoryMb: Number(result.memory_kb || 0) / 1024,
+          isHidden: hidden,
+          verdict: typeof result.status === 'string' ? result.status : undefined,
+          reason: hidden ? undefined : (result.stderr || result.error_message || undefined),
           stderr: hidden ? undefined : (result.stderr || result.error_message || undefined)
         };
       });
+      const rawLastFailedCase = execution.last_failed_case;
+      const lastFailedCaseOrdinal = Number(
+        rawLastFailedCase?.ordinal ?? rawLastFailedCase?.test_case_number ?? rawLastFailedCase?.case_number
+      );
+      const lastFailedCase = rawLastFailedCase && Number.isFinite(lastFailedCaseOrdinal) && lastFailedCaseOrdinal > 0
+        ? {
+            ordinal: lastFailedCaseOrdinal,
+            isHidden: Boolean(rawLastFailedCase.is_hidden ?? rawLastFailedCase.isHidden),
+            status: typeof rawLastFailedCase.status === 'string' ? rawLastFailedCase.status : undefined,
+            // Hidden diagnostics remain intentionally unavailable in browser state.
+            reason: Boolean(rawLastFailedCase.is_hidden ?? rawLastFailedCase.isHidden)
+              ? undefined
+              : typeof rawLastFailedCase.reason === 'string' ? rawLastFailedCase.reason : undefined
+          }
+        : undefined;
 
       const newAssessment: AssessmentResult = {
         submissionId: newSubmissionId,
@@ -501,7 +519,7 @@ export const ProblemWorkspace: React.FC = () => {
             max: 25,
             notes: accepted
               ? `Accepted: ${passedCases}/${totalCases} public and hidden tests passed.`
-              : `Judge result: ${passedCases}/${totalCases} tests passed. Review the first failing test below.`
+              : `Judge result: ${passedCases}/${totalCases} tests passed. Review the last failed test below.`
           },
           timeComplexity: {
             score: Math.round(((data.complexity_score ?? 85) / 100) * 25),
@@ -566,7 +584,8 @@ export const ProblemWorkspace: React.FC = () => {
             ? data.improved_code.improved_code
             : code,
         testResults,
-        totalTestCases: totalCases
+        totalTestCases: totalCases,
+        lastFailedCase
       };
 
       const newSubItem: SubmissionItem = {

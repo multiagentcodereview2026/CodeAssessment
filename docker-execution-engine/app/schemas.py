@@ -44,6 +44,21 @@ class TestCaseResultResponse(BaseModel):
         return self
 
 
+class FailedTestCaseSummaryResponse(BaseModel):
+    """Safe metadata for the last test that did not pass.
+
+    Hidden test inputs, outputs, and stderr must never leave the execution
+    service.  This deliberately contains only the one-based position in the
+    submitted test list and a fixed verdict description that is safe to show
+    to a student.
+    """
+
+    ordinal: int
+    status: str
+    reason: str
+    is_hidden: bool
+
+
 class ExecutionResultResponse(BaseModel):
 
     status: str
@@ -55,3 +70,4 @@ class ExecutionResultResponse(BaseModel):
     tests_passed: int
     tests_failed: int
     results: list[TestCaseResultResponse] = []
+    last_failed_case: FailedTestCaseSummaryResponse | None = None
