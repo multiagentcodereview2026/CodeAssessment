@@ -25,14 +25,21 @@ def canonical_problem_id(problem_id: str) -> str:
     return LEGACY_INSTRUCTOR_ALIASES.get(problem_id, problem_id)
 
 
-def assignment_metadata(problem_id: str) -> dict:
+def assignment_metadata(problem_id: str, db: Session | None = None) -> dict:
     definition = ASSIGNMENTS.get(problem_id)
-    if definition is None:
+    if definition is not None:
+        return {
+            "is_instructor_assigned": True,
+            "course_code": definition["course_code"],
+            "due_date": definition["due_date"],
+        }
+    assignment = db.get(models.InstructorAssignment, problem_id) if db else None
+    if assignment is None:
         return {}
     return {
         "is_instructor_assigned": True,
-        "course_code": definition["course_code"],
-        "due_date": definition["due_date"],
+        "course_code": assignment.course_code,
+        "due_date": assignment.due_date,
     }
 
 

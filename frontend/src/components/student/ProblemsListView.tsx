@@ -34,6 +34,29 @@ interface TestCaseItem {
 }
 
 const PRACTICE_CATALOGUE_CACHE_KEY = 'codevedha_practice_catalogue_v2';
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const todayForDateInput = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const formatDueDate = (value: string) => {
+  const [year, month, day] = value.split('-').map(Number);
+  return year && month && day ? `${day} ${MONTHS[month - 1]}, ${year}` : value;
+};
+
+const toDateInputValue = (value?: string) => {
+  if (!value) return todayForDateInput();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const match = value.match(/^(\d{1,2})\s+([A-Za-z]{3,9}),?\s+(\d{4})$/);
+  if (!match) return todayForDateInput();
+  const month = MONTHS.findIndex((name) => match[2].toLowerCase().startsWith(name.toLowerCase()));
+  return month >= 0 ? `${match[3]}-${String(month + 1).padStart(2, '0')}-${match[1].padStart(2, '0')}` : todayForDateInput();
+};
 
 const readCachedPracticeCatalogue = (): Problem[] => {
   try {
@@ -49,7 +72,7 @@ export const ProblemsListView: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isInstructor = location.pathname.startsWith('/instructor');
-  const { openProblemWorkspace, submissions, courses, problems, addProblem, updateProblem, deleteProblem } = useApp();
+  const { openProblemWorkspace, submissions, courses, problems, addProblem, updateProblem, deleteProblem, showToast } = useApp();
 
   const [activeTab, setActiveTab] = useState<'instructor' | 'practice'>(() =>
     new URLSearchParams(location.search).get('view') === 'instructor' ? 'instructor' : 'practice'
@@ -157,7 +180,7 @@ export const ProblemsListView: React.FC = () => {
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formCourseCode, setFormCourseCode] = useState('CS201');
-  const [formDueDate, setFormDueDate] = useState('15 May, 2026');
+  const [formDueDate, setFormDueDate] = useState(todayForDateInput);
   const [formDifficulty, setFormDifficulty] = useState<Difficulty>('Medium');
   const [formTags, setFormTags] = useState('Arrays, Two Pointers');
   const [formTimeComp, setFormTimeComp] = useState('O(N)');
@@ -216,7 +239,7 @@ export const ProblemsListView: React.FC = () => {
     setFormTitle('');
     setFormDescription('');
     setFormCourseCode('CS201');
-    setFormDueDate('25 May, 2026');
+    setFormDueDate(todayForDateInput());
     setFormDifficulty('Medium');
     setFormTags('Arrays, Hash Map');
     setFormTimeComp('O(N)');
@@ -235,7 +258,7 @@ export const ProblemsListView: React.FC = () => {
     setFormTitle(prob.title);
     setFormDescription(prob.description);
     setFormCourseCode(prob.courseCode || 'CS201');
-    setFormDueDate('15 May, 2026');
+    setFormDueDate(toDateInputValue(prob.dueDate));
     setFormDifficulty(prob.difficulty);
     setFormTags(prob.tags.join(', '));
     setFormTimeComp(prob.optimalComplexity.time);
@@ -271,7 +294,7 @@ export const ProblemsListView: React.FC = () => {
   };
 
   // Handle Save Question
-  const handleSaveQuestion = (e: React.FormEvent) => {
+  const handleSaveQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim()) return;
 
@@ -297,7 +320,7 @@ export const ProblemsListView: React.FC = () => {
           description: formDescription.trim(),
           difficulty: formDifficulty,
           courseCode: formCourseCode,
-          dueDate: formDueDate,
+          dueDate: formatDueDate(formDueDate),
           tags: parsedTags.length > 0 ? parsedTags : ['Algorithms'],
           optimalComplexity: {
             time: formTimeComp.trim() || 'O(N)',
@@ -320,7 +343,7 @@ export const ProblemsListView: React.FC = () => {
         tags: parsedTags.length > 0 ? parsedTags : ['Algorithms'],
         isInstructorAssigned: true,
         courseCode: formCourseCode,
-        dueDate: formDueDate,
+        dueDate: formatDueDate(formDueDate),
         optimalComplexity: {
           time: formTimeComp.trim() || 'O(N)',
           space: formSpaceComp.trim() || 'O(1)'
@@ -334,7 +357,37 @@ export const ProblemsListView: React.FC = () => {
         testCases: formattedTestCases
       };
 
-      addProblem(newProblem);
+      try {
+        const response = await fetch('/api/instructor-problems', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: newProblem.id,
+            title: newProblem.title,
+            difficulty: newProblem.difficulty,
+            category: newProblem.tags[0] || 'Algorithms',
+            description: newProblem.description,
+            examples: newProblem.examples,
+            constraints: newProblem.constraints,
+            starter_codes: newProblem.starterCode,
+            test_cases: newProblem.testCases.map((testCase) => ({
+              input: testCase.input,
+              expected_output: testCase.expectedOutput,
+              is_hidden: testCase.isHidden
+            })),
+            course_code: newProblem.courseCode || 'Course assignment',
+            due_date: newProblem.dueDate || ''
+          })
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => null);
+          throw new Error(error?.detail || 'Question could not be published.');
+        }
+        addProblem(newProblem);
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Question could not be published.', 'error');
+        return;
+      }
     }
 
     setIsQuestionModalOpen(false);
@@ -415,12 +468,12 @@ export const ProblemsListView: React.FC = () => {
                     onClick={() => handleSolve(problem.id)}
                     className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 border-b border-slate-100 px-6 py-5 text-left transition-colors last:border-b-0 hover:bg-emerald-50/60"
                   >
-                    <span className={`text-base font-bold ${attempted ? 'text-emerald-600' : 'text-slate-300'}`}>{attempted ? '✓' : '○'}</span>
+                    <span className={`font-mono text-sm font-bold ${attempted ? 'text-emerald-600' : 'text-slate-400'}`}>{attempted ? '✓' : '○'}</span>
                     <span className="min-w-0">
-                      <span className="block truncate text-base font-bold text-slate-900">{problem.title}</span>
-                      <span className="mt-1 block text-sm text-slate-500">{problem.courseCode || 'Course assignment'}{problem.dueDate ? ` · Due ${problem.dueDate}` : ''}</span>
+                      <span className="block truncate text-sm font-bold text-slate-900">{problem.title}</span>
+                      <span className="mt-1 block text-xs text-slate-500">{problem.courseCode || 'Course assignment'}{problem.dueDate ? ` · Due ${problem.dueDate}` : ''}</span>
                     </span>
-                    <DifficultyBadge difficulty={problem.difficulty} />
+                    <span className={`text-sm font-bold ${problem.difficulty === 'Easy' ? 'text-emerald-600' : problem.difficulty === 'Hard' ? 'text-rose-600' : 'text-amber-600'}`}>{problem.difficulty}</span>
                   </button>
                 );
               })}
@@ -916,12 +969,11 @@ export const ProblemsListView: React.FC = () => {
             <div>
               <label className="block font-bold text-slate-700 mb-1">Due Date</label>
               <input
-                type="text"
+                type="date"
                 value={formDueDate}
                 onChange={(e) => setFormDueDate(e.target.value)}
-                placeholder="e.g. 20 May, 2026"
                 required
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium cursor-pointer"
               />
             </div>
 

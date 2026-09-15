@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, Dict, Any, List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Auth Schemas
 class LoginRequest(BaseModel):
@@ -43,6 +43,19 @@ class ProblemDetail(BaseModel):
 
     class Config:
         from_attributes = True
+
+class InstructorProblemCreate(BaseModel):
+    id: str
+    title: str
+    difficulty: str = "Medium"
+    category: str = "Algorithms"
+    description: str
+    examples: List[Dict[str, Any]] = Field(default_factory=list)
+    constraints: List[str] = Field(default_factory=list)
+    starter_codes: Dict[str, str] = Field(default_factory=dict)
+    test_cases: List[Dict[str, Any]] = Field(default_factory=list)
+    course_code: str
+    due_date: str
 
 # Submission Schemas
 class SubmissionRequest(BaseModel):

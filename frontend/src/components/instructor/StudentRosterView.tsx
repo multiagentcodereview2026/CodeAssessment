@@ -54,7 +54,7 @@ export const StudentRosterView: React.FC = () => {
       id: `stu-${Date.now()}`,
       name: newName.trim(),
       rollNumber: newRoll.trim().toUpperCase(),
-      email: newEmail.trim() || `${newRoll.toLowerCase()}@geethanjali.edu.in`,
+      email: newEmail.trim() || `${newRoll.toLowerCase()}@kmit.in`,
       avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80`,
       submissionsCount: 0,
       avgScore: 0,
@@ -361,7 +361,7 @@ export const StudentRosterView: React.FC = () => {
               type="email"
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
-              placeholder="e.g. student@geethanjali.edu.in"
+              placeholder="e.g. student@kmit.in"
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium"
             />
           </div>

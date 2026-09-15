@@ -362,7 +362,7 @@ const Login = () => {
                   </div>
                 ))}
               </div>
-              <span className="text-sm font-medium text-white/90">Trusted by KMIT Faculty</span>
+              <span className="text-sm font-medium text-white/90">Trusted by Keshav Memorial Institute of Technology Faculty</span>
             </div>
             <p className="text-sm text-white/70 italic">"The multi-agent feedback is phenomenally accurate and genuinely helps students improve."</p>
           </motion.div>

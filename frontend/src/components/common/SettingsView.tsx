@@ -20,7 +20,7 @@ export const SettingsView: React.FC = () => {
   // Profile Form
   const [name, setName] = useState(currentUser.name);
   const [email, setEmail] = useState(currentUser.email);
-  const [institution, setInstitution] = useState(currentUser.institution || 'Geethanjali College of Engg');
+  const [institution, setInstitution] = useState(currentUser.institution || 'Keshav Memorial Institute of Technology');
   const [department, setDepartment] = useState(currentUser.department || 'Computer Science & Engineering');
 
   // Preferences
