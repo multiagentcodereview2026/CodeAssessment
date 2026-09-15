@@ -50,9 +50,9 @@ export const INITIAL_COURSES: CourseItem[] = [
   }
 ];
 
-// Bump this whenever the server-side practice corpus changes.  It prevents a
-// browser from mixing an obsolete local CodeContests cache or draft with the
-// replacement problem bank.
+// Bump this whenever the server-side practice corpus changes. Problem metadata
+// may be invalidated, but editor drafts must remain independent of catalogue
+// updates so a student's work is never erased by a frontend deployment.
 const PROBLEM_BANK_VERSION = 'newfacade-stdio-v2-empty-editors';
 
 interface ToastInfo {
@@ -119,10 +119,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       if (localStorage.getItem('codevedha_problem_bank_version') !== PROBLEM_BANK_VERSION) {
         localStorage.removeItem('codevedha_problems');
-        for (let index = localStorage.length - 1; index >= 0; index -= 1) {
-          const key = localStorage.key(index);
-          if (key?.startsWith('codevedha_editor_draft:')) localStorage.removeItem(key);
-        }
         localStorage.setItem('codevedha_problem_bank_version', PROBLEM_BANK_VERSION);
       }
       const saved = localStorage.getItem('codevedha_problems');
