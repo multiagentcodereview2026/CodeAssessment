@@ -59,46 +59,33 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Login with OAuth2 password flow
+  // Login via API
   const login = async (username, password, selectedRole = 'student') => {
     try {
-      // OAuth2PasswordRequestForm expects form-urlencoded data
-      const formData = new URLSearchParams();
-      formData.append('username', username);
-      formData.append('password', password);
-
       const response = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData.toString()
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: username,
+          role: selectedRole,
+          password: password || 'password'
+        })
       });
 
       if (response.ok) {
-        const data = await response.json();
-        const accessToken = data.access_token;
-
-        // Store token
-        localStorage.setItem('evaluator_token', accessToken);
-        setToken(accessToken);
-
-        // Fetch user profile
-        const meResponse = await fetch('/api/auth/me', {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-
-        if (meResponse.ok) {
-          const userData = await meResponse.json();
-          const userObj = {
-            id: userData.id,
-            username: userData.username,
-            name: userData.username.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-            email: userData.email,
-            role: userData.role || selectedRole || 'student'
-          };
-          setUser(userObj);
-          localStorage.setItem('evaluator_user', JSON.stringify(userObj));
-          return userObj;
-        }
+        const userData = await response.json();
+        const userObj = {
+          id: userData.id,
+          username: userData.id,
+          name: userData.name || userData.id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          email: userData.email,
+          role: userData.role || selectedRole || 'student'
+        };
+        setUser(userObj);
+        setToken('session-token');
+        localStorage.setItem('evaluator_token', 'session-token');
+        localStorage.setItem('evaluator_user', JSON.stringify(userObj));
+        return userObj;
       }
     } catch (e) {
       console.warn("Backend auth unavailable, falling back to mock login:", e);

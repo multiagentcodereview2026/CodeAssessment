@@ -1,3 +1,4 @@
+import asyncio
 import copy
 import json
 import logging
@@ -9,7 +10,14 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 import models
-from database import Base, SessionLocal, engine, get_db
+from database import (
+    Base,
+    SessionLocal,
+    engine,
+    ensure_problem_complexity_columns,
+    ensure_submission_assessment_columns,
+    get_db,
+)
 from schemas import (
     LoginRequest,
     AuthUser,
@@ -23,6 +31,7 @@ from schemas import (
     StudentAnalyticsResponse
 )
 from docker_runner.executor import execute_code_sandboxed
+from agents.complexity import analyze_student_complexity, unavailable_analysis
 from workflow.graph import evaluation_graph
 from workflow.state import EvaluationState
 from instructor_repository import (
@@ -87,6 +96,8 @@ def redact_hidden_execution(execution_result):
 
 # Create tables
 Base.metadata.create_all(bind=engine)
+ensure_problem_complexity_columns()
+ensure_submission_assessment_columns()
 
 app = FastAPI(
     title="Explainable Multi-Agent AI Code Evaluator (Production API)",
@@ -231,8 +242,9 @@ async def submit_and_evaluate_code(
     """
     Complete Multi-Agent Evaluation:
     1. Look up problem and test cases.
-    2. Sandboxed execution in container/subprocess.
-    3. LangGraph 10-Agent Evaluation (Groq).
+    2. Sandboxed execution and complexity analysis run in parallel.
+    3. LangGraph assessment scores correctness from observed cases and
+       complexity against a private backend target.
     4. Atomic DB Persistence.
     """
     problem_id = canonical_problem_id(payload.problem_id)
@@ -249,6 +261,7 @@ async def submit_and_evaluate_code(
         .order_by(models.ProblemTestCase.position)
         .all()
     )
+    test_cases = []
     if stored_cases:
         test_cases = [
             {
@@ -271,28 +284,53 @@ async def submit_and_evaluate_code(
         elif isinstance(tc_raw, list):
             test_cases = tc_raw
     
-    # 1. Sandboxed Test Execution
-    exec_result = await execute_code_sandboxed(
+    # Docker execution decides correctness. Groq only sees the public problem
+    # information and source code; it never receives hidden cases or TC/SC
+    # targets. Starting both tasks here removes unnecessary sequential delay.
+    public_problem = {
+        "title": problem.title,
+        "statement": problem.description,
+        "constraints": problem.constraints,
+        "category": problem.category,
+        "difficulty": problem.difficulty,
+    }
+    execution_task = asyncio.create_task(execute_code_sandboxed(
         source_code=payload.code,
         language=payload.language,
         test_cases=test_cases,
         # A final submission must produce an accurate passed/total result.
         # The engine still uses bounded parallelism, so this does not run all
         # containers at once and exhaust the host.
-        stop_on_first_failure=False
+        stop_on_first_failure=False,
+    ))
+    complexity_task = asyncio.create_task(
+        analyze_student_complexity(public_problem, payload.code, payload.language)
     )
     # The agent workflow needs verdicts and counts, not the input/output of a
     # private judge case. Redact before invoking any downstream service too.
     safe_exec_result = redact_hidden_execution(exec_result)
 
+    execution_outcome, complexity_outcome = await asyncio.gather(
+        execution_task,
+        complexity_task,
+        return_exceptions=True,
+    )
+    if isinstance(execution_outcome, Exception):
+        logger.error("Sandbox execution failed: %s", execution_outcome)
+        raise HTTPException(status_code=502, detail="Code execution service is unavailable")
+    exec_result = execution_outcome
+    if isinstance(complexity_outcome, Exception):
+        logger.warning("Complexity analysis failed: %s", complexity_outcome)
+        precomputed_complexity_analysis = unavailable_analysis(
+            "The complexity analysis service was unavailable for this submission."
+        )
+    else:
+        precomputed_complexity_analysis = complexity_outcome
+
     # 2. Build LangGraph State
     initial_state: EvaluationState = {
         "user": {"student_id": payload.student_id, "name": payload.student_id},
-        "problem": {
-            "title": problem.title if problem else payload.problem_id,
-            "statement": problem.description if problem else "Problem statement",
-            "constraints": str(problem.constraints) if problem else ""
-        },
+        "problem": public_problem,
         "submission": {
             "source_code": payload.code,
             "language": payload.language
@@ -303,6 +341,14 @@ async def submit_and_evaluate_code(
         "correctness_details": None,
         "complexity_score": None,
         "complexity_details": None,
+        # This object remains in process only. Do not add it to any prompt,
+        # submission JSON, or response schema.
+        "complexity_target": {
+            "time": problem.target_time_complexity,
+            "space": problem.target_space_complexity,
+        },
+        "precomputed_complexity_analysis": precomputed_complexity_analysis,
+        "assessment_flags": {},
         "style_score": None,
         "style_details": None,
         "similarity_score": None,
@@ -346,6 +392,8 @@ async def submit_and_evaluate_code(
         style_score=final_state.get("style_score"),
         similarity_score=final_state.get("similarity_score"),
         execution_result=safe_execution_result,
+        complexity_details=final_state.get("complexity_details"),
+        assessment_flags=final_state.get("assessment_flags"),
         feedback=final_state.get("feedback"),
         recommendations=final_state.get("recommendations"),
         improved_code=final_state.get("improved_code"),

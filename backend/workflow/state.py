@@ -15,6 +15,14 @@ class EvaluationState(TypedDict):
     correctness_details: Optional[Dict[str, Any]]
     complexity_score: Optional[float]
     complexity_details: Optional[Dict[str, Any]]
+    # Private targets are read from the backend problem record only. They are
+    # never included in the public problem payload, AI payload, or API result.
+    complexity_target: Optional[Dict[str, Any]]
+    # This analysis can be started alongside Docker execution before the graph
+    # reaches the complexity node.
+    precomputed_complexity_analysis: Optional[Dict[str, Any]]
+    # Backend-only signals such as a benchmark that should be re-verified.
+    assessment_flags: Optional[Dict[str, Any]]
     style_score: Optional[float]
     style_details: Optional[Dict[str, Any]]
     similarity_score: Optional[float]

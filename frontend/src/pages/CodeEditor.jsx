@@ -85,7 +85,7 @@ const CodeEditor = () => {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      const response = await authFetch('/api/submissions', {
+      const response = await authFetch('/api/submissions/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

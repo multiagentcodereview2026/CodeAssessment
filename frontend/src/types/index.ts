@@ -101,14 +101,12 @@ export interface MultiDimensionalScore {
     score: number;
     max: number;
     detected: string;
-    optimal: string;
     notes: string;
   };
   spaceComplexity: {
     score: number;
     max: number;
     detected: string;
-    optimal: string;
     notes: string;
   };
   codeQuality: {

@@ -12,7 +12,19 @@ import json
 from pathlib import Path
 
 import models
-from database import Base, SessionLocal, engine
+from database import Base, SessionLocal, engine, ensure_problem_complexity_columns
+
+
+ALLOWED_COMPLEXITIES = {
+    "O(1)",
+    "O(log n)",
+    "O(n)",
+    "O(n log n)",
+    "O(n^2)",
+    "O(n^3)",
+    "O(2^n)",
+    "O(n!)",
+}
 
 
 def digest(*values: str) -> str:
@@ -29,12 +41,19 @@ def replace_problem_bank(db) -> None:
     db.commit()
 
 
-def import_dataset(dataset_path: str, replace: bool, batch_size: int, limit: int | None = None) -> None:
+def import_dataset(
+    dataset_path: str,
+    replace: bool,
+    batch_size: int,
+    limit: int | None = None,
+    require_complexity: bool = False,
+) -> None:
     path = Path(dataset_path)
     if not path.is_file():
         raise FileNotFoundError(f"Dataset not found: {path}")
 
     Base.metadata.create_all(bind=engine)
+    ensure_problem_complexity_columns()
     db = SessionLocal()
     imported = public = hidden = skipped = 0
     try:
@@ -57,6 +76,15 @@ def import_dataset(dataset_path: str, replace: bool, batch_size: int, limit: int
                 if not public_tests or not hidden_tests:
                     skipped += 1
                     continue
+                if require_complexity and (
+                    row.get("complexity_needs_review")
+                    or row.get("target_time_complexity") not in ALLOWED_COMPLEXITIES
+                    or row.get("target_space_complexity") not in ALLOWED_COMPLEXITIES
+                ):
+                    raise ValueError(
+                        f"{problem_id} does not have reviewed target TC/SC metadata; "
+                        "do not publish a partial main problem bank."
+                    )
 
                 problem = models.Problem(
                     id=problem_id,
@@ -70,6 +98,11 @@ def import_dataset(dataset_path: str, replace: bool, batch_size: int, limit: int
                     test_cases=[],
                     source_url=row.get("source_url"),
                     source_license=str(row.get("source_license") or "Newfacade LeetCodeDataset (Apache-2.0)"),
+                    target_time_complexity=row.get("target_time_complexity"),
+                    target_space_complexity=row.get("target_space_complexity"),
+                    complexity_source=row.get("complexity_source"),
+                    complexity_confidence=row.get("complexity_confidence"),
+                    complexity_reasoning=row.get("complexity_reasoning"),
                     content_hash=str(row.get("content_hash") or digest(problem_id, str(row.get("description") or ""))),
                 )
                 db.add(problem)
@@ -119,5 +152,6 @@ if __name__ == "__main__":
     parser.add_argument("--replace", action="store_true", help="Delete old submissions, cases and problems first.")
     parser.add_argument("--batch-size", type=int, default=25)
     parser.add_argument("--limit", type=int, help="Import only this many rows; useful for isolated validation.")
+    parser.add_argument("--require-complexity", action="store_true", help="Reject rows without reviewed target TC/SC metadata.")
     args = parser.parse_args()
-    import_dataset(args.dataset_path, args.replace, args.batch_size, args.limit)
+    import_dataset(args.dataset_path, args.replace, args.batch_size, args.limit, args.require_complexity)

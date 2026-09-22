@@ -338,7 +338,10 @@ export const ProblemWorkspace: React.FC = () => {
           }))
         })
       });
-      if (!res.ok) throw new Error('Sandbox request failed.');
+      if (!res.ok) {
+        const errorPayload = await res.json().catch(() => null);
+        throw new Error(errorPayload?.detail || errorPayload?.compile_error || `Sandbox request failed (${res.status}).`);
+      }
       const data = await res.json();
       const compilationFailed = data.compile_status === 'error';
       if (compilationFailed) showCompilerMarker(data.compile_error || data.stderr || 'Compilation failed.');
@@ -396,12 +399,13 @@ export const ProblemWorkspace: React.FC = () => {
         compileError: compilationFailed ? (data.compile_error || data.stderr || 'Compilation failed.') : undefined,
         results
       });
-    } catch (err) {
+    } catch (err: any) {
+      const errMsg = err?.message || 'The execution service could not run this code.';
       setRunOutput({
         status: 'error',
         time: '—',
         memory: '—',
-        reason: 'The execution service could not run this code.',
+        reason: errMsg,
         results: selectedProblem.testCases.slice(0, 3).map((tc, idx) => ({
           caseNum: idx + 1,
           passed: false,
@@ -409,7 +413,7 @@ export const ProblemWorkspace: React.FC = () => {
           expected: tc.expectedOutput,
           output: '',
           status: 'system_error',
-          error: 'Unable to run this case because the execution service was unavailable.'
+          error: errMsg
         }))
       });
     } finally {
@@ -462,14 +466,22 @@ export const ProblemWorkspace: React.FC = () => {
       const accepted = totalCases > 0 && passedCases === totalCases;
       const timeComplexity = typeof data.complexity_details?.time_complexity === 'string'
         ? data.complexity_details.time_complexity
-        : selectedProblem.optimalComplexity?.time !== '—'
-          ? selectedProblem.optimalComplexity?.time
-          : 'Not available';
+        : 'Not available';
       const spaceComplexity = typeof data.complexity_details?.space_complexity === 'string'
         ? data.complexity_details.space_complexity
-        : selectedProblem.optimalComplexity?.space !== '—'
-          ? selectedProblem.optimalComplexity?.space
-          : 'Not available';
+        : 'Not available';
+      const timeMarks = typeof data.complexity_details?.time_score === 'number'
+        ? data.complexity_details.time_score
+        : null;
+      const spaceMarks = typeof data.complexity_details?.space_score === 'number'
+        ? data.complexity_details.space_score
+        : null;
+      const complexityClassification = typeof data.complexity_details?.classification === 'string'
+        ? data.complexity_details.classification
+        : 'REVIEW_REQUIRED';
+      const spaceClassification = typeof data.complexity_details?.space_classification === 'string'
+        ? data.complexity_details.space_classification
+        : 'REVIEW_REQUIRED';
       const testResults: TestCaseResult[] = (execution.results || []).map((result: any, index: number) => {
         const hidden = Boolean(result.is_hidden);
         return {
@@ -510,30 +522,32 @@ export const ProblemWorkspace: React.FC = () => {
         timestamp: 'Just now',
         language: language === 'cpp' ? 'C++' : language === 'c' ? 'C' : language === 'python' ? 'Python 3' : language === 'java' ? 'Java' : 'JavaScript',
         code: code,
-        status: accepted ? 'Accepted' : 'Wrong Answer',
+        status: accepted ? 'Accepted' : passedCases > 0 ? 'Partial' : 'Wrong Answer',
         executionTime: `${execution.runtime_ms || 0} ms`,
         memory: '5.2 MB',
         multiScores: {
           correctness: {
-            score: Math.round(((data.correctness_score ?? 100) / 100) * 25),
+            score: Math.round(((data.correctness_score ?? 0) / 100) * 25),
             max: 25,
             notes: accepted
               ? `Accepted: ${passedCases}/${totalCases} public and hidden tests passed.`
               : `Judge result: ${passedCases}/${totalCases} tests passed. Review the last failed test below.`
           },
           timeComplexity: {
-            score: Math.round(((data.complexity_score ?? 85) / 100) * 25),
-            max: 25,
+            score: timeMarks ?? 0,
+            max: timeMarks === null ? 0 : 25,
             detected: timeComplexity,
-            optimal: timeComplexity,
-            notes: `AST complexity analysis reported ${timeComplexity}.`
+            notes: timeMarks === null
+              ? `${complexityClassification}: complexity was recorded but is awaiting a private benchmark or problem-specific review.`
+              : `${complexityClassification}: detected complexity was compared against the private benchmark.`
           },
           spaceComplexity: {
-            score: 13,
-            max: 15,
+            score: spaceMarks ?? 0,
+            max: spaceMarks === null ? 0 : 25,
             detected: spaceComplexity,
-            optimal: spaceComplexity,
-            notes: `AST complexity analysis reported ${spaceComplexity}.`
+            notes: spaceMarks === null
+              ? `${spaceClassification}: space complexity is awaiting a private benchmark or problem-specific review.`
+              : `${spaceClassification}: detected auxiliary space was compared against the private benchmark.`
           },
           codeQuality: {
             score: Math.round(((data.style_score ?? 90) / 100) * 20),
@@ -704,7 +718,7 @@ export const ProblemWorkspace: React.FC = () => {
             </div>
             <div className="flex items-center gap-4 text-xs text-slate-500">
               <span>Acceptance: <strong className="text-slate-700">{selectedProblem.acceptanceRate}</strong></span>
-              <span>Optimal Time: <strong className="text-slate-700 font-mono">{selectedProblem.optimalComplexity.time}</strong></span>
+              <span>Complexity benchmark: <strong className="text-slate-700">Private during assessment</strong></span>
             </div>
           </div>
 

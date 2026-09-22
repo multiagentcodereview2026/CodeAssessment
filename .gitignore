@@ -9,3 +9,4 @@ frontend/README.md
 .env
 backend/.env
 frontend/.env
+backend_local_backup/

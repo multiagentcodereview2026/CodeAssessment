@@ -237,6 +237,13 @@ def normalize_row(row: dict[str, Any]) -> tuple[dict[str, Any] | None, str]:
         "hidden_tests": hidden_cases,
         "source_url": f"https://leetcode.com/problems/{task_id}/",
         "source_license": "Newfacade LeetCodeDataset (Apache-2.0)",
+        # Filled later by enrich_newfacade_complexities.py. Keep these fields
+        # in the canonical format so all downstream importers have one schema.
+        "target_time_complexity": None,
+        "target_space_complexity": None,
+        "complexity_source": None,
+        "complexity_confidence": None,
+        "complexity_reasoning": None,
         "method": method,
         "parameter_schema": {name: schema for name, schema in parameters},
         "return_schema": result_schema,

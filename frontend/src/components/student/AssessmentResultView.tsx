@@ -12,8 +12,8 @@ import {
   Share2,
   Play,
   Lightbulb,
-  CheckSquare2
-  ,XCircle
+  CheckSquare2,
+  XCircle
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
@@ -22,49 +22,30 @@ import { CodeDiffViewer } from '../common/CodeDiffViewer';
 import { DifficultyBadge } from '../common/Badge';
 import { MOCK_DEFAULT_ASSESSMENT } from '../../mock/data';
 
-const normaliseFailedCase = (value: any) => {
-  if (!value || typeof value !== 'object') return undefined;
+const getGradeLabel = (score: number): string => {
+  if (score >= 90) {
+    return 'Excellent (A)';
+  }
 
-  const ordinal = Number(value.ordinal ?? value.test_case_number ?? value.case_number);
-  if (!Number.isFinite(ordinal) || ordinal < 1) return undefined;
+  if (score >= 80) {
+    return 'Very Good (B)';
+  }
 
-  const isHidden = Boolean(value.is_hidden ?? value.isHidden);
+  if (score >= 70) {
+    return 'Good (C)';
+  }
 
-  return {
-    ordinal,
-    isHidden,
-    status: typeof value.status === 'string' ? value.status : undefined,
-    // The backend deliberately returns only a generic, redacted reason for a
-    // hidden test. The UI never renders it for hidden cases as an additional
-    // defence against accidental private input/output exposure.
-    reason: isHidden ? undefined : (typeof value.reason === 'string' ? value.reason : undefined)
-  };
-};
+  if (score >= 60) {
+    return 'Satisfactory (D)';
+  }
 
-const verdictLabel = (status?: string) => {
-  const normalized = String(status || '').trim().toUpperCase();
-  const labels: Record<string, string> = {
-    WRONG_ANSWER: 'Wrong answer',
-    WA: 'Wrong answer',
-    TIME_LIMIT_EXCEEDED: 'Time limit exceeded',
-    TLE: 'Time limit exceeded',
-    MEMORY_LIMIT_EXCEEDED: 'Memory limit exceeded',
-    MLE: 'Memory limit exceeded',
-    RUNTIME_ERROR: 'Runtime error',
-    RE: 'Runtime error',
-    COMPILATION_ERROR: 'Compilation error',
-    COMPILE_ERROR: 'Compilation error',
-    CE: 'Compilation error'
-  };
-
-  return labels[normalized] || (normalized
-    ? normalized.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
-    : 'Output did not match the expected result');
+  return 'Needs Improvement (F)';
 };
 
 export const AssessmentResultView: React.FC = () => {
   const navigate = useNavigate();
   const { id: routeSubmissionId } = useParams();
+
   const {
     activeAssessment,
     openProblemWorkspace,
@@ -73,88 +54,195 @@ export const AssessmentResultView: React.FC = () => {
   } = useApp();
 
   // A submission can be opened directly by URL, before the API data finishes
-  // loading.  Normalise every optional collection so incomplete API data can
+  // loading. Normalize every optional collection so incomplete API data can
   // never crash this page into a blank screen.
   const assessment = {
     ...MOCK_DEFAULT_ASSESSMENT,
     ...activeAssessment,
+
     multiScores: {
       ...MOCK_DEFAULT_ASSESSMENT.multiScores,
       ...(activeAssessment?.multiScores || {})
     },
-    suggestedImprovements: Array.isArray(activeAssessment?.suggestedImprovements)
-      ? activeAssessment.suggestedImprovements : MOCK_DEFAULT_ASSESSMENT.suggestedImprovements,
-    recommendedTopics: Array.isArray(activeAssessment?.recommendedTopics)
-      ? activeAssessment.recommendedTopics : MOCK_DEFAULT_ASSESSMENT.recommendedTopics,
-    practiceProblems: Array.isArray(activeAssessment?.practiceProblems)
-      ? activeAssessment.practiceProblems : MOCK_DEFAULT_ASSESSMENT.practiceProblems,
-    testResults: Array.isArray(activeAssessment?.testResults) ? activeAssessment.testResults : [],
+
+    suggestedImprovements: Array.isArray(
+      activeAssessment?.suggestedImprovements
+    )
+      ? activeAssessment.suggestedImprovements
+      : MOCK_DEFAULT_ASSESSMENT.suggestedImprovements,
+
+    recommendedTopics: Array.isArray(
+      activeAssessment?.recommendedTopics
+    )
+      ? activeAssessment.recommendedTopics
+      : MOCK_DEFAULT_ASSESSMENT.recommendedTopics,
+
+    practiceProblems: Array.isArray(
+      activeAssessment?.practiceProblems
+    )
+      ? activeAssessment.practiceProblems
+      : MOCK_DEFAULT_ASSESSMENT.practiceProblems,
+
+    testResults: Array.isArray(activeAssessment?.testResults)
+      ? activeAssessment.testResults
+      : [],
+
     scoreProjection: {
       ...MOCK_DEFAULT_ASSESSMENT.scoreProjection,
       ...(activeAssessment?.scoreProjection || {}),
-      focusAreas: Array.isArray(activeAssessment?.scoreProjection?.focusAreas)
-        ? activeAssessment.scoreProjection.focusAreas : MOCK_DEFAULT_ASSESSMENT.scoreProjection.focusAreas,
-      iterationTimeline: Array.isArray(activeAssessment?.scoreProjection?.iterationTimeline)
-        ? activeAssessment.scoreProjection.iterationTimeline : MOCK_DEFAULT_ASSESSMENT.scoreProjection.iterationTimeline
+
+      focusAreas: Array.isArray(
+        activeAssessment?.scoreProjection?.focusAreas
+      )
+        ? activeAssessment.scoreProjection.focusAreas
+        : MOCK_DEFAULT_ASSESSMENT.scoreProjection.focusAreas,
+
+      iterationTimeline: Array.isArray(
+        activeAssessment?.scoreProjection?.iterationTimeline
+      )
+        ? activeAssessment.scoreProjection.iterationTimeline
+        : MOCK_DEFAULT_ASSESSMENT.scoreProjection.iterationTimeline
     }
   };
 
   useEffect(() => {
     if (!routeSubmissionId) return;
+
     let active = true;
+
     const loadSubmission = async () => {
       try {
-        const response = await fetch(`/api/submissions/${routeSubmissionId}`, { cache: 'no-store' });
+        const response = await fetch(
+          `/api/submissions/${routeSubmissionId}`,
+          { cache: 'no-store' }
+        );
+
         if (!response.ok) return;
+
         const submission = await response.json();
+
         const execution = submission.execution_result || {};
-        const total = Number(execution.total_cases || (Number(execution.passed_cases || 0) + Number(execution.failed_cases || 0)));
+
+        const total = Number(
+          execution.total_cases ||
+            (
+              Number(execution.passed_cases || 0) +
+              Number(execution.failed_cases || 0)
+            )
+        );
+
         const passed = Number(execution.passed_cases || 0);
-        const accepted = total > 0 && passed === total;
-        const problemResponse = await fetch(`/api/problems/${submission.problem_id}`, { cache: 'no-store' });
-        const problem = problemResponse.ok ? await problemResponse.json() : null;
+
+        const accepted =
+          total > 0 &&
+          passed === total;
+
+        const problemResponse = await fetch(
+          `/api/problems/${submission.problem_id}`,
+          { cache: 'no-store' }
+        );
+
+        const problem = problemResponse.ok
+          ? await problemResponse.json()
+          : null;
+
         if (!active) return;
+
         setActiveAssessment({
           ...activeAssessment,
+
           submissionId: submission.submission_id,
           problemId: submission.problem_id,
           problemTitle: problem?.title || submission.problem_id,
+
           language: submission.language,
+
           code: submission.code,
-          aiRevisedCode: typeof submission.improved_code === 'string'
-            ? submission.improved_code
-            : typeof submission.improved_code?.improved_code === 'string'
-              ? submission.improved_code.improved_code
-              : submission.code,
-          status: accepted ? 'Accepted' : 'Wrong Answer',
+
+          aiRevisedCode:
+            typeof submission.improved_code === 'string'
+              ? submission.improved_code
+              : typeof submission.improved_code?.improved_code === 'string'
+                ? submission.improved_code.improved_code
+                : submission.code,
+
+          status: accepted
+            ? 'Accepted'
+            : 'Wrong Answer',
+
           executionTime: `${execution.runtime_ms || 0} ms`,
+
           totalTestCases: total,
+
           explainableFeedback: accepted
             ? `Accepted: ${passed}/${total} test cases passed.`
-            : `Not accepted: ${passed}/${total} test cases passed. Review the last failed case below.`,
-          testResults: (execution.results || []).map((result: any, index: number) => {
-            const hidden = Boolean(result.is_hidden);
-            return {
-              id: String(result.test_case_id || index + 1), testCaseNumber: index + 1,
-              input: hidden ? 'Hidden test case' : (result.input || ''),
-              expectedOutput: hidden ? 'Hidden test case' : (result.expected_output || ''),
-              actualOutput: hidden ? 'Hidden test case' : (result.actual_output || ''),
-              passed: result.status === 'accepted' || result.status === 'ACCEPTED',
-              executionTimeMs: Number(result.runtime_ms || 0), memoryMb: Number(result.memory_kb || 0) / 1024,
-              isHidden: hidden,
-              verdict: typeof result.status === 'string' ? result.status : undefined,
-              reason: hidden ? undefined : (result.stderr || result.error_message || undefined),
-              stderr: hidden ? undefined : (result.stderr || result.error_message || undefined)
-            };
-          }),
-          lastFailedCase: normaliseFailedCase(execution.last_failed_case)
+            : `Not accepted: ${passed}/${total} test cases passed. ${
+                execution.results?.find(
+                  (result: any) =>
+                    result.status !== 'accepted' &&
+                    result.status !== 'ACCEPTED'
+                )?.stderr ||
+                'The first failing case did not match the expected output.'
+              }`,
+
+          testResults: (execution.results || []).map(
+            (result: any, index: number) => {
+              const hidden = Boolean(result.is_hidden);
+
+              return {
+                id: String(
+                  result.test_case_id || index + 1
+                ),
+
+                testCaseNumber: index + 1,
+
+                input: hidden
+                  ? 'Hidden test case'
+                  : result.input || '',
+
+                expectedOutput: hidden
+                  ? 'Hidden test case'
+                  : result.expected_output || '',
+
+                actualOutput: hidden
+                  ? 'Hidden test case'
+                  : result.actual_output || '',
+
+                passed:
+                  result.status === 'accepted' ||
+                  result.status === 'ACCEPTED',
+
+                executionTimeMs: Number(
+                  result.runtime_ms || 0
+                ),
+
+                memoryMb:
+                  Number(result.memory_kb || 0) / 1024,
+
+                stderr: hidden
+                  ? undefined
+                  : (
+                      result.stderr ||
+                      result.error_message ||
+                      undefined
+                    )
+              };
+            }
+          )
         });
       } catch (error) {
-        console.error('Unable to load submission result:', error);
+        console.error(
+          'Unable to load submission result:',
+          error
+        );
       }
     };
+
     void loadSubmission();
-    return () => { active = false; };
+
+    return () => {
+      active = false;
+    };
   }, [routeSubmissionId]);
 
   const {
@@ -173,25 +261,47 @@ export const AssessmentResultView: React.FC = () => {
     aiRevisedCode,
     code,
     testResults = [],
-    totalTestCases,
-    lastFailedCase
+    totalTestCases
   } = assessment;
-  const passedTests = testResults.filter((test) => test.passed).length;
-  const totalTests = totalTestCases || testResults.length;
-  const accepted = status === 'Accepted' && totalTests > 0 && passedTests === totalTests;
-  const lastFailedResult = [...testResults].reverse().find((test) => !test.passed);
-  const lastFailure = lastFailedCase || (lastFailedResult ? {
-    ordinal: lastFailedResult.testCaseNumber,
-    isHidden: Boolean(lastFailedResult.isHidden || lastFailedResult.input === 'Hidden test case'),
-    status: lastFailedResult.verdict,
-    reason: lastFailedResult.reason || lastFailedResult.stderr
-  } : undefined);
-  const lastFailureIsHidden = Boolean(lastFailure?.isHidden);
-  const lastFailurePublicResult = !lastFailureIsHidden && lastFailure
-    ? testResults.find((test) => test.testCaseNumber === lastFailure.ordinal && !test.isHidden)
-      || (!lastFailedResult?.isHidden ? lastFailedResult : undefined)
-    : undefined;
-  const revisedCode = typeof aiRevisedCode === 'string' ? aiRevisedCode : code;
+
+  const passedTests = testResults.filter(
+    (test) => test.passed
+  ).length;
+
+  const totalTests =
+    totalTestCases || testResults.length;
+
+  const accepted =
+    status === 'Accepted' &&
+    totalTests > 0 &&
+    passedTests === totalTests;
+
+  const firstFailure = testResults.find(
+    (test) => !test.passed
+  );
+
+  const revisedCode =
+    typeof aiRevisedCode === 'string'
+      ? aiRevisedCode
+      : code;
+
+  /*
+   * IMPORTANT:
+   * Calculate the grade directly from the actual overall score.
+   *
+   * 90-100 -> Excellent (A)
+   * 80-89  -> Very Good (B)
+   * 70-79  -> Good (C)
+   * 60-69  -> Satisfactory (D)
+   * <60    -> Needs Improvement (F)
+   */
+  const overallScore = Number(
+    multiScores.overallScore || 0
+  );
+
+  const gradeLabel = getGradeLabel(
+    overallScore
+  );
 
   const scoreItems = [
     {
@@ -201,20 +311,26 @@ export const AssessmentResultView: React.FC = () => {
       color: 'bg-blue-500',
       detail: multiScores.correctness.notes
     },
+
     {
       label: 'Time',
       score: multiScores.timeComplexity.score,
       max: multiScores.timeComplexity.max,
       color: 'bg-cyan-500',
-      detail: `${multiScores.timeComplexity.detected} detected, ${multiScores.timeComplexity.optimal} target`
+      detail:
+        multiScores.timeComplexity.notes
     },
+
     {
-      label: 'Space',
+      label: 'Space (feedback)',
       score: multiScores.spaceComplexity.score,
       max: multiScores.spaceComplexity.max,
       color: 'bg-amber-500',
-      detail: `${multiScores.spaceComplexity.detected} detected, ${multiScores.spaceComplexity.optimal} target`
+      detail:
+        `${multiScores.spaceComplexity.detected} detected. ` +
+        multiScores.spaceComplexity.notes
     },
+
     {
       label: 'Quality',
       score: multiScores.codeQuality.score,
@@ -222,131 +338,215 @@ export const AssessmentResultView: React.FC = () => {
       color: 'bg-violet-500',
       detail: multiScores.codeQuality.notes
     },
+
     {
       label: 'Originality',
       score: multiScores.similarity.score,
       max: multiScores.similarity.max,
       color: 'bg-emerald-500',
-      detail: `${multiScores.similarity.originalityPercent}% original, ${multiScores.similarity.plagiarismRisk.toLowerCase()} risk`
+      detail:
+        `${multiScores.similarity.originalityPercent}% original, ` +
+        `${multiScores.similarity.plagiarismRisk.toLowerCase()} risk`
     }
   ];
 
   return (
     <div className="space-y-6 pb-16 animate-fadeIn">
+
       {/* Top Header & Breadcrumb */}
       <div className="flex flex-wrap items-center justify-between gap-4">
+
         <button
           onClick={() => navigate('/submissions')}
           className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Submissions</span>
+
+          <span>
+            Back to Submissions
+          </span>
         </button>
 
         <div className="flex items-center gap-3">
+
           <button
             onClick={() => window.print()}
             className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Share2 className="w-3.5 h-3.5 text-slate-500" />
-            <span>Export Report</span>
+
+            <span>
+              Export Report
+            </span>
           </button>
+
           <button
             onClick={() => {
-              openProblemWorkspace(activeAssessment.problemId);
-              navigate(`/problems/${activeAssessment.problemId}`);
+              openProblemWorkspace(
+                activeAssessment.problemId
+              );
+
+              navigate(
+                `/problems/${activeAssessment.problemId}`
+              );
             }}
             className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
           >
             <Play className="w-3.5 h-3.5" />
-            <span>Iterate & Re-Submit</span>
+
+            <span>
+              Iterate & Re-Submit
+            </span>
           </button>
+
         </div>
       </div>
 
-      {/* Main Top Banner: Accepted Status & Circular Score (Matches Step 5 in diagram) */}
+      {/* Main Top Banner */}
       <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm p-6 sm:p-8">
+
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+
           {/* Left info */}
           <div className="space-y-3 flex-1">
-            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold ${accepted ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-rose-50 border border-rose-200 text-rose-700'}`}>
-              {accepted ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <XCircle className="w-4 h-4 text-rose-600" />}
-              <span>{accepted ? `Accepted • ${passedTests}/${totalTests} test cases passed` : `Not accepted • ${passedTests}/${totalTests} test cases passed`}</span>
+
+            <div
+              className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold ${
+                accepted
+                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                  : 'bg-rose-50 border border-rose-200 text-rose-700'
+              }`}
+            >
+              {accepted ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              ) : (
+                <XCircle className="w-4 h-4 text-rose-600" />
+              )}
+
+              <span>
+                {accepted
+                  ? `Accepted • ${passedTests}/${totalTests} test cases passed`
+                  : `Not accepted • ${passedTests}/${totalTests} test cases passed`}
+              </span>
             </div>
 
             <div>
+
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
                 {problemTitle}
               </h1>
+
               <p className="text-xs text-slate-500 mt-1">
                 Evaluated by Multi-Agent AI Assessment Engine • Rubric v2.4
               </p>
+
             </div>
 
             {/* Metadata Pills */}
             <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 pt-1 font-mono">
+
               <span className="bg-slate-100 px-2.5 py-1 rounded-lg">
-                ID: <strong className="text-slate-800">{submissionId}</strong>
+                ID:{' '}
+                <strong className="text-slate-800">
+                  {submissionId}
+                </strong>
               </span>
+
               <span className="bg-slate-100 px-2.5 py-1 rounded-lg">
-                Language: <strong className="text-slate-800 font-sans">{language}</strong>
+                Language:{' '}
+                <strong className="text-slate-800 font-sans">
+                  {language}
+                </strong>
               </span>
+
               <span className="bg-slate-100 px-2.5 py-1 rounded-lg flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5 text-slate-400" />
-                Runtime: <strong className="text-slate-800">{executionTime}</strong>
+
+                Runtime:{' '}
+                <strong className="text-slate-800">
+                  {executionTime}
+                </strong>
               </span>
+
               <span className="bg-slate-100 px-2.5 py-1 rounded-lg">
-                Time complexity: <strong className="text-slate-800">{multiScores.timeComplexity.detected}</strong>
+                Time complexity:{' '}
+                <strong className="text-slate-800">
+                  {multiScores.timeComplexity.detected}
+                </strong>
               </span>
+
               <span className="bg-slate-100 px-2.5 py-1 rounded-lg flex items-center gap-1">
                 <HardDrive className="w-3.5 h-3.5 text-slate-400" />
-                Memory: <strong className="text-slate-800">{memory}</strong>
+
+                Memory:{' '}
+                <strong className="text-slate-800">
+                  {memory}
+                </strong>
               </span>
+
             </div>
           </div>
 
-          {/* Right Circular Gauge (Matching diagram 85/100) */}
+          {/* Right Circular Gauge */}
           <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200/80 self-center md:self-auto">
+
             <CircularGauge
-              score={multiScores.overallScore}
+              score={overallScore}
               maxScore={100}
               size={110}
               strokeWidth={9}
               color="#10b981"
               sublabel="Score"
             />
+
             <div className="text-left">
+
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
                 Overall Grade
               </span>
+
+              {/* DYNAMIC GRADE */}
               <span className="text-lg font-extrabold text-emerald-600 block">
-                Excellent (A)
+                {gradeLabel}
               </span>
+
               <span className="text-xs text-slate-500 font-medium">
                 Top 15% in cohort
               </span>
+
             </div>
           </div>
+
         </div>
       </div>
 
-      {/* Explainability First: Improvement Guidance & Compact Evidence */}
+      {/* Explainability First */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+
         <div className="xl:col-span-8 bg-gradient-to-br from-indigo-950 via-slate-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-lg relative overflow-hidden">
+
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-400 via-emerald-400 to-amber-300" />
+
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
+
             <div className="space-y-4 flex-1">
+
               <div className="flex items-center gap-3">
+
                 <div className="p-2.5 bg-indigo-500/20 text-indigo-200 rounded-2xl border border-indigo-400/20">
                   <Sparkles className="w-5 h-5" />
                 </div>
+
                 <div>
+
                   <span className="text-[11px] font-extrabold tracking-wider text-indigo-200 uppercase">
                     Explainable Feedback
                   </span>
+
                   <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">
                     What to improve next
                   </h2>
+
                 </div>
               </div>
 
@@ -355,166 +555,282 @@ export const AssessmentResultView: React.FC = () => {
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {suggestedImprovements.slice(0, 3).map((item, idx) => (
-                  <div key={idx} className="rounded-2xl bg-white/8 border border-white/10 p-4">
-                    <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs">
-                      <CheckSquare2 className="w-4 h-4" />
-                      <span>Improvement {idx + 1}</span>
+
+                {suggestedImprovements
+                  .slice(0, 3)
+                  .map((item, idx) => (
+
+                    <div
+                      key={idx}
+                      className="rounded-2xl bg-white/8 border border-white/10 p-4"
+                    >
+
+                      <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs">
+
+                        <CheckSquare2 className="w-4 h-4" />
+
+                        <span>
+                          Improvement {idx + 1}
+                        </span>
+
+                      </div>
+
+                      <p className="mt-2 text-xs text-slate-200 leading-relaxed">
+                        {item}
+                      </p>
+
                     </div>
-                    <p className="mt-2 text-xs text-slate-200 leading-relaxed">{item}</p>
-                  </div>
-                ))}
+
+                  ))}
+
               </div>
             </div>
 
             <div className="w-full lg:w-64 rounded-2xl bg-white/8 border border-white/10 p-4 flex-shrink-0">
-              <span className="text-[11px] font-bold uppercase text-slate-300">Projected Gain</span>
+
+              <span className="text-[11px] font-bold uppercase text-slate-300">
+                Projected Gain
+              </span>
+
               <div className="mt-3 flex items-end justify-between">
+
                 <div>
+
                   <span className="text-4xl font-extrabold text-emerald-300 font-mono">
                     +{scoreProjection.improvementDelta}
                   </span>
-                  <span className="ml-1 text-xs text-slate-300">pts</span>
+
+                  <span className="ml-1 text-xs text-slate-300">
+                    pts
+                  </span>
+
                 </div>
+
                 <TrendingUp className="w-6 h-6 text-emerald-300" />
+
               </div>
+
               <div className="mt-4 h-2 rounded-full bg-white/10 overflow-hidden">
+
                 <div
                   className="h-full rounded-full bg-emerald-400"
-                  style={{ width: `${Math.min(100, scoreProjection.projectedScore)}%` }}
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      scoreProjection.projectedScore
+                    )}%`
+                  }}
                 />
+
               </div>
+
               <p className="mt-3 text-xs text-slate-300 leading-relaxed">
-                Current {scoreProjection.currentScore}/100. Target {scoreProjection.projectedScore}/100 after revision.
+                Current {scoreProjection.currentScore}/100.
+                Target {scoreProjection.projectedScore}/100 after revision.
               </p>
+
             </div>
+
           </div>
         </div>
 
         {/* Compact Multi-Dimensional Scores */}
         <div className="xl:col-span-4 bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 space-y-4">
+
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+
             <div>
-              <h3 className="text-base font-bold text-slate-900">5D Score Evidence</h3>
-              <p className="text-xs text-slate-400">Compact rubric signals</p>
+
+              <h3 className="text-base font-bold text-slate-900">
+                5D Score Evidence
+              </h3>
+
+              <p className="text-xs text-slate-400">
+                Compact rubric signals
+              </p>
+
             </div>
+
             <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg">
-              {multiScores.overallScore} / 100
+              {overallScore} / 100
             </span>
+
           </div>
 
           <div className="space-y-2.5">
+
             {scoreItems.map((item) => {
-              const width = Math.min(100, Math.round((item.score / item.max) * 100));
+
+              const width =
+                item.max > 0
+                  ? Math.min(
+                      100,
+                      Math.round(
+                        (item.score / item.max) * 100
+                      )
+                    )
+                  : 0;
+
               return (
-                <div key={item.label} className="rounded-2xl bg-slate-50 border border-slate-200/70 p-3">
+                <div
+                  key={item.label}
+                  className="rounded-2xl bg-slate-50 border border-slate-200/70 p-3"
+                >
+
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs font-bold text-slate-800">{item.label}</span>
-                    <span className="text-xs font-mono font-extrabold text-slate-800">{item.score}/{item.max}</span>
+
+                    <span className="text-xs font-bold text-slate-800">
+                      {item.label}
+                    </span>
+
+                    <span className="text-xs font-mono font-extrabold text-slate-800">
+                      {item.max > 0 ? `${item.score}/${item.max}` : 'Diagnostic'}
+                    </span>
+
                   </div>
+
                   <div className="mt-2 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full ${item.color}`} style={{ width: `${width}%` }} />
+
+                    <div
+                      className={`h-full rounded-full ${item.color}`}
+                      style={{
+                        width: `${width}%`
+                      }}
+                    />
+
                   </div>
-                  <p className="mt-1.5 text-[11px] text-slate-500 leading-snug line-clamp-2">{item.detail}</p>
+
+                  <p className="mt-1.5 text-[11px] text-slate-500 leading-snug line-clamp-2">
+                    {item.detail}
+                  </p>
+
                 </div>
               );
             })}
+
           </div>
 
           {/* Test Case Results Summary */}
           <div className="pt-3 border-t border-slate-100">
+
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-800">Test Case Results:</span>
-              <span className={`font-semibold px-2 py-0.5 rounded border ${accepted ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 'text-rose-600 bg-rose-50 border-rose-200'}`}>
+
+              <span className="font-bold text-slate-800">
+                Test Case Results:
+              </span>
+
+              <span
+                className={`font-semibold px-2 py-0.5 rounded border ${
+                  accepted
+                    ? 'text-emerald-600 bg-emerald-50 border-emerald-200'
+                    : 'text-rose-600 bg-rose-50 border-rose-200'
+                }`}
+              >
                 Passed {passedTests} / {totalTests}
               </span>
-            </div>
-            {lastFailure && (
-              <div className="mt-2 rounded-xl border border-rose-200 bg-rose-50/70 p-3 text-[11px]">
-                <p className="font-semibold text-rose-700">
-                  Last failed case: {lastFailureIsHidden
-                    ? `hidden test case #${lastFailure.ordinal}`
-                    : `public case #${lastFailure.ordinal}`} — {verdictLabel(lastFailure.status)}
-                </p>
 
-                {lastFailureIsHidden ? (
-                  <p className="mt-1 text-rose-600">
-                    Hidden-test input, your output, and expected output are intentionally not displayed.
-                  </p>
-                ) : lastFailurePublicResult ? (
-                  <div className="mt-3 grid gap-2 font-mono text-slate-700">
-                    <div>
-                      <span className="font-sans text-slate-500">Input:</span>
-                      <pre className="mt-0.5 whitespace-pre-wrap break-words rounded bg-white px-2 py-1">{lastFailurePublicResult.input || '∅ (empty input)'}</pre>
-                    </div>
-                    <div>
-                      <span className="font-sans text-slate-500">Your output:</span>
-                      <pre className="mt-0.5 whitespace-pre-wrap break-words rounded bg-white px-2 py-1 text-rose-700">{lastFailurePublicResult.actualOutput || '∅ (no output produced)'}</pre>
-                    </div>
-                    <div>
-                      <span className="font-sans text-slate-500">Expected output:</span>
-                      <pre className="mt-0.5 whitespace-pre-wrap break-words rounded bg-white px-2 py-1">{lastFailurePublicResult.expectedOutput || '∅ (empty output)'}</pre>
-                    </div>
-                    {lastFailurePublicResult.reason && (
-                      <p className="font-sans text-rose-600">Reason: {lastFailurePublicResult.reason}</p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="mt-1 text-rose-600">Your output did not match the expected output.</p>
-                )}
-              </div>
+            </div>
+
+            {firstFailure && (
+              <p className="mt-2 text-[11px] text-rose-600">
+                First failed case:{' '}
+                {firstFailure.input === 'Hidden test case'
+                  ? 'hidden test case'
+                  : `public case ${firstFailure.testCaseNumber}`}.
+                {' '}
+                {firstFailure.stderr ||
+                  'Your output did not match the expected output.'}
+              </p>
             )}
+
           </div>
+
         </div>
       </div>
 
+      {/* Focus Areas / Iteration / Topics */}
       <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs">
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
           <div className="flex items-start gap-3">
+
             <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
               <Lightbulb className="w-4 h-4" />
             </div>
+
             <div>
-              <span className="text-xs font-bold text-slate-900">Focus Areas</span>
+
+              <span className="text-xs font-bold text-slate-900">
+                Focus Areas
+              </span>
+
               <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
                 {scoreProjection.focusAreas.join(', ')}
               </p>
+
             </div>
           </div>
 
           <div className="flex items-start gap-3">
+
             <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
               <TrendingUp className="w-4 h-4" />
             </div>
+
             <div>
-              <span className="text-xs font-bold text-slate-900">Iteration Path</span>
+
+              <span className="text-xs font-bold text-slate-900">
+                Iteration Path
+              </span>
+
               <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
-                {scoreProjection.iterationTimeline.map(step => `${step.stage}: ${step.score}`).join(' -> ')}
+                {scoreProjection.iterationTimeline
+                  .map(
+                    (step) =>
+                      `${step.stage}: ${step.score}`
+                  )
+                  .join(' -> ')}
               </p>
+
             </div>
           </div>
 
           <div className="flex items-start gap-3">
+
             <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
               <Target className="w-4 h-4" />
             </div>
+
             <div>
-              <span className="text-xs font-bold text-slate-900">Recommended Topics</span>
+
+              <span className="text-xs font-bold text-slate-900">
+                Recommended Topics
+              </span>
+
               <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
                 {recommendedTopics.join(', ')}
               </p>
+
             </div>
           </div>
+
         </div>
       </div>
 
-      {/* AI Revised Code Side-by-Side Comparison */}
+      {/* AI Revised Code */}
       <div className="space-y-2">
-        <h3 className="text-base font-bold text-slate-900">AI Code Revision & Optimization Diff</h3>
+
+        <h3 className="text-base font-bold text-slate-900">
+          AI Code Revision & Optimization Diff
+        </h3>
+
         <p className="text-xs text-slate-500">
           Compare your submitted solution with the AI engine's proposed refactor to hit {scoreProjection.projectedScore}/100.
         </p>
+
         <div className="rounded-3xl bg-white border border-slate-200/80 p-3 shadow-xs">
+
           <CodeDiffViewer
             originalCode={code}
             revisedCode={revisedCode}
@@ -523,87 +839,161 @@ export const AssessmentResultView: React.FC = () => {
             projectedScore={scoreProjection.projectedScore}
             improvementDelta={scoreProjection.improvementDelta}
           />
+
         </div>
       </div>
 
-      {/* Recommendations & Next Steps Grid (Matches Step 6 in diagram) */}
+      {/* Recommendations & Next Steps */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
         {/* Suggested Improvements Card */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4">
+
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <h3 className="text-sm font-bold text-slate-900">Suggested Improvements</h3>
+
+            <h3 className="text-sm font-bold text-slate-900">
+              Suggested Improvements
+            </h3>
+
             <Sparkles className="w-4 h-4 text-purple-600" />
+
           </div>
 
           <ul className="space-y-2.5 text-xs text-slate-600">
-            {suggestedImprovements.map((item, idx) => (
-              <li key={idx} className="flex items-start gap-2.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-1.5 flex-shrink-0" />
-                <span className="leading-relaxed">{item}</span>
-              </li>
-            ))}
+
+            {suggestedImprovements.map(
+              (item, idx) => (
+
+                <li
+                  key={idx}
+                  className="flex items-start gap-2.5"
+                >
+
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-1.5 flex-shrink-0" />
+
+                  <span className="leading-relaxed">
+                    {item}
+                  </span>
+
+                </li>
+
+              )
+            )}
+
           </ul>
 
           <div className="pt-3 border-t border-slate-100">
-            <span className="text-xs font-bold text-slate-700 mb-2 block">Recommended Topics:</span>
+
+            <span className="text-xs font-bold text-slate-700 mb-2 block">
+              Recommended Topics:
+            </span>
+
             <div className="flex flex-wrap gap-2">
-              {recommendedTopics.map((topic, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setCurrentView('problems')}
-                  className="px-3 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition-colors"
-                >
-                  {topic}
-                </button>
-              ))}
+
+              {recommendedTopics.map(
+                (topic, idx) => (
+
+                  <button
+                    key={idx}
+                    onClick={() =>
+                      setCurrentView('problems')
+                    }
+                    className="px-3 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition-colors"
+                  >
+                    {topic}
+                  </button>
+
+                )
+              )}
+
             </div>
           </div>
+
         </div>
 
-        {/* Recommended Practice Problems Card */}
+        {/* Recommended Practice Problems */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4 flex flex-col justify-between">
+
           <div>
+
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Practice Problems</h3>
-                <p className="text-xs text-slate-400">Targeted reinforcement based on this submission</p>
+
+                <h3 className="text-sm font-bold text-slate-900">
+                  Practice Problems
+                </h3>
+
+                <p className="text-xs text-slate-400">
+                  Targeted reinforcement based on this submission
+                </p>
+
               </div>
+
               <Target className="w-4 h-4 text-indigo-600" />
+
             </div>
 
             <div className="space-y-3">
-              {practiceProblems.map((prob, idx) => (
-                <div
-                  key={prob.id}
-                  className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between group hover:bg-white hover:border-indigo-300 transition-all"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-800">
-                        {idx + 1}. {prob.title}
-                      </span>
-                      <DifficultyBadge difficulty={prob.difficulty} />
-                    </div>
-                    <div className="flex gap-1.5">
-                      {prob.tags.map((t, tIdx) => (
-                        <span key={tIdx} className="text-[10px] text-slate-500 font-mono">
-                          #{t}
+
+              {practiceProblems.map(
+                (prob, idx) => (
+
+                  <div
+                    key={prob.id}
+                    className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between group hover:bg-white hover:border-indigo-300 transition-all"
+                  >
+
+                    <div className="space-y-1">
+
+                      <div className="flex items-center gap-2">
+
+                        <span className="text-xs font-bold text-slate-800">
+                          {idx + 1}. {prob.title}
                         </span>
-                      ))}
+
+                        <DifficultyBadge
+                          difficulty={prob.difficulty}
+                        />
+
+                      </div>
+
+                      <div className="flex gap-1.5">
+
+                        {prob.tags.map(
+                          (t, tIdx) => (
+
+                            <span
+                              key={tIdx}
+                              className="text-[10px] text-slate-500 font-mono"
+                            >
+                              #{t}
+                            </span>
+
+                          )
+                        )}
+
+                      </div>
+
                     </div>
+
+                    <button
+                      onClick={() => {
+                        openProblemWorkspace(prob.id);
+                        navigate(
+                          `/problems/${prob.id}`
+                        );
+                      }}
+                      className="p-2 text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+
                   </div>
 
-                  <button
-                    onClick={() => {
-                      openProblemWorkspace(prob.id);
-                      navigate(`/problems/${prob.id}`);
-                    }}
-                    className="p-2 text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+                )
+              )}
+
             </div>
           </div>
 
@@ -614,11 +1004,16 @@ export const AssessmentResultView: React.FC = () => {
             }}
             className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer mt-4"
           >
-            <span>Start Practice Suite</span>
+            <span>
+              Start Practice Suite
+            </span>
+
             <ArrowRight className="w-4 h-4" />
           </button>
+
         </div>
       </div>
+
     </div>
   );
 };

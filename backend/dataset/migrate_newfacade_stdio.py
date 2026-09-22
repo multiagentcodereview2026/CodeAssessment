@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 
 import models
-from database import SessionLocal
+from database import SessionLocal, ensure_problem_complexity_columns
 
 
 def digest(*values: str) -> str:
@@ -25,6 +25,7 @@ def migrate(dataset_path: str, dry_run: bool = False, batch_size: int = 50) -> N
     if not source_path.is_file():
         raise FileNotFoundError(f"Dataset not found: {source_path}")
 
+    ensure_problem_complexity_columns()
     db = SessionLocal()
     report = {"updated": 0, "unchanged": 0, "missing": 0, "case_count_mismatch": 0}
     try:
@@ -81,6 +82,18 @@ def migrate(dataset_path: str, dry_run: bool = False, batch_size: int = 50) -> N
                 if problem.starter_codes != starter_codes:
                     changed = True
                     problem.starter_codes = starter_codes
+
+                complexity_values = {
+                    "target_time_complexity": row.get("target_time_complexity"),
+                    "target_space_complexity": row.get("target_space_complexity"),
+                    "complexity_source": row.get("complexity_source"),
+                    "complexity_confidence": row.get("complexity_confidence"),
+                    "complexity_reasoning": row.get("complexity_reasoning"),
+                }
+                for field, value in complexity_values.items():
+                    if getattr(problem, field) != value:
+                        changed = True
+                        setattr(problem, field, value)
                 if changed:
                     problem.content_hash = str(row.get("content_hash") or digest(problem_id, description))
                     report["updated"] += 1
