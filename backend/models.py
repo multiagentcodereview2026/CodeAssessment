@@ -32,6 +32,14 @@ class Problem(Base):
     test_cases = Column(JSON, nullable=False) # list of {input, expected_output, is_hidden}
     source_url = Column(String(1000), nullable=True)
     source_license = Column(String(200), nullable=True)
+    # Curated/validated algorithmic targets used by the complexity assessor.
+    # These are deliberately separate from observed Docker runtime and memory,
+    # which cannot prove an algorithm's theoretical Big-O complexity.
+    target_time_complexity = Column(String(20), nullable=True)
+    target_space_complexity = Column(String(20), nullable=True)
+    complexity_source = Column(String(50), nullable=True)
+    complexity_confidence = Column(Float, nullable=True)
+    complexity_reasoning = Column(Text, nullable=True)
     content_hash = Column(String(64), nullable=True, unique=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -76,6 +84,11 @@ class Submission(Base):
     
     # Deep Agent Outputs
     execution_result = Column(JSON, nullable=True)
+    # Safe, student-visible complexity analysis. It deliberately omits the
+    # private optimal TC/SC stored on the related problem.
+    complexity_details = Column(JSON, nullable=True)
+    # Internal-only review signals, deliberately excluded from response schemas.
+    assessment_flags = Column(JSON, nullable=True)
     feedback = Column(JSON, nullable=True)
     recommendations = Column(JSON, nullable=True)
     improved_code = Column(JSON, nullable=True)

@@ -1,7 +1,8 @@
 import asyncio
 
 from agents import aggregation
-from agents.complexity import extract_expected_complexities
+from agents import complexity
+from agents.complexity import public_problem_context, score_complexity_analysis
 from agents.correctness import (
     calculate_correctness_score,
     sanitize_execution_for_llm,
@@ -52,12 +53,74 @@ def test_hidden_execution_details_are_not_sent_to_the_llm():
     ]
 
 
-def test_complexity_requirements_are_read_from_constraints():
-    expected = extract_expected_complexities(
-        {"constraints": ["O(n) time required", "O(1) space complexity"]}
+def test_complexity_ai_payload_excludes_private_target_data():
+    public = public_problem_context(
+        {
+            "title": "Two Sum",
+            "statement": "Find two values.",
+            "constraints": ["2 <= n <= 10^4"],
+            "target_time_complexity": "O(n)",
+            "target_space_complexity": "O(n)",
+        }
     )
 
-    assert expected == ("O(n)", "O(1)")
+    assert "target_time_complexity" not in public
+    assert "target_space_complexity" not in public
+
+
+def test_groq_complexity_call_never_receives_private_target_data(monkeypatch):
+    captured = {}
+
+    async def inspect_payload(_prompt, payload, _schema, _fallback):
+        captured.update(payload)
+        return {
+            "time_complexity": "O(n)",
+            "space_complexity": "O(1)",
+            "bottlenecks": [],
+            "optimization_suggestion": "Keep the single traversal.",
+            "reasoning": "One pass over the input.",
+        }
+
+    monkeypatch.setattr(complexity, "invoke_agent", inspect_payload)
+    asyncio.run(
+        complexity.analyze_student_complexity(
+            {
+                "title": "Two Sum",
+                "statement": "Find two values.",
+                "target_time_complexity": "O(n)",
+                "target_space_complexity": "O(n)",
+            },
+            "print('student code')",
+            "python",
+        )
+    )
+
+    encoded_payload = str(captured)
+    assert "target_time_complexity" not in encoded_payload
+    assert "target_space_complexity" not in encoded_payload
+    assert "O(n)" not in encoded_payload
+
+
+def test_complexity_response_excludes_private_target_data():
+    scored = score_complexity_analysis(
+        {
+            "time_complexity": "O(n log n)",
+            "space_complexity": "O(n)",
+            "bottlenecks": ["Sorting dominates the runtime."],
+            "optimization_suggestion": "Use a hash map.",
+            "reasoning": "The code sorts the input.",
+        },
+        {"time": "O(n)", "space": "O(n)"},
+    )
+
+    details = scored["complexity_details"]
+    assert scored["complexity_score"] == 93.75
+    assert details["time_score"] == 21.875
+    assert details["space_score"] == 25.0
+    assert "target_time_complexity" not in details
+    assert "expected_time_complexity" not in details
+    assert "optimal" not in details
+    assert scored["assessment_flags"] == {"benchmark_review_required": False}
 
 
 def test_aggregation_does_not_replace_a_zero_score_with_a_default(monkeypatch):

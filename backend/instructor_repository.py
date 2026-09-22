@@ -40,7 +40,16 @@ def provision_instructor_problems(db: Session) -> int:
     """Insert missing assignments and cases atomically; return the number created."""
     created = 0
     for problem_id, definition in ASSIGNMENTS.items():
-        if db.get(models.Problem, problem_id) is not None:
+        existing = db.get(models.Problem, problem_id)
+        if existing is not None:
+            # Instructor definitions are trusted metadata. Keep the reviewed
+            # target complexity values synchronized without replacing judge
+            # cases, statements, or any student submissions.
+            existing.target_time_complexity = definition["target_time_complexity"]
+            existing.target_space_complexity = definition["target_space_complexity"]
+            existing.complexity_source = "instructor-reviewed"
+            existing.complexity_confidence = 1.0
+            existing.complexity_reasoning = definition["complexity_reasoning"]
             continue
 
         cases = definition["test_cases"]
@@ -57,6 +66,11 @@ def provision_instructor_problems(db: Session) -> int:
             test_cases=copy.deepcopy([case for case in cases if not case["is_hidden"]][:3]),
             source_url=definition.get("source_url"),
             source_license=definition.get("source_license"),
+            target_time_complexity=definition["target_time_complexity"],
+            target_space_complexity=definition["target_space_complexity"],
+            complexity_source="instructor-reviewed",
+            complexity_confidence=1.0,
+            complexity_reasoning=definition["complexity_reasoning"],
             content_hash=hashlib.sha256(f"instructor-assignment:{problem_id}".encode()).hexdigest(),
         )
         db.add(problem)

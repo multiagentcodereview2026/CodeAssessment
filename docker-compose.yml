@@ -32,7 +32,10 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - ./backend/.env
+      # Local Docker execution and deterministic correctness work without an
+      # API key. If present, this file enables the optional Groq analysis.
+      - path: ./backend/.env
+        required: false
     environment:
       - DATABASE_URL=postgresql+psycopg://codeassessment:${POSTGRES_PASSWORD:-change-this-before-production}@postgres:5432/codeassessment
       - DOCKER_ENGINE_URL=http://execution-engine:8001/execute
@@ -92,7 +95,64 @@ services:
       - DATABASE_URL=postgresql+psycopg://codeassessment:${POSTGRES_PASSWORD:-change-this-before-production}@postgres:5432/codeassessment
     volumes:
       - ../datasets/newfacade-staging:/newfacade:ro
-    command: ["python", "-m", "dataset.import_newfacade", "--dataset-path", "/newfacade/normalized-newfacade.jsonl"]
+    command: ["python", "-m", "dataset.import_newfacade", "--dataset-path", "/newfacade/normalized-newfacade-stdio-complexity.jsonl", "--require-complexity"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  newfacade-tag-curator:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    profiles: ["tools"]
+    volumes:
+      - ../datasets/newfacade-staging:/newfacade
+    command: ["python", "-m", "dataset.curate_newfacade_tags", "--source", "/newfacade/normalized-newfacade-stdio.jsonl", "--output", "/newfacade/normalized-newfacade-stdio-tagged.jsonl"]
+
+  newfacade-oracle-verifier:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    profiles: ["tools"]
+    volumes:
+      - ../datasets/newfacade-staging:/newfacade:ro
+    command: ["python", "-m", "dataset.verify_newfacade_oracles", "--raw-source", "/newfacade/LeetCodeDataset-train.jsonl", "/newfacade/LeetCodeDataset-test.jsonl", "--normalized", "/newfacade/normalized-newfacade-stdio-tagged.jsonl"]
+
+  # Explicit, one-off data-preparation job. It is never started by `docker
+  # compose up`; set GROQ_API_KEY in the invoking shell before running it.
+  newfacade-complexity-enricher:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    profiles: ["tools"]
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+    volumes:
+      - ../datasets/newfacade-staging:/newfacade
+    command: ["python", "-m", "dataset.enrich_newfacade_complexities", "--source", "/newfacade/normalized-newfacade-stdio-tagged.jsonl", "--output", "/newfacade/normalized-newfacade-stdio-complexity.jsonl"]
+
+  newfacade-complexity-verifier:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    profiles: ["tools"]
+    volumes:
+      - ../datasets/newfacade-staging:/newfacade:ro
+    command: ["python", "-m", "dataset.validate_newfacade_complexities", "--dataset-path", "/newfacade/normalized-newfacade-stdio-complexity.jsonl"]
+
+  # Applies only reviewed, closed-set TC/SC metadata. Problem statements,
+  # public/hidden test cases, users, and submissions are left unchanged.
+  newfacade-complexity-importer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    profiles: ["tools"]
+    environment:
+      - DATABASE_URL=postgresql+psycopg://codeassessment:${POSTGRES_PASSWORD:-change-this-before-production}@postgres:5432/codeassessment
+    volumes:
+      - ../datasets/newfacade-staging:/newfacade:ro
+    command: ["python", "-m", "dataset.migrate_problem_complexities", "--dataset-path", "/newfacade/normalized-newfacade-stdio-complexity.jsonl"]
     depends_on:
       postgres:
         condition: service_healthy

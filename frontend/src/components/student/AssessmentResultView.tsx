@@ -318,18 +318,17 @@ export const AssessmentResultView: React.FC = () => {
       max: multiScores.timeComplexity.max,
       color: 'bg-cyan-500',
       detail:
-        `${multiScores.timeComplexity.detected} detected, ` +
-        `${multiScores.timeComplexity.optimal} target`
+        multiScores.timeComplexity.notes
     },
 
     {
-      label: 'Space',
+      label: 'Space (feedback)',
       score: multiScores.spaceComplexity.score,
       max: multiScores.spaceComplexity.max,
       color: 'bg-amber-500',
       detail:
-        `${multiScores.spaceComplexity.detected} detected, ` +
-        `${multiScores.spaceComplexity.optimal} target`
+        `${multiScores.spaceComplexity.detected} detected. ` +
+        multiScores.spaceComplexity.notes
     },
 
     {
@@ -685,7 +684,7 @@ export const AssessmentResultView: React.FC = () => {
                     </span>
 
                     <span className="text-xs font-mono font-extrabold text-slate-800">
-                      {item.score}/{item.max}
+                      {item.max > 0 ? `${item.score}/${item.max}` : 'Diagnostic'}
                     </span>
 
                   </div>

@@ -31,6 +31,9 @@ INSTRUCTOR_PROBLEMS = [
         "title": "Two Sum",
         "difficulty": "Easy",
         "category": "Arrays / Hashing",
+        "target_time_complexity": "O(n)",
+        "target_space_complexity": "O(n)",
+        "complexity_reasoning": "One pass with a hash map storing previously seen values.",
         "course_code": "CS201",
         "due_date": "15 May, 2026",
         "description": """Given an array of integers and a target, print the zero-based indices of the two distinct elements whose sum equals the target. Exactly one valid pair exists. Print the smaller index first.
@@ -70,6 +73,9 @@ The first line contains n. The second line contains n space-separated integers. 
         "title": "Binary Search",
         "difficulty": "Easy",
         "category": "Binary Search",
+        "target_time_complexity": "O(log n)",
+        "target_space_complexity": "O(1)",
+        "complexity_reasoning": "Iterative binary search halves the remaining interval each step.",
         "course_code": "CS301",
         "due_date": "18 May, 2026",
         "description": """Given a sorted array of distinct integers and a target, print the zero-based index of the target. Print -1 when it is absent. Your solution should run in O(log n) time.
@@ -109,6 +115,9 @@ The first line contains n. The second line contains n space-separated integers i
         "title": "Reverse Linked List",
         "difficulty": "Easy",
         "category": "Linked Lists",
+        "target_time_complexity": "O(n)",
+        "target_space_complexity": "O(1)",
+        "complexity_reasoning": "Reverse each link once using a constant number of pointers.",
         "course_code": "CS201",
         "due_date": "21 May, 2026",
         "description": """The input values represent a singly linked list from head to tail. Reverse the list and print its values from the new head to the new tail.
@@ -147,6 +156,9 @@ The first line contains n. When n is greater than zero, the second line contains
         "title": "Valid Parentheses",
         "difficulty": "Easy",
         "category": "Stack / Queue",
+        "target_time_complexity": "O(n)",
+        "target_space_complexity": "O(n)",
+        "complexity_reasoning": "Scan once and keep unmatched opening brackets on a stack.",
         "course_code": "CS201",
         "due_date": "25 May, 2026",
         "description": """Given a string containing only (), [] and {}, decide whether it is valid. Every opening bracket must be closed by the same type in the correct order.
