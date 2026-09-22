@@ -1,0 +1,281 @@
+export type Role = 'student' | 'instructor';
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  avatar: string;
+  rollNumber: string;
+  institution: string;
+  department: string;
+  year: string;
+}
+
+export type Difficulty = 'Easy' | 'Medium' | 'Hard';
+
+export interface ProblemExample {
+  input: string;
+  output: string;
+  explanation?: string;
+}
+
+export interface TestCase {
+  id: string;
+  input: string;
+  expectedOutput: string;
+  isHidden?: boolean;
+}
+
+export type InputValueKind = 'int' | 'float' | 'str' | 'bool' | 'list' | 'optional';
+
+export interface InputValueSchema {
+  kind: InputValueKind;
+  item?: InputValueSchema;
+}
+
+export interface ProblemInputField {
+  name: string;
+  schema: InputValueSchema;
+}
+
+export interface Problem {
+  id: string;
+  title: string;
+  slug: string;
+  difficulty: Difficulty;
+  tags: string[];
+  acceptanceRate: string;
+  description: string;
+  examples: ProblemExample[];
+  constraints: string[];
+  testCases: TestCase[];
+  starterCode: Record<string, string>;
+  solutionCode: Record<string, string>;
+  optimalComplexity: {
+    time: string;
+    space: string;
+  };
+  /** Display metadata only. TestCase.input remains the untouched judge stdin. */
+  inputSchema?: ProblemInputField[];
+  isInstructorAssigned?: boolean;
+  courseCode?: string;
+  dueDate?: string;
+}
+
+export interface TestCaseResult {
+  id: string;
+  testCaseNumber: number;
+  input: string;
+  expectedOutput: string;
+  actualOutput: string;
+  passed: boolean;
+  executionTimeMs: number;
+  memoryMb: number;
+  /** Never render input/output for a hidden test, even if an API regresses. */
+  isHidden?: boolean;
+  /** Raw sandbox verdict, used for a student-friendly failed-case summary. */
+  verdict?: string;
+  /** Public-case diagnostic only. */
+  reason?: string;
+  stdout?: string;
+  stderr?: string;
+}
+
+export interface FailedTestCaseSummary {
+  /** One-based position in the full public + hidden judge suite. */
+  ordinal: number;
+  isHidden: boolean;
+  status?: string;
+  /** The backend must keep this generic for a hidden test. */
+  reason?: string;
+}
+
+export interface MultiDimensionalScore {
+  correctness: {
+    score: number;
+    max: number;
+    notes: string;
+  };
+  timeComplexity: {
+    score: number;
+    max: number;
+    detected: string;
+    notes: string;
+  };
+  spaceComplexity: {
+    score: number;
+    max: number;
+    detected: string;
+    notes: string;
+  };
+  codeQuality: {
+    score: number;
+    max: number;
+    styleScore: number;
+    structureScore: number;
+    notes: string;
+  };
+  similarity: {
+    score: number;
+    max: number;
+    originalityPercent: number;
+    plagiarismRisk: 'Low' | 'Medium' | 'High';
+    notes: string;
+  };
+  overallScore: number;
+}
+
+export interface IterationTimelineStep {
+  stage: string;
+  score: number;
+  note: string;
+  timestamp?: string;
+}
+
+export interface ScoreProjection {
+  currentScore: number;
+  projectedScore: number;
+  improvementDelta: number;
+  focusAreas: string[];
+  iterationTimeline: IterationTimelineStep[];
+}
+
+export interface AssessmentResult {
+  submissionId: string;
+  problemId: string;
+  problemTitle: string;
+  timestamp: string;
+  language: string;
+  code: string;
+  status: 'Accepted' | 'Partial' | 'Wrong Answer' | 'Time Limit Exceeded' | 'Runtime Error';
+  executionTime: string;
+  memory: string;
+  multiScores: MultiDimensionalScore;
+  explainableFeedback: string;
+  suggestedImprovements: string[];
+  recommendedTopics: string[];
+  practiceProblems: {
+    id: string;
+    title: string;
+    difficulty: Difficulty;
+    tags: string[];
+  }[];
+  scoreProjection: ScoreProjection;
+  aiRevisedCode: string;
+  testResults: TestCaseResult[];
+  totalTestCases?: number;
+  lastFailedCase?: FailedTestCaseSummary;
+}
+
+export interface SubmissionItem {
+  id: string;
+  problemId: string;
+  problemSlug?: string;
+  problemTitle: string;
+  score: number;
+  status: 'Passed' | 'Partial' | 'Failed';
+  language: string;
+  date: string;
+  timeSpent?: string;
+  passedTestCases: number;
+  totalTestCases: number;
+  feedbackSummary?: string;
+}
+
+export interface CategoryScore {
+  name: string;
+  percentage: number;
+  color: string;
+  scoreDisplay: string;
+}
+
+export interface StudentProgress {
+  overallScore: number;
+  problemsSolved: number;
+  totalProblems: number;
+  currentStreak: number;
+  rankPercentile: string;
+  progressPercent: number;
+  topicsCovered: number;
+  totalTopics: number;
+  hoursSpent: string;
+  weakTopics: string[];
+  categoryWiseScores: CategoryScore[];
+  scoreTrend: { date: string; score: number }[];
+}
+
+export interface StudentRosterItem {
+  id: string;
+  name: string;
+  rollNumber: string;
+  email: string;
+  avatar: string;
+  submissionsCount: number;
+  avgScore: number;
+  trend: 'up' | 'down' | 'neutral';
+  weakTopics: string[];
+  status: 'On Track' | 'At Risk' | 'Needs Attention';
+  department: string;
+  year: string;
+}
+
+export interface Assignment {
+  id: string;
+  title: string;
+  description: string;
+  course: string;
+  problemsCount: number;
+  problemIds: string[];
+  submittedCount: number;
+  totalCount: number;
+  avgScore: number;
+  dueDate: string;
+  status: 'Active' | 'Upcoming' | 'Closed';
+}
+
+export interface SimilarityAlert {
+  id: string;
+  problemId: string;
+  problemTitle: string;
+  studentA: { id: string; name: string; rollNumber: string; submissionId: string };
+  studentB: { id: string; name: string; rollNumber: string; submissionId: string };
+  similarityPercentage: number;
+  riskLevel: 'High' | 'Medium' | 'Low';
+  matchedLinesCount: number;
+  timestamp: string;
+  studentACodeSnippet: string;
+  studentBCodeSnippet: string;
+  aiAuditNotes: string;
+}
+
+export interface ReportItem {
+  id: string;
+  title: string;
+  description: string;
+  type: 'Performance' | 'Assignment' | 'Topic' | 'At-Risk';
+  generatedDate: string;
+  fileSize: string;
+  format: 'PDF' | 'CSV' | 'XLSX';
+}
+
+export interface CourseItem {
+  id: string;
+  code: string;
+  title: string;
+  term: string;
+  studentsCount: number;
+  activeAssignments: number;
+  avgGrade: string;
+}
+
+export interface AnnouncementItem {
+  id: string;
+  title: string;
+  message: string;
+  problemId?: string;
+  courseCode?: string;
+  dueDate?: string;
+  createdAt: string;
+  read: boolean;
+}

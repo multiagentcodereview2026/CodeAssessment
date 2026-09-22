@@ -1,0 +1,7 @@
+FROM python:3.11-slim
+WORKDIR /workspace
+ENV HF_HOME=/hf
+COPY requirements-codecontests.txt .
+RUN pip install --no-cache-dir -r requirements-codecontests.txt
+COPY *.py .
+ENTRYPOINT ["python", "/workspace/codecontests_extract.py"]

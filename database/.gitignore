@@ -1,0 +1,7 @@
+# Database exports may include private problems and hidden test cases.
+# Keep only this folder's instructions and placeholder in Git.
+*
+!.gitignore
+!README.md
+!backups/
+!backups/.gitkeep
