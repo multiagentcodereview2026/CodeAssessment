@@ -306,10 +306,6 @@ async def submit_and_evaluate_code(
     complexity_task = asyncio.create_task(
         analyze_student_complexity(public_problem, payload.code, payload.language)
     )
-    # The agent workflow needs verdicts and counts, not the input/output of a
-    # private judge case. Redact before invoking any downstream service too.
-    safe_exec_result = redact_hidden_execution(exec_result)
-
     execution_outcome, complexity_outcome = await asyncio.gather(
         execution_task,
         complexity_task,
@@ -319,6 +315,9 @@ async def submit_and_evaluate_code(
         logger.error("Sandbox execution failed: %s", execution_outcome)
         raise HTTPException(status_code=502, detail="Code execution service is unavailable")
     exec_result = execution_outcome
+    # The agent workflow needs verdicts and counts, not the input/output of a
+    # private judge case. Redact only after the execution task has completed.
+    safe_exec_result = redact_hidden_execution(exec_result)
     if isinstance(complexity_outcome, Exception):
         logger.warning("Complexity analysis failed: %s", complexity_outcome)
         precomputed_complexity_analysis = unavailable_analysis(
