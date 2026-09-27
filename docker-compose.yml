@@ -24,7 +24,6 @@ services:
     depends_on:
       backend:
         condition: service_started
-
   backend:
     build:
       context: ./backend
@@ -32,8 +31,6 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      # Local Docker execution and deterministic correctness work without an
-      # API key. If present, this file enables the optional Groq analysis.
       - path: ./backend/.env
         required: false
     environment:
@@ -42,6 +39,7 @@ services:
       - EXECUTION_CPU_LIMIT=1.0
       - EXECUTION_MEMORY_LIMIT=256m
       - EXECUTION_TIMEOUT_SECONDS=5
+      - PUBLIC_ONLY_EXECUTION=${PUBLIC_ONLY_EXECUTION:-false}
       - DOCKER_ENGINE_REQUEST_TIMEOUT_SECONDS=120
     depends_on:
       postgres:

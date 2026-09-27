@@ -2,12 +2,15 @@ import asyncio
 import copy
 import json
 import logging
+import os
+from dataclasses import asdict
 from uuid import uuid4
 from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from analysis.analyzer_service import analyze_submission_complexity
 
 import models
 from database import (
@@ -31,7 +34,7 @@ from schemas import (
     StudentAnalyticsResponse
 )
 from docker_runner.executor import execute_code_sandboxed
-from agents.complexity import analyze_student_complexity, unavailable_analysis
+from agents.complexity import unavailable_analysis
 from workflow.graph import evaluation_graph
 from workflow.state import EvaluationState
 from instructor_repository import (
@@ -261,21 +264,40 @@ async def submit_and_evaluate_code(
         .order_by(models.ProblemTestCase.position)
         .all()
     )
-    test_cases = []
-    if stored_cases:
-        test_cases = [
-            {
-                "id": case.id,
-                "input": case.input_data,
-                "expected_output": case.expected_output,
-                "is_hidden": case.visibility == "HIDDEN",
-                "time_limit": case.time_limit_seconds,
-                "memory_limit": case.memory_limit_mb,
-            }
+
+    public_only = os.getenv(
+        "PUBLIC_ONLY_EXECUTION",
+        "false",
+    ).lower() in {"1", "true", "yes"}
+
+    if public_only:
+        stored_cases = [
+            case
             for case in stored_cases
+            if str(case.visibility).upper() == "PUBLIC"
         ]
-    else:
+
+    test_cases = [
+        {
+            "id": case.id,
+            "input": case.input_data,
+            "expected_output": case.expected_output,
+            "is_hidden": str(case.visibility).upper() == "HIDDEN",
+            "time_limit": case.time_limit_seconds,
+            "memory_limit": case.memory_limit_mb,
+        }
+        for case in stored_cases
+    ]
+
+    if not test_cases and public_only:
+        raise HTTPException(
+            status_code=400,
+            detail="No public test cases are available for this problem",
+        )
+
+    if not test_cases and not public_only:
         tc_raw = problem.test_cases
+
         if isinstance(tc_raw, str):
             try:
                 test_cases = json.loads(tc_raw)
@@ -303,26 +325,51 @@ async def submit_and_evaluate_code(
         # containers at once and exhaust the host.
         stop_on_first_failure=False,
     ))
+    async def run_local_complexity_analysis():
+        evidence = await analyze_submission_complexity(
+            source_code=payload.code,
+            language=payload.language,
+        )
+
+        if evidence.final is None:
+            return {
+                "status": "REVIEW_REQUIRED",
+                "method": "none",
+                "confidence": 0.0,
+                "explanation": "No complexity result is available.",
+            }
+
+        return asdict(evidence.final)
+
     complexity_task = asyncio.create_task(
-        analyze_student_complexity(public_problem, payload.code, payload.language)
+        run_local_complexity_analysis()
     )
-    # The agent workflow needs verdicts and counts, not the input/output of a
-    # private judge case. Redact before invoking any downstream service too.
-    safe_exec_result = redact_hidden_execution(exec_result)
 
     execution_outcome, complexity_outcome = await asyncio.gather(
         execution_task,
         complexity_task,
         return_exceptions=True,
     )
+
     if isinstance(execution_outcome, Exception):
         logger.error("Sandbox execution failed: %s", execution_outcome)
-        raise HTTPException(status_code=502, detail="Code execution service is unavailable")
+        raise HTTPException(
+            status_code=502,
+            detail="Code execution service is unavailable",
+        )
+
     exec_result = execution_outcome
+
+    safe_exec_result = redact_hidden_execution(exec_result)
+
     if isinstance(complexity_outcome, Exception):
-        logger.warning("Complexity analysis failed: %s", complexity_outcome)
+        logger.warning(
+            "Complexity analysis failed: %s",
+            complexity_outcome,
+        )
         precomputed_complexity_analysis = unavailable_analysis(
-            "The complexity analysis service was unavailable for this submission."
+            "The complexity analysis service was unavailable "
+            "for this submission."
         )
     else:
         precomputed_complexity_analysis = complexity_outcome
