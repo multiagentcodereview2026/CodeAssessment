@@ -149,7 +149,7 @@ export const InstructorDashboard: React.FC = () => {
             </div>
           </div>
           <div className="text-3xl font-extrabold text-slate-900 font-mono">
-            {instructorStats.averageScore}%
+            {instructorStats.averageScore == null ? 'N/A' : `${instructorStats.averageScore}%`}
           </div>
           <div className="mt-2 text-xs text-slate-500 font-medium">
             Cohort Average
@@ -211,7 +211,7 @@ export const InstructorDashboard: React.FC = () => {
           </div>
           <h3 className="mt-2 text-sm font-bold text-slate-900">Complexity Reasoning</h3>
           <p className="mt-1 text-xs text-slate-500 leading-relaxed">
-            Class average is {instructorStats.averageScore}%. Use rubric analytics to find topics that need a short reteach.
+            Class average is {instructorStats.averageScore == null ? 'unavailable' : `${instructorStats.averageScore}%`}. Use rubric analytics to find topics that need a short reteach.
           </p>
         </button>
 
@@ -256,19 +256,19 @@ export const InstructorDashboard: React.FC = () => {
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
               <span className="text-[10px] font-bold uppercase text-slate-400 block tracking-wider">Average Score</span>
               <span className="text-2xl font-extrabold text-slate-800 font-mono mt-1 block">
-                {instructorStats.averageScore}%
+                {instructorStats.averageScore == null ? 'N/A' : `${instructorStats.averageScore}%`}
               </span>
             </div>
             <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-100">
               <span className="text-[10px] font-bold uppercase text-emerald-600 block tracking-wider">Highest Score</span>
               <span className="text-2xl font-extrabold text-emerald-700 font-mono mt-1 block">
-                {instructorStats.highestScore}%
+                {instructorStats.highestScore == null ? 'N/A' : `${instructorStats.highestScore}%`}
               </span>
             </div>
             <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-100">
               <span className="text-[10px] font-bold uppercase text-rose-600 block tracking-wider">Lowest Score</span>
               <span className="text-2xl font-extrabold text-rose-700 font-mono mt-1 block">
-                {instructorStats.lowestScore}%
+                {instructorStats.lowestScore == null ? 'N/A' : `${instructorStats.lowestScore}%`}
               </span>
             </div>
           </div>
@@ -314,7 +314,7 @@ export const InstructorDashboard: React.FC = () => {
                       Submissions: <strong className="text-slate-900">{asg.submittedCount}/{asg.totalCount}</strong>
                     </span>
                     <span>
-                      Avg: <strong className="text-emerald-600">{asg.avgScore}%</strong>
+                      Avg: <strong className="text-emerald-600">{asg.avgScore == null ? 'N/A' : `${asg.avgScore}%`}</strong>
                     </span>
                   </div>
 

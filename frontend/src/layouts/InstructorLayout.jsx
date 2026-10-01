@@ -16,7 +16,7 @@ import {
   Sparkles,
   AlertTriangle
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const InstructorLayout = () => {
@@ -47,7 +47,7 @@ const InstructorLayout = () => {
   const navItems = [
     { name: 'Dashboard', path: '/instructor/dashboard', icon: LayoutDashboard },
     { name: 'Courses', path: '/instructor/courses', icon: BookOpen },
-    { name: 'Student Roster', path: '/instructor/students', icon: Users },
+    { name: 'Course Rosters', path: '/instructor/courses', icon: Users },
     { name: 'Problem Bank', path: '/instructor/problems', icon: Code2 },
     { name: 'Class Analytics', path: '/instructor/analytics', icon: BarChart3 },
     { name: 'Similarity & Plagiarism', path: '/instructor/similarity', icon: ShieldAlert },

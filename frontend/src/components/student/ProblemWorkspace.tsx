@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/useAuth';
 import { DifficultyBadge } from '../common/Badge';
 import { AssessmentResult, SubmissionItem, TestCaseResult } from '../../types';
 import {
@@ -61,6 +62,8 @@ export const ProblemWorkspace: React.FC = () => {
   const location = useLocation();
   const { id: routeProblemId } = useParams<{ id: string }>();
   const isInstructorProblem = new URLSearchParams(location.search).get('view') === 'instructor';
+  const assignmentId = new URLSearchParams(location.search).get('assignmentId');
+  const { authFetch } = useAuth();
   const {
     currentUser,
     selectedProblem: fallbackProblem,
@@ -442,14 +445,13 @@ export const ProblemWorkspace: React.FC = () => {
     // Docker is still judging would be misleading.
 
     try {
-      const res = await fetch('/api/submissions/submit', {
+      const res = await authFetch('/api/submissions/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          student_id: '24BD1A058Z',
           problem_id: remoteProblem.id,
           language,
-          code
+          code,
+          assignment_id: assignmentId ? Number(assignmentId) : null
         })
       });
       if (!res.ok) {

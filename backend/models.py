@@ -3,6 +3,72 @@ from sqlalchemy import Column, Integer, String, Text, DateTime, Float, JSON, Boo
 from sqlalchemy.orm import relationship
 from database import Base
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(100), unique=True, nullable=False, index=True)
+    email = Column(String(200), unique=True, nullable=False, index=True)
+    full_name = Column(String(200), nullable=False)
+    hashed_password = Column(String(200), nullable=False)
+    role = Column(String(50), nullable=False, default="student")  # "student" or "instructor"
+    is_active = Column(Boolean, default=True)
+    token_version = Column(Integer, nullable=False, default=0, server_default="0")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    instructor_profile = relationship("Instructor", back_populates="user", uselist=False)
+    student_profile = relationship("Student", back_populates="user", uselist=False)
+
+
+class Instructor(Base):
+    __tablename__ = "instructors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    title = Column(String(100), nullable=True)  # e.g., "Professor", "Dr."
+    department = Column(String(200), nullable=True)
+    institution = Column(String(200), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="instructor_profile")
+    courses = relationship("Course", back_populates="instructor")
+
+
+class Course(Base):
+    __tablename__ = "courses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    course_code = Column(String(50), nullable=False, index=True)  # e.g., "CSE-301"
+    title = Column(String(200), nullable=False)
+    term = Column(String(100), nullable=True)  # e.g., "Fall 2024"
+    description = Column(Text, nullable=True)
+    instructor_id = Column(Integer, ForeignKey("instructors.id"), nullable=False, index=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    instructor = relationship("Instructor", back_populates="courses")
+    enrollments = relationship("Enrollment", back_populates="course", cascade="all, delete-orphan")
+    assignments = relationship("Assignment", back_populates="course", cascade="all, delete-orphan")
+
+
+class Enrollment(Base):
+    __tablename__ = "enrollments"
+    __table_args__ = (UniqueConstraint("student_id", "course_id", name="uq_student_course"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(String(100), ForeignKey("students.student_id"), nullable=False, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=False, index=True)
+    enrollment_date = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+    # Relationships
+    student = relationship("Student")
+    course = relationship("Course", back_populates="enrollments")
+
+
 class Student(Base):
     __tablename__ = "students"
 
@@ -15,8 +81,12 @@ class Student(Base):
     xp = Column(Integer, default=150)
     streak_days = Column(Integer, default=7)
     created_at = Column(DateTime, default=datetime.utcnow)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, unique=True, index=True)
 
+    # Relationships
+    user = relationship("User", back_populates="student_profile")
     submissions = relationship("Submission", back_populates="student")
+    enrollments = relationship("Enrollment", back_populates="student", cascade="all, delete-orphan")
 
 class Problem(Base):
     __tablename__ = "problems"
@@ -64,6 +134,38 @@ class ProblemTestCase(Base):
 
     problem = relationship("Problem", back_populates="test_case_records")
 
+class Assignment(Base):
+    __tablename__ = "assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=False, index=True)
+    due_date = Column(DateTime, nullable=True)
+    status = Column(String(50), default="ACTIVE")  # ACTIVE, CLOSED, UPCOMING
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    course = relationship("Course", back_populates="assignments")
+    problems = relationship("AssignmentProblem", back_populates="assignment", cascade="all, delete-orphan")
+    submissions = relationship("Submission", back_populates="assignment")
+
+
+class AssignmentProblem(Base):
+    __tablename__ = "assignment_problems"
+    __table_args__ = (UniqueConstraint("assignment_id", "problem_id", name="uq_assignment_problem"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    assignment_id = Column(Integer, ForeignKey("assignments.id"), nullable=False, index=True)
+    problem_id = Column(String(100), ForeignKey("problems.id"), nullable=False, index=True)
+    position = Column(Integer, default=1)  # order in assignment
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    assignment = relationship("Assignment", back_populates="problems")
+    problem = relationship("Problem")
+
+
 class Submission(Base):
     __tablename__ = "submissions"
 
@@ -71,6 +173,7 @@ class Submission(Base):
     submission_id = Column(String(100), unique=True, nullable=False, index=True)
     student_id = Column(String(100), ForeignKey("students.student_id"), nullable=False, index=True)
     problem_id = Column(String(100), ForeignKey("problems.id"), nullable=False, index=True)
+    assignment_id = Column(Integer, ForeignKey("assignments.id"), nullable=True, index=True)  # NULL for independent practice
     language = Column(String(50), nullable=False)
     code = Column(Text, nullable=False)
     status = Column(String(50), default="SUBMITTED") # SUBMITTED, EVALUATED, FAILED
@@ -98,3 +201,12 @@ class Submission(Base):
 
     student = relationship("Student", back_populates="submissions")
     problem = relationship("Problem", back_populates="submissions")
+    assignment = relationship("Assignment", back_populates="submissions")
+VERDICT_ACCEPTED = "ACCEPTED"
+VERDICT_WRONG_ANSWER = "WRONG_ANSWER"
+VERDICT_TIME_LIMIT_EXCEEDED = "TIME_LIMIT_EXCEEDED"
+VERDICT_MEMORY_LIMIT_EXCEEDED = "MEMORY_LIMIT_EXCEEDED"
+VERDICT_OUTPUT_LIMIT_EXCEEDED = "OUTPUT_LIMIT_EXCEEDED"
+VERDICT_RUNTIME_ERROR = "RUNTIME_ERROR"
+VERDICT_COMPILATION_ERROR = "COMPILATION_ERROR"
+VERDICT_SYSTEM_ERROR = "SYSTEM_ERROR"

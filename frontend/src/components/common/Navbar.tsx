@@ -3,23 +3,24 @@ import {
   Sparkles,
   Search,
   Bell,
-  ArrowRightLeft,
   ChevronDown,
   LogOut,
   ShieldCheck,
   User
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/useAuth';
+import { useNavigate } from 'react-router-dom';
 
 export const Navbar: React.FC = () => {
   const {
     currentUser,
     currentRole,
-    switchRole,
-    logout,
     setCurrentView,
     similarityAlerts
   } = useApp();
+  const { logout } = useAuth();
+  const navigate = useNavigate();
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -64,21 +65,8 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
 
-        {/* Right: Role Switcher, Alerts & Profile */}
+        {/* Right: Alerts & Profile */}
         <div className="flex items-center gap-3">
-          {/* Quick Role Toggle */}
-          <button
-            onClick={() => switchRole(currentRole === 'student' ? 'instructor' : 'student')}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200 transition-all active:scale-95"
-            title={`Switch to ${currentRole === 'student' ? 'Instructor' : 'Student'} view`}
-          >
-            <ArrowRightLeft className="w-3.5 h-3.5 text-indigo-600" />
-            <span className="hidden sm:inline">
-              Switch to <strong className="text-indigo-600 capitalize">{currentRole === 'student' ? 'Instructor' : 'Student'}</strong>
-            </span>
-            <span className="sm:hidden capitalize">{currentRole === 'student' ? 'Inst' : 'Stud'}</span>
-          </button>
-
           {/* Notifications Dropdown */}
           <div className="relative">
             <button
@@ -175,7 +163,7 @@ export const Navbar: React.FC = () => {
                   </button>
                   <button
                     onClick={() => {
-                      logout();
+                      void logout().finally(() => navigate('/login'));
                       setProfileOpen(false);
                     }}
                     className="w-full px-4 py-2 text-xs text-left font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2"

@@ -1,5 +1,5 @@
 import { User, Bell, Shield } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { motion } from 'framer-motion';
 
 const SettingsPage = ({ role }) => {

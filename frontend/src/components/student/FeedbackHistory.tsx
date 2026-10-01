@@ -22,7 +22,7 @@ export const FeedbackHistory: React.FC = () => {
 
   const handleOpenReport = (subId: string) => {
     openAssessmentResult(subId);
-    navigate('/result');
+    navigate(`/submissions/${encodeURIComponent(subId)}`);
   };
 
   return (

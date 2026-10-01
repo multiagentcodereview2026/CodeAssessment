@@ -58,11 +58,11 @@ The frontend sends `/api` requests through Vite to FastAPI. FastAPI owns problem
 
 ### 2. Sign in and select a problem
 
-`AuthContext.jsx` calls `/api/auth/login` with an identifier and role. The demo backend creates an unknown student if needed and returns profile information. The browser stores a session marker and routes the user to student or instructor views.
+`AuthContext.jsx` calls `/api/auth/login` with an identifier, role, and password. The backend verifies a stored password hash and returns a signed bearer token. Registration currently creates or links student accounts; instructor accounts are provisioned separately with the explicit development seed script. The browser validates restored sessions through `/api/auth/me` and revokes them through `/api/auth/logout`.
 
 The student catalogue calls `/api/problems`; the instructor catalogue calls `/api/instructor-problems`. Opening a problem calls `/api/problems/{id}` for its statement, constraints, examples, starter code, and public cases. Private judge cases stay server-side.
 
-This is demo identity handling: passwords are not validated, and the current editor/history paths use a fixed student ID. Browser role routing is not backend authorization.
+JWT signing requires `JWT_SECRET_KEY` with at least 32 characters. Instructor APIs require an authenticated instructor profile and scope results to its owned courses. Student submission/history/analytics APIs derive identity from the authenticated student profile; a submitted student ID is not trusted. This remains a development deployment, not a hardened production identity provider.
 
 ### 3. Write code and run public tests
 
@@ -72,7 +72,7 @@ The backend execution client prepares supported solution wrappers, calls the exe
 
 ### 4. Submit for full judging
 
-**Submit** sends `student_id`, `problem_id`, `language`, and `code` to `/api/submissions/submit`. The backend loads authoritative cases from `problem_test_cases`, falling back to legacy problem JSON when normalized records are absent. Request-supplied cases do not replace the final judge cases.
+**Submit** sends `problem_id`, `language`, and `code` to `/api/submissions/submit`; assignment work also sends `assignment_id`. The backend derives student identity from the bearer token. Independent practice stores `assignment_id = NULL`; assigned submissions require an active enrollment and a problem linked to an active assignment. The backend loads authoritative cases from `problem_test_cases`, falling back to legacy problem JSON when normalized records are absent. Request-supplied cases do not replace the final judge cases.
 
 The backend asks the execution engine to run all cases, including hidden cases, without stopping after the first failure. The engine resolves the language, compiles when necessary, executes cases with bounded concurrency, and reports results. Docker runners apply network, filesystem, process, CPU, and memory restrictions.
 
@@ -94,9 +94,7 @@ Submission processing completes within the original HTTP request. There is no du
 
 ### 7. Review history and instructor views
 
-History is retrieved through `/api/submissions?student_id=...`; a saved result and original source are available through `/api/submissions/{submission_id}`. The initial response includes some details, such as complexity analysis, that are not persisted as dedicated submission fields.
-
-Student analytics and the instructor overview query stored submissions but also include demonstration defaults. Courses, roster management, similarity alerts, and reports have interface/state implementations without a complete set of persistent management APIs. A change in one of these views may therefore remain only in browser or in-memory state.
+History and saved result routes are restricted to the authenticated student. Instructor courses, assignments, enrollment, course analytics, and assignment summaries are persisted in PostgreSQL. Score summaries use the latest evaluated attempt per student/problem for averages and score distributions; total attempts are reported separately. Independent practice is excluded from instructor analytics. Similarity alerts and report generation are not fully database-backed yet.
 
 ### Request sequence
 
@@ -184,13 +182,17 @@ For correctness 80, complexity 60, style 90, originality 85, and successful comp
 | `students` | Identity, profile, XP, and streak fields |
 | `problems` | Statements, examples, constraints, starter code, source metadata, and legacy cases |
 | `problem_test_cases` | Ordered public/hidden cases with time and memory limits |
-| `submissions` | Student/problem references, source, scores, redacted execution results, and teaching outputs |
+| `users`, `instructors` | Hashed-password identities, role, active state, token revocation version, and instructor profiles |
+| `students` | Student identity/profile and nullable link to an authenticated user |
+| `courses`, `enrollments` | Instructor-owned courses and course-specific student enrollment |
+| `assignments`, `assignment_problems` | Course assignments, ordered problem links, and publication status |
+| `submissions` | Student/problem/optional assignment references, source, scores, redacted execution results, and teaching outputs |
 
-Students and problems each have many submissions; problems have many test cases. The backend prefers normalized case rows and supports older JSON cases. Missing instructor problems are seeded at startup without replacing existing records. Tables are created automatically; no versioned migration workflow is included.
+Students and problems each have many submissions; problems have many test cases. The backend prefers normalized case rows and supports older JSON cases. Missing instructor problems are seeded at startup without replacing existing records. Alembic migration `20260929_0001` adds missing assessment/assignment columns, creates missing instructor tables, adds `students.user_id` and `users.token_version`, and links legacy students only when an existing student-role username matches the student ID. Compose applies migrations before starting FastAPI. A pre-migration backup should be retained before deployment.
 
 Detailed complexity analysis is returned on initial submission but is not stored as a submission column. Some graph details therefore do not survive a later result fetch.
 
-**Frontend navigation:** student routes cover dashboard, problems/editor, submissions/results, analytics, feedback, profile, and settings. `/instructor/*` contains instructor views. `src/App.jsx` defines active routes, `AuthContext.jsx` manages demo sessions, and `AppContext.tsx` combines shared state, mock data, and server-loaded history. Active feature views mostly live under `src/components/`.
+**Frontend navigation:** student routes cover dashboard, enrolled courses/assignments, problems/editor, submissions/results, analytics, feedback, profile, and settings. `/instructor/*` contains instructor views. `src/App.jsx` defines active routes, `AuthContext.jsx` manages signed sessions, and `AppContext.tsx` loads account-scoped persisted data. Some non-core features such as similarity review, announcements, profile metadata, and report generation remain incomplete or local-only.
 
 ## Quick start
 
@@ -203,12 +205,21 @@ git clone https://github.com/multiagentcodereview2026/CodeAssessment.git
 cd CodeAssessment
 ```
 
-Create `backend/.env` (required by Compose, even without an API key):
+Create `backend/.env` (optional for Docker Compose; used for Groq settings):
 
 ```dotenv
 GROQ_API_KEY=
 GROQ_MODEL=llama-3.3-70b-versatile
 ```
+
+Set a private JWT signing key in the shell before starting the backend. PowerShell example:
+
+```powershell
+$env:JWT_SECRET_KEY = (python -c "import secrets; print(secrets.token_urlsafe(48))").Trim()
+docker compose up --build -d
+```
+
+Keep this environment variable available for subsequent `docker compose` commands. Do not commit the key. For a host-run backend, export the same variable in the backend process environment.
 
 Optionally set `POSTGRES_PASSWORD` in a root `.env` to override the Compose development password.
 
@@ -229,7 +240,16 @@ docker compose up --build -d
 | API documentation | http://localhost:8000/docs |
 | Health check | http://localhost:8000/health |
 
-The root Compose stack keeps execution port 8001 internal. Sign in with a student identifier such as `demo_student` and any password. Instructor assignments are provisioned automatically; the practice catalogue may require a dataset import.
+The root Compose stack keeps execution port 8001 internal. Register a student account from the login page. To create a development instructor, set `DEV_INSTRUCTOR_USERNAME`, `DEV_INSTRUCTOR_EMAIL`, and a password of at least 12 characters in PowerShell, then run the explicit seed script:
+
+```powershell
+$env:DEV_INSTRUCTOR_USERNAME = 'instructor'
+$env:DEV_INSTRUCTOR_EMAIL = 'instructor@example.test'
+$env:DEV_INSTRUCTOR_PASSWORD = '<choose-a-private-development-password>'
+docker compose run --rm --no-deps -e DEV_INSTRUCTOR_USERNAME -e DEV_INSTRUCTOR_EMAIL -e DEV_INSTRUCTOR_PASSWORD backend python seed_dev_instructor.py
+```
+
+The seed script does not run during normal application startup. Existing invalid demo credentials must be explicitly reset with `DEV_INSTRUCTOR_RESET_PASSWORD=true`. Instructor problems are provisioned automatically; the practice catalogue may require a dataset import.
 
 ```bash
 docker compose logs -f backend execution-engine
@@ -268,6 +288,7 @@ On Windows, activate with `.venv\Scripts\activate`. A host-run backend needs a r
 | Variable | Purpose / default |
 | --- | --- |
 | `GROQ_API_KEY`, `GROQ_MODEL` | Model credentials and selection |
+| `JWT_SECRET_KEY` | Required to issue/verify sessions; at least 32 characters; keep private |
 | `DATABASE_URL` | Export in the backend process; local default is `sqlite:///./codeassessment_v2.db` |
 | `DOCKER_ENGINE_URL` | Local default: `http://localhost:8001/execute`; Compose sets the service URL |
 | `DOCKER_ENGINE_REQUEST_TIMEOUT_SECONDS` | Execution HTTP timeout; 120 seconds |
@@ -283,7 +304,10 @@ Compose supplies the database/engine connection settings. The built frontend req
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| POST | `/api/auth/login` | Demo login |
+| POST | `/api/auth/register` | Register a student and link/create its student profile |
+| POST | `/api/auth/login` | Verify stored password hash and issue a bearer token |
+| GET | `/api/auth/me` | Validate current session |
+| POST | `/api/auth/logout` | Revoke current token version |
 | GET | `/api/problems` | Practice catalogue |
 | GET | `/api/instructor-problems` | Instructor catalogue |
 | GET | `/api/problems/{problem_id}` | Statement and public cases |
@@ -293,6 +317,13 @@ Compose supplies the database/engine connection settings. The built frontend req
 | GET | `/api/submissions/{submission_id}` | Saved result and source |
 | GET | `/api/analytics/student/{student_id}` | Student analytics |
 | GET | `/api/instructor/overview` | Instructor summary |
+| GET/POST | `/api/instructor/courses` | List/create owned courses |
+| GET/PATCH/DELETE | `/api/instructor/courses/{course_id}` | Read/update/archive an owned course |
+| POST | `/api/instructor/enrollments` | Enroll/reactivate a student in an owned course |
+| GET | `/api/student/courses` | List current student's active courses |
+| GET | `/api/student/courses/{course_id}/assignments` | List accessible course assignments |
+| GET/POST/PATCH | `/api/instructor/assignments` | List/create/update owned assignments |
+| GET | `/api/instructor/courses/{course_id}/analytics` | Course-scoped analytics |
 
 Example run without a stored problem:
 
@@ -302,7 +333,7 @@ curl -X POST http://localhost:8000/api/submissions/run \
   -d '{"language":"python","code":"print(sum(map(int, input().split())))","test_cases":[{"input":"2 3","expected_output":"5","is_hidden":false}]}'
 ```
 
-For final submission, send `student_id`, an existing `problem_id`, `language`, and `code`. The server selects judge cases. The response contains a `submission_id`, scores, execution results, and nested feedback/recommendation/revision/projection objects. See `/docs` for complete schemas.
+For final submission, send an existing `problem_id`, `language`, and `code`, plus `assignment_id` for coursework. Do not send student identity; the server resolves it from the bearer token. Omit/null `assignment_id` for independent practice. The response contains a `submission_id`, scores, execution results, and nested feedback/recommendation/revision/projection objects. See `/docs` for complete schemas.
 
 ## Repository map
 
@@ -349,8 +380,10 @@ Dataset tools are available under `backend/dataset/` and the Compose `tools` pro
 
 ## Important implementation limits
 
-- **Demo identity:** login accepts any password; browser session markers are not real access tokens. Backend routes do not enforce production authentication/authorization. Workspace submission and shared history currently use the fixed student ID `24BD1A058Z`.
-- **Mixed data:** analytics include hardcoded defaults and trends; several instructor operations use mock/browser state instead of persistent APIs.
+- **Account bootstrap:** legacy seeded students have no credentials until registered and linked using the same student ID and matching email. The development instructor seed must be run explicitly with private credentials.
+- **Instructor workflows:** course create/archive, enrollment/reactivation/deactivation, assignment create/archive, student course visibility, and assignment submissions are persisted. Course editing is API-backed but not yet exposed as a complete frontend form; assignment editing is limited to the API and disallows changing problem links after submissions exist.
+- **Analytics:** headline scores and distributions use latest evaluated attempts; report export, dimension filters, time-range filters, and complete per-student instructor reports remain unfinished. Similarity alerts are currently empty rather than fabricated, and similarity comparison is not a full stored peer-analysis workflow.
+- **Frontend:** dashboard/course/assignment flows use real APIs. Some profile metadata, announcements, parts of feedback/recommendations, and some legacy pages still use local/mock state and need follow-up before calling the whole product production-ready.
 - **AI output:** fallbacks may be generic. The revision fallback is a fixed C++ Two Sum solution. Similarity has no comparison corpus, and projections are estimates rather than verified outcomes.
 - **Execution isolation:** Docker runners disable networking and apply resource restrictions, but both execution layers contain local-process fallback paths. An unavailable sandbox does not necessarily stop execution. The service also mounts the host Docker socket.
 - **Deployment:** Compose runs the Vite development server and permissive CORS. It is a development setup.
@@ -363,7 +396,9 @@ Dataset tools are available under `backend/dataset/` and the Compose `tools` pro
 | Empty practice catalogue | Import practice data; check instructor catalogue separately. |
 | Generic feedback | Check Groq configuration and backend fallback logs. |
 | Slow or failed execution | Inspect backend/engine logs, runtime images, timeouts, and shared volume name. |
-| Wrong student's history | Fixed IDs in `ProblemWorkspace.tsx` and `AppContext.tsx`. |
+| Authentication failure | Check `JWT_SECRET_KEY`, account role/profile, and backend logs; do not use demo credentials. |
+| Student account cannot sign in | Register using the existing student ID and the email already stored on that student profile, or have an administrator inspect the identity link. |
+| Database schema mismatch | Check `alembic_version` and run `docker compose logs backend`; migrations run before Uvicorn. |
 | Change a page | `frontend/src/App.jsx` and the mounted component. |
 | Change scoring or workflow | `backend/agents/`, `scoring/`, and `workflow/`. |
 | Add a language | Engine `app/languages.py`, runtime image, backend wrappers, and editor options. |

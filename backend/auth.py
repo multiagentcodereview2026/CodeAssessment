@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -11,6 +12,7 @@ from jose import JWTError
 from jose import jwt
 
 from pwdlib import PasswordHash
+from pwdlib.exceptions import UnknownHashError
 
 from sqlalchemy.orm import Session
 
@@ -19,7 +21,7 @@ import models
 from database import get_db
 
 
-SECRET_KEY = "development-secret-change-later"
+SECRET_KEY_ENV = "JWT_SECRET_KEY"
 
 ALGORITHM = "HS256"
 
@@ -44,17 +46,22 @@ def verify_password(
     hashed_password: str
 ) -> bool:
 
-    return password_hash.verify(
-        password,
-        hashed_password
-    )
+    try:
+        return password_hash.verify(password, hashed_password)
+    except UnknownHashError:
+        return False
 
 
 def create_access_token(
     user_id: int,
     username: str,
-    role: str
+    role: str,
+    token_version: int = 0,
 ):
+
+    secret_key = os.getenv(SECRET_KEY_ENV, "")
+    if len(secret_key) < 32:
+        raise RuntimeError(f"{SECRET_KEY_ENV} must contain at least 32 characters")
 
     expire = (
         datetime.now(timezone.utc)
@@ -67,12 +74,13 @@ def create_access_token(
         "sub": str(user_id),
         "username": username,
         "role": role,
+        "token_version": token_version,
         "exp": expire
     }
 
     return jwt.encode(
         payload,
-        SECRET_KEY,
+        secret_key,
         algorithm=ALGORITHM
     )
 
@@ -91,10 +99,13 @@ def get_current_user(
     )
 
     try:
+        secret_key = os.getenv(SECRET_KEY_ENV, "")
+        if len(secret_key) < 32:
+            raise credentials_exception
 
         payload = jwt.decode(
             token,
-            SECRET_KEY,
+            secret_key,
             algorithms=[ALGORITHM]
         )
 
@@ -118,6 +129,13 @@ def get_current_user(
     )
 
     if user is None:
+        raise credentials_exception
+
+    if (
+        not user.is_active
+        or payload.get("role") != user.role
+        or payload.get("token_version") != user.token_version
+    ):
         raise credentials_exception
 
     return user

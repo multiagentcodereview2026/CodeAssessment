@@ -158,6 +158,10 @@ interface ScoreDistProps {
 }
 
 export const ScoreDistributionBarChart: React.FC<ScoreDistProps> = ({ distribution }) => {
+  if (!Array.isArray(distribution) || distribution.length === 0) {
+    return <p className="py-10 text-center text-sm text-slate-500">No graded submissions yet.</p>;
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex items-end justify-between gap-3 h-36 pt-4 px-2 border-b border-slate-200">

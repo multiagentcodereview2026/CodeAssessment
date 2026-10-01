@@ -31,6 +31,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    command: ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"]
     env_file:
       # Local Docker execution and deterministic correctness work without an
       # API key. If present, this file enables the optional Groq analysis.
@@ -39,6 +40,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg://codeassessment:${POSTGRES_PASSWORD:-change-this-before-production}@postgres:5432/codeassessment
       - DOCKER_ENGINE_URL=http://execution-engine:8001/execute
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
       - EXECUTION_CPU_LIMIT=1.0
       - EXECUTION_MEMORY_LIMIT=256m
       - EXECUTION_TIMEOUT_SECONDS=5

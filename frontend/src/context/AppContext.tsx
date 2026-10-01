@@ -15,40 +15,11 @@ import {
 } from '../types';
 import {
   MOCK_STUDENT_USER,
-  MOCK_INSTRUCTOR_USER,
   MOCK_PROBLEMS,
   MOCK_DEFAULT_ASSESSMENT,
-  MOCK_RECENT_SUBMISSIONS,
-  MOCK_STUDENT_PROGRESS,
-  MOCK_STUDENT_ROSTER,
-  MOCK_ASSIGNMENTS,
-  MOCK_SIMILARITY_ALERTS,
-  MOCK_REPORTS,
-  MOCK_INSTRUCTOR_STATS
 } from '../mock/data';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
-import { useAuth } from './AuthContext';
-
-export const INITIAL_COURSES: CourseItem[] = [
-  {
-    id: 'c1',
-    code: 'CSE-301',
-    title: 'Data Structures & Algorithms',
-    term: 'Spring 2026',
-    studentsCount: 48,
-    activeAssignments: 4,
-    avgGrade: '74.3%'
-  },
-  {
-    id: 'c2',
-    code: 'CSE-402',
-    title: 'Advanced Algorithmic Design & Optimization',
-    term: 'Spring 2026',
-    studentsCount: 32,
-    activeAssignments: 2,
-    avgGrade: '81.0%'
-  }
-];
+import { useAuth } from './useAuth';
 
 // Bump this whenever the server-side practice corpus changes. Problem metadata
 // may be invalidated, but editor drafts must remain independent of catalogue
@@ -61,11 +32,37 @@ interface ToastInfo {
   type: 'success' | 'info' | 'warning' | 'error';
 }
 
+const EMPTY_INSTRUCTOR_STATS = {
+  totalStudents: 0,
+  activeAssignments: 0,
+  totalSubmissions: 0,
+  classAvg: '0%',
+  averageScore: null as number | null,
+  highestScore: null as number | null,
+  lowestScore: null as number | null,
+  scoreDistribution: [] as Array<{ range: string; count: number; heightPercent: number }>,
+  students: [] as Array<{ id: string; name: string; subs: number; avg: string; status: string }>,
+};
+
+const EMPTY_STUDENT_PROGRESS: StudentProgress = {
+  overallScore: null,
+  problemsSolved: 0,
+  totalProblems: 0,
+  currentStreak: 0,
+  rankPercentile: 'N/A',
+  progressPercent: 0,
+  topicsCovered: 0,
+  totalTopics: 0,
+  hoursSpent: 'N/A',
+  weakTopics: [],
+  categoryWiseScores: [],
+  scoreTrend: [],
+};
+
 interface AppContextType {
   currentUser: UserProfile;
   updateCurrentUser: (profile: Partial<UserProfile>) => void;
   currentRole: Role;
-  switchRole: (role: Role) => void;
   currentView: string;
   setCurrentView: (view: string) => void;
   problems: Problem[];
@@ -95,12 +92,9 @@ interface AppContextType {
   dismissSimilarityAlert: (id: string) => void;
   reports: ReportItem[];
   generateReport: (report: ReportItem) => void;
-  instructorStats: typeof MOCK_INSTRUCTOR_STATS;
+  instructorStats: typeof EMPTY_INSTRUCTOR_STATS;
   announcements: AnnouncementItem[];
   dismissAnnouncement: (id: string) => void;
-  isAuthenticated: boolean;
-  login: (role: Role) => void;
-  logout: () => void;
   openProblemWorkspace: (problemId: string) => void;
   openAssessmentResult: (submissionId?: string) => void;
   showToast: (message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
@@ -130,29 +124,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [selectedProblemId, setSelectedProblemId] = useState<string>('prob-1');
   const [activeAssessment, setActiveAssessment] = useState<AssessmentResult>(MOCK_DEFAULT_ASSESSMENT);
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
-  const [studentProgress, setStudentProgress] = useState<StudentProgress>(MOCK_STUDENT_PROGRESS);
-  const [courses, setCourses] = useState<CourseItem[]>(INITIAL_COURSES);
-  const [studentRoster, setStudentRoster] = useState<StudentRosterItem[]>(MOCK_STUDENT_ROSTER);
+  const [studentProgress, setStudentProgress] = useState<StudentProgress>(EMPTY_STUDENT_PROGRESS);
+  const [courses, setCourses] = useState<CourseItem[]>([]);
+  const [studentRoster, setStudentRoster] = useState<StudentRosterItem[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<StudentRosterItem | null>(null);
-  const [assignments, setAssignments] = useState<Assignment[]>(MOCK_ASSIGNMENTS);
-  const [similarityAlerts, setSimilarityAlerts] = useState<SimilarityAlert[]>(MOCK_SIMILARITY_ALERTS);
-  const [reports, setReports] = useState<ReportItem[]>(MOCK_REPORTS);
-  const [instructorStats, setInstructorStats] = useState(MOCK_INSTRUCTOR_STATS);
-  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('codevedha_announcements');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return [];
-  });
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [similarityAlerts, setSimilarityAlerts] = useState<SimilarityAlert[]>([]);
+  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [instructorStats, setInstructorStats] = useState(EMPTY_INSTRUCTOR_STATS);
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [toasts, setToasts] = useState<ToastInfo[]>([]);
 
   useEffect(() => {
-    if (!auth?.user) return;
+    if (!auth?.user) {
+      setCourses([]);
+      setAssignments([]);
+      setStudentRoster([]);
+      setSubmissions([]);
+      setInstructorStats(EMPTY_INSTRUCTOR_STATS);
+      return;
+    }
 
     const role: Role = auth.user.role === 'instructor' ? 'instructor' : 'student';
-    const profileBase = role === 'instructor' ? MOCK_INSTRUCTOR_USER : MOCK_STUDENT_USER;
+    const profileBase = MOCK_STUDENT_USER;
 
     setCurrentRole(role);
     setCurrentUser({
@@ -160,22 +154,110 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       id: auth.user.id || profileBase.id,
       name: auth.user.name || auth.user.username || profileBase.name,
       email: auth.user.email || profileBase.email,
-      role
+      role,
+      avatar: profileBase.avatar,
+      rollNumber: profileBase.rollNumber,
+      institution: profileBase.institution,
+      department: role === 'instructor' ? 'Computer Science' : profileBase.department,
+      year: profileBase.year
     });
-    setIsAuthenticated(true);
-  }, [auth?.user]);
+    if (role === 'instructor') {
+      let cancelled = false;
+      const loadInstructorOverview = async () => {
+        try {
+          const response = await auth.authFetch('/api/instructor/overview', { cache: 'no-store' });
+          if (!response.ok) throw new Error('Instructor overview unavailable');
+          const overview = await response.json();
+          if (cancelled) return;
+          const parsedAverageScore = overview.class_avg_score == null
+            ? null
+            : Number.parseFloat(String(overview.class_avg_score).replace(/%/g, ''));
+          const averageScoreValue = Number.isFinite(parsedAverageScore) ? parsedAverageScore : null;
+
+          setInstructorStats({
+            totalStudents: Number(overview.total_students ?? 0),
+            activeAssignments: Number(overview.active_assignments ?? 0),
+            totalSubmissions: Number(overview.total_submissions ?? 0),
+            classAvg: overview.class_avg_score ?? 'N/A',
+            averageScore: averageScoreValue,
+            highestScore: overview.highest_score == null ? null : Number(overview.highest_score),
+            lowestScore: overview.lowest_score == null ? null : Number(overview.lowest_score),
+            scoreDistribution: Array.isArray(overview.score_distribution) ? overview.score_distribution : [],
+            students: Array.isArray(overview.students) ? overview.students : []
+          });
+
+          const courseResponse = await auth.authFetch('/api/instructor/courses', { cache: 'no-store' });
+          if (courseResponse.ok) {
+            const courseData = await courseResponse.json();
+            if (!cancelled && Array.isArray(courseData)) {
+              const mappedCourses = courseData.map((course: any) => ({
+                id: String(course.id),
+                code: course.course_code,
+                title: course.title,
+                term: course.term || 'N/A',
+                studentsCount: Number(course.student_count ?? 0),
+                activeAssignments: Number(course.assignment_count ?? 0),
+                avgGrade: course.avg_score != null ? `${course.avg_score}%` : 'N/A'
+              }));
+              setCourses(mappedCourses);
+            }
+          }
+
+          const assignmentResponse = await auth.authFetch('/api/instructor/assignments', { cache: 'no-store' });
+          if (assignmentResponse.ok) {
+            const assignmentData = await assignmentResponse.json();
+            if (!cancelled && Array.isArray(assignmentData)) {
+              const courseMap = new Map<string, string>();
+              const currentCourses = await auth.authFetch('/api/instructor/courses', { cache: 'no-store' }).then(res => res.ok ? res.json() : []);
+              if (Array.isArray(currentCourses)) {
+                currentCourses.forEach((course: any) => {
+                  courseMap.set(String(course.id), String(course.title));
+                });
+              }
+
+              setAssignments(assignmentData.map((assignment: any) => ({
+                id: String(assignment.id),
+                title: assignment.title,
+                description: assignment.description || 'No description provided.',
+                course: courseMap.get(String(assignment.course_id)) || `Course ${assignment.course_id}`,
+                problemsCount: Array.isArray(assignment.problems) ? assignment.problems.length : 0,
+                problemIds: Array.isArray(assignment.problems) ? assignment.problems : [],
+                submittedCount: Number(assignment.submitted_count ?? 0),
+                totalCount: Number(assignment.total_students ?? 0),
+                avgScore: assignment.avg_score == null ? null : Number(assignment.avg_score),
+                dueDate: assignment.due_date ? new Date(assignment.due_date).toLocaleDateString() : 'No due date',
+                status: assignment.status === 'ACTIVE' ? 'Active' : assignment.status === 'UPCOMING' ? 'Upcoming' : 'Closed'
+              })));
+            }
+          }
+        } catch (error) {
+          console.error('Unable to load instructor overview:', error);
+          if (!cancelled) {
+            setInstructorStats(EMPTY_INSTRUCTOR_STATS);
+            setCourses([]);
+            setAssignments([]);
+          }
+        }
+      };
+
+      void loadInstructorOverview();
+      return () => { cancelled = true; };
+    }
+  }, [auth?.user, auth?.authFetch]);
 
   // Submission history, accepted ticks, and attempted markers come from
   // PostgreSQL—not mock state—so they survive a browser reload and restart.
   useEffect(() => {
     let cancelled = false;
 
+    if (!auth?.user || auth.user.role !== 'student') {
+      setSubmissions([]);
+      return () => { cancelled = true; };
+    }
+
     const loadSavedSubmissions = async () => {
       try {
-        // This is the student identity used by the current assessment flow.
-        // When production auth is connected, it should be replaced with the
-        // authenticated student identifier sent on submission as well.
-        const response = await fetch('/api/submissions?student_id=24BD1A058Z', { cache: 'no-store' });
+        const response = await auth.authFetch('/api/submissions', { cache: 'no-store' });
         if (!response.ok) throw new Error('Could not load saved submissions.');
         const records = await response.json();
         if (!Array.isArray(records) || cancelled) return;
@@ -184,7 +266,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const titles = new Map<string, string>();
         await Promise.all(problemIds.map(async (problemId: string) => {
           try {
-            const problemResponse = await fetch(`/api/problems/${encodeURIComponent(problemId)}`, { cache: 'no-store' });
+            const problemResponse = await auth.authFetch(`/api/problems/${encodeURIComponent(problemId)}`, { cache: 'no-store' });
             if (problemResponse.ok) {
               const problem = await problemResponse.json();
               titles.set(problemId, problem.title || problemId);
@@ -221,7 +303,56 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     void loadSavedSubmissions();
     return () => { cancelled = true; };
-  }, []);
+  }, [auth?.user, auth?.authFetch]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!auth?.user || auth.user.role !== 'student') {
+      setStudentProgress(EMPTY_STUDENT_PROGRESS);
+      return () => { cancelled = true; };
+    }
+
+    const loadStudentAnalytics = async () => {
+      try {
+        const response = await auth.authFetch(`/api/analytics/student/${encodeURIComponent(auth.user.id)}`, { cache: 'no-store' });
+        if (!response.ok) throw new Error('Student analytics unavailable');
+        const analytics = await response.json();
+        if (cancelled) return;
+        const categories = Array.isArray(analytics.category_breakdown)
+          ? analytics.category_breakdown.filter((item: any) => item.value != null).map((item: any) => ({
+              name: String(item.name),
+              percentage: Number(item.value),
+              color: String(item.color || '#64748b'),
+              scoreDisplay: `${Number(item.value)}%`
+            }))
+          : [];
+        const totalProblems = Number(analytics.total_problems ?? 0);
+        const problemsSolved = Number(analytics.problems_solved ?? 0);
+        setStudentProgress({
+          overallScore: analytics.overall_score == null ? null : Number(analytics.overall_score),
+          problemsSolved,
+          totalProblems,
+          currentStreak: Number(analytics.streak_days ?? 0),
+          rankPercentile: 'N/A',
+          progressPercent: totalProblems > 0 ? Math.round(problemsSolved / totalProblems * 100) : 0,
+          topicsCovered: categories.length,
+          totalTopics: categories.length,
+          hoursSpent: 'N/A',
+          weakTopics: Array.isArray(analytics.weak_topics) ? analytics.weak_topics : [],
+          categoryWiseScores: categories,
+          scoreTrend: Array.isArray(analytics.score_trend)
+            ? analytics.score_trend.map((point: any) => ({ date: String(point.date), score: Number(point.score) }))
+            : [],
+        });
+      } catch (error) {
+        console.error('Unable to load student analytics:', error);
+        if (!cancelled) setStudentProgress(EMPTY_STUDENT_PROGRESS);
+      }
+    };
+
+    void loadStudentAnalytics();
+    return () => { cancelled = true; };
+  }, [auth?.user?.id, auth?.user?.role, auth?.authFetch, submissions.length]);
 
   // Sync problems to localStorage on change
   useEffect(() => {
@@ -229,12 +360,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.setItem('codevedha_problems', JSON.stringify(problems));
     } catch {}
   }, [problems]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('codevedha_announcements', JSON.stringify(announcements));
-    } catch {}
-  }, [announcements]);
 
   const showToast = (message: string, type: 'success' | 'info' | 'warning' | 'error' = 'success') => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
@@ -251,28 +376,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateCurrentUser = (updates: Partial<UserProfile>) => {
     setCurrentUser(prev => ({ ...prev, ...updates }));
     showToast('Profile updated successfully!', 'success');
-  };
-
-  const switchRole = (role: Role) => {
-    setCurrentRole(role);
-    if (role === 'student') {
-      setCurrentUser(MOCK_STUDENT_USER);
-      setCurrentView('dashboard');
-    } else {
-      setCurrentUser(MOCK_INSTRUCTOR_USER);
-      setCurrentView('instructor-dashboard');
-    }
-  };
-
-  const login = (role: Role) => {
-    setIsAuthenticated(true);
-    switchRole(role);
-    showToast(`Signed in as ${role === 'student' ? 'Student' : 'Faculty'}`, 'success');
-  };
-
-  const logout = () => {
-    setIsAuthenticated(false);
-    showToast('Signed out successfully', 'info');
   };
 
   const addProblem = (newProb: Problem) => {
@@ -341,32 +444,126 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setCurrentView('result');
   };
 
-  const addCourse = (newCourse: CourseItem) => {
-    setCourses(prev => [...prev, newCourse]);
-    showToast(`Course "${newCourse.code}: ${newCourse.title}" created!`, 'success');
+  const addCourse = async (newCourse: CourseItem) => {
+    try {
+      const response = await auth.authFetch('/api/instructor/courses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          course_code: newCourse.code,
+          title: newCourse.title,
+          term: newCourse.term,
+          description: newCourse.title
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Course creation failed');
+      }
+
+      const created = await response.json();
+      const savedCourse: CourseItem = {
+        id: String(created.id),
+        code: created.course_code,
+        title: created.title,
+        term: created.term || newCourse.term,
+        studentsCount: 0,
+        activeAssignments: 0,
+        avgGrade: 'N/A'
+      };
+
+      setCourses(prev => [...prev, savedCourse]);
+      showToast(`Course "${savedCourse.code}: ${savedCourse.title}" created!`, 'success');
+    } catch (error) {
+      console.error('Unable to save course to backend:', error);
+      showToast('Unable to save course. Please retry.', 'error');
+      throw error;
+    }
   };
 
-  const deleteCourse = (id: string) => {
+  const deleteCourse = async (id: string) => {
+    const response = await auth.authFetch(`/api/instructor/courses/${encodeURIComponent(id)}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) {
+      showToast('Unable to archive course. Please retry.', 'error');
+      throw new Error('Course archive failed');
+    }
     setCourses(prev => prev.filter(c => c.id !== id));
-    showToast('Course removed', 'info');
+    showToast('Course archived', 'success');
   };
 
-  const addAssignment = (newAssignment: Assignment) => {
-    setAssignments(prev => [newAssignment, ...prev]);
-    setInstructorStats(prev => ({
-      ...prev,
-      activeAssignments: prev.activeAssignments + 1
-    }));
-    showToast(`Assignment "${newAssignment.title}" published!`, 'success');
+  const addAssignment = async (newAssignment: Assignment & { courseId?: string | number; problemIds?: string[] }) => {
+    const courseId = Number(newAssignment.courseId ?? (courses.find(c => `${c.code} ${c.title}` === newAssignment.course)?.id ?? 0));
+    if (!courseId) {
+      showToast('Choose a saved course before creating an assignment.', 'error');
+      throw new Error('Assignment requires a persisted course');
+    }
+
+    try {
+      const response = await auth.authFetch('/api/instructor/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newAssignment.title,
+          description: newAssignment.description,
+          course_id: courseId,
+          problem_ids: newAssignment.problemIds || [],
+          due_date: newAssignment.dueDate ? new Date(newAssignment.dueDate).toISOString() : null,
+          status: newAssignment.status.toUpperCase()
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Assignment creation failed');
+      }
+
+      const created = await response.json();
+      const savedAssignment: Assignment = {
+        id: String(created.id),
+        title: created.title,
+        description: created.description || '',
+        course: newAssignment.course,
+        problemsCount: Array.isArray(created.problems) ? created.problems.length : newAssignment.problemsCount,
+        problemIds: Array.isArray(created.problems) ? created.problems : newAssignment.problemIds || [],
+        submittedCount: 0,
+        totalCount: 0,
+        avgScore: null,
+        dueDate: newAssignment.dueDate,
+        status: newAssignment.status
+      };
+
+      setAssignments(prev => [savedAssignment, ...prev]);
+      setInstructorStats(prev => ({
+        ...prev,
+        activeAssignments: prev.activeAssignments + 1
+      }));
+      showToast(`Assignment "${savedAssignment.title}" published!`, 'success');
+    } catch (error) {
+      console.error('Unable to save assignment to backend:', error);
+      showToast('Unable to save assignment. Please retry.', 'error');
+      throw error;
+    }
   };
 
-  const deleteAssignment = (id: string) => {
-    setAssignments(prev => prev.filter(a => a.id !== id));
-    setInstructorStats(prev => ({
-      ...prev,
-      activeAssignments: Math.max(0, prev.activeAssignments - 1)
-    }));
-    showToast('Assignment deleted', 'info');
+  const deleteAssignment = async (id: string) => {
+    const assignment = assignments.find(item => item.id === id);
+    const response = await auth.authFetch(`/api/instructor/assignments/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'CLOSED' })
+    });
+    if (!response.ok) {
+      showToast('Unable to archive assignment. Please retry.', 'error');
+      throw new Error('Assignment archive failed');
+    }
+    setAssignments(prev => prev.map(item => item.id === id ? { ...item, status: 'Closed' } : item));
+    if (assignment?.status === 'Active') {
+      setInstructorStats(prev => ({
+        ...prev,
+        activeAssignments: Math.max(0, prev.activeAssignments - 1)
+      }));
+    }
+    showToast('Assignment archived', 'success');
   };
 
   const addStudent = (newStudent: StudentRosterItem) => {
@@ -403,7 +600,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         currentUser,
         updateCurrentUser,
         currentRole,
-        switchRole,
         currentView,
         setCurrentView,
         problems,
@@ -436,9 +632,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         instructorStats,
         announcements,
         dismissAnnouncement,
-        isAuthenticated,
-        login,
-        logout,
         openProblemWorkspace,
         openAssessmentResult,
         showToast

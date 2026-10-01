@@ -78,7 +78,7 @@ export const ClassAnalyticsView: React.FC = () => {
           </span>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-slate-900 font-mono">
-              {instructorStats.averageScore}%
+              {instructorStats.averageScore == null ? 'N/A' : `${instructorStats.averageScore}%`}
             </span>
             <span className="text-xs text-emerald-600 font-bold">+2.4% vs midterm</span>
           </div>
@@ -90,7 +90,7 @@ export const ClassAnalyticsView: React.FC = () => {
           </span>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-emerald-700 font-mono">
-              {instructorStats.highestScore}%
+              {instructorStats.highestScore == null ? 'N/A' : `${instructorStats.highestScore}%`}
             </span>
             <span className="text-xs text-slate-500">(Ananya S.)</span>
           </div>
@@ -102,7 +102,7 @@ export const ClassAnalyticsView: React.FC = () => {
           </span>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-rose-700 font-mono">
-              {instructorStats.lowestScore}%
+              {instructorStats.lowestScore == null ? 'N/A' : `${instructorStats.lowestScore}%`}
             </span>
             <span className="text-xs text-rose-600 font-semibold">Requires Intervention</span>
           </div>

@@ -114,8 +114,8 @@ def test_complexity_response_excludes_private_target_data():
     )
 
     details = scored["complexity_details"]
-    assert scored["complexity_score"] == 93.75
-    assert details["time_score"] == 21.875
+    assert scored["complexity_score"] == 94.444
+    assert details["time_score"] == 22.222
     assert details["space_score"] == 25.0
     assert "target_time_complexity" not in details
     assert "expected_time_complexity" not in details

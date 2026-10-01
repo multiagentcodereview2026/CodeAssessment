@@ -68,6 +68,33 @@ def ensure_submission_assessment_columns() -> None:
                 connection.execute(text(f"ALTER TABLE submissions ADD COLUMN {name} {sql_type}"))
 
 
+def ensure_new_tables():
+    """Create new tables for instructor features if they don't exist."""
+    import models  # noqa: F401 - models must be imported to register with Base
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    
+    # Import all models to register them with Base
+    from models import User, Instructor, Course, Enrollment, Assignment, AssignmentProblem
+    
+    # Create missing tables
+    Base.metadata.create_all(bind=engine)
+
+
+def ensure_submission_assignment_column():
+    """Add assignment_id column to submissions table for tracking assignment vs practice."""
+    inspector = inspect(engine)
+    if "submissions" not in inspector.get_table_names():
+        return
+    
+    existing = {column["name"] for column in inspector.get_columns("submissions")}
+    if "assignment_id" not in existing:
+        with engine.begin() as connection:
+            connection.execute(text(
+                "ALTER TABLE submissions ADD COLUMN assignment_id INTEGER REFERENCES assignments(id)"
+            ))
+
+
 def get_db():
     db = SessionLocal()
 

@@ -15,7 +15,7 @@ client = Groq(
 
 def analyze_complexity(problem, code, language):
 
-    with open("prompts/complexity_prompt.txt", "r") as file:
+    with open("prompts/complexity.txt", "r") as file:
         system_prompt = file.read()
 
     user_prompt = f"""
