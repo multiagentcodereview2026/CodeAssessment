@@ -226,12 +226,10 @@ def _is_two_pass_array(source: str) -> bool:
     """Detect independent two-pass array algorithm (O(n) + O(n) = O(n))."""
     src = source.lower()
 
-    # Count distinct single-depth for loops
-    single_loops = re.findall(r"for\s*\([^;]+;[^;]+;[^)]+\)\s*\{[^}]*\}", src)
-
-    # Check if loops are at same indentation (sequential, not nested)
-    if len(single_loops) >= 2:
-        # Ensure no nested loops
+    # Count distinct for/while loops
+    for_loops = re.findall(r"for\s*\([^;]+;[^;]+;[^)]+\)", src)
+    if len(for_loops) >= 2:
+        # Ensure no nested loops with { ... for ... }
         nested = bool(re.search(r"for\s*\([^)]+\)\s*\{[^}]*for\s*\(", src))
         return not nested
 
@@ -348,7 +346,7 @@ def analyze_cpp_enhanced(source: str) -> ComplexityAnalysis:
         space_complexity = "O(1)"
 
     # TWO-PASS SEQUENTIAL LOOPS
-    elif is_two_pass and loop_structure == "sequential":
+    elif is_two_pass:
         if has_sort:
             time_complexity = "O(n log n)"
         else:
@@ -380,8 +378,20 @@ def analyze_cpp_enhanced(source: str) -> ComplexityAnalysis:
         elif loop_depth >= 4:
             time_complexity = "O(n^4+)"
 
-        # Space: check for data structure allocation
-        if re.search(r"vector<[^>]+>\s+\w+\(", src) or "unordered_map" in src:
+        # Space: check for dynamic data structure allocation (ignore fixed-size like vector(26))
+        has_dynamic_alloc = "unordered_map" in src or "unordered_set" in src or "map<" in src or "set<" in src
+        if not has_dynamic_alloc:
+            vector_matches = re.finditer(r"vector\s*<[^>]+>\s+\w+\s*\(\s*([^,\)]+)", src)
+            for m in vector_matches:
+                size_arg = m.group(1).strip()
+                if any(t in size_arg for t in ['int', 'string', 'char', 'auto', 'const', 'bool', 'float', 'double', '&', '*']):
+                    continue
+                if re.match(r"^\d+$", size_arg):
+                    if int(size_arg) > 1000:
+                        has_dynamic_alloc = True
+                else:
+                    has_dynamic_alloc = True
+        if has_dynamic_alloc:
             space_complexity = "O(n)"
 
     # JUST SORT, NO LOOPS

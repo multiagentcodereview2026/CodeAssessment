@@ -151,10 +151,13 @@ class ASTComplexityAnalyzer:
             return True
 
         # Check vectors with variable size (e.g. vector<int> dp(n) or vector<int> c(n, 1))
-        # Ignore fixed-size vectors like vector<int> last(26) or vector<int> count(256)
+        # Ignore function return types like vector<int> f(string& s) and fixed-size vectors like vector<int> last(26)
         vector_matches = re.finditer(r"vector\s*<[^>]+>\s+\w+\s*\(\s*([^,\)]+)", src)
         for m in vector_matches:
             size_arg = m.group(1).strip()
+            # Ignore function signatures
+            if any(t in size_arg for t in ['int', 'string', 'char', 'auto', 'const', 'bool', 'float', 'double', '&', '*']):
+                continue
             # If size_arg is purely a small constant number, it's O(1)
             if re.match(r"^\d+$", size_arg):
                 val = int(size_arg)

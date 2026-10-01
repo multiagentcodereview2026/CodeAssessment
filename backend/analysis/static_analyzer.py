@@ -3,6 +3,14 @@ import re
 from .complexity_normalizer import normalize_complexity
 from .models import ComplexityAnalysis
 
+try:
+    from .ast_parser import ASTComplexityAnalyzer, AST_AVAILABLE
+    from .ast_engine import infer_complexity_from_ir
+except ImportError:
+    AST_AVAILABLE = False
+    ASTComplexityAnalyzer = None
+    infer_complexity_from_ir = None
+
 
 # ─── Loop Depth ────────────────────────────────────────────────────────────────
 
@@ -883,8 +891,31 @@ def analyze_source(
 ) -> ComplexityAnalysis:
     language_name = language.lower().strip()
 
+    # 1. Try AST-based analysis (supports Python, Java, C, C++)
+    if AST_AVAILABLE and ASTComplexityAnalyzer and infer_complexity_from_ir:
+        try:
+            ast_analyzer = ASTComplexityAnalyzer(source, language_name)
+            ir = ast_analyzer.analyze()
+            if ir:
+                ast_result = infer_complexity_from_ir(ir)
+                if ast_result and ast_result.time_complexity and ast_result.time_complexity != "O(1)":
+                    return ast_result
+        except Exception:
+            pass
+
+    # 2. Fall back to regex C++ / C analyzer
     if language_name in {"cpp", "c++", "cc", "cxx", "c"}:
         return analyze_cpp(source)
+
+    # 3. For non-C++ languages, if AST returned O(1)
+    if AST_AVAILABLE and ASTComplexityAnalyzer and infer_complexity_from_ir:
+        try:
+            ast_analyzer = ASTComplexityAnalyzer(source, language_name)
+            ir = ast_analyzer.analyze()
+            if ir:
+                return infer_complexity_from_ir(ir)
+        except Exception:
+            pass
 
     return ComplexityAnalysis(
         status="REVIEW_REQUIRED",

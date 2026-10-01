@@ -4,7 +4,15 @@ import re
 from pathlib import Path
 from typing import Any, Dict
 from pydantic import BaseModel
-from langchain_core.messages import SystemMessage, HumanMessage
+try:
+    from langchain_core.messages import SystemMessage, HumanMessage
+except ImportError:
+    class SystemMessage:
+        def __init__(self, content):
+            self.content = content
+    class HumanMessage:
+        def __init__(self, content):
+            self.content = content
 from config.settings import settings
 
 logger = logging.getLogger(__name__)

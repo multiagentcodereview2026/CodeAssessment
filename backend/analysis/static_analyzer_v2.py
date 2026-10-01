@@ -35,18 +35,11 @@ def analyze_cpp(source: str) -> ComplexityAnalysis:
     return _regex_analyze_cpp(source)
 
 
-# === REGEX FALLBACK (existing implementation) ===
+# === REGEX FALLBACK (enhanced implementation) ===
 
 def _regex_analyze_cpp(source: str) -> ComplexityAnalysis:
     """
-    Original regex-based complexity analyzer (preserved as fallback).
+    Enhanced regex-based complexity analyzer (preserved as fallback).
     """
-    from . import static_analyzer as legacy
-
-    time_complexity = legacy._infer_time_complexity(source)
-    space_complexity = legacy._infer_space_complexity(source)
-
-    return ComplexityAnalysis(
-        time_complexity=normalize_complexity(time_complexity) or "O(1)",
-        space_complexity=normalize_complexity(space_complexity) or "O(1)"
-    )
+    from .static_analyzer_enhanced import analyze_cpp_enhanced
+    return analyze_cpp_enhanced(source)
