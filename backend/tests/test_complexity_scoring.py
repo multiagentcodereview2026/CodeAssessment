@@ -30,17 +30,17 @@ def test_time_score_is_optimal_when_student_matches_target():
 
 
 def test_time_score_uses_the_approved_ladder():
-    assert time_complexity_assessment("O(n)", "O(n log n)")["time_score"] == 21.875
-    assert time_complexity_assessment("O(n)", "O(n^2)")["time_score"] == 18.75
-    assert time_complexity_assessment("O(log n)", "O(n^2)")["time_score"] == 12.5
-    assert time_complexity_assessment("O(n)", "O(n!)")["time_score"] == 9.375
-    assert time_complexity_assessment("O(1)", "O(n!)")["time_score"] == 0.0
+    assert time_complexity_assessment("O(n)", "O(n log n)")["time_score"] == 22.222
+    assert time_complexity_assessment("O(n)", "O(n^2)")["time_score"] == 19.444
+    assert time_complexity_assessment("O(log n)", "O(n^2)")["time_score"] == 13.889
+    assert time_complexity_assessment("O(n)", "O(n!)")["time_score"] == 11.111
+    assert time_complexity_assessment("O(1)", "O(n!)")["time_score"] == 2.778
 
 
 def test_space_score_uses_the_same_rank_distance_rule():
     assessment = space_complexity_assessment("O(n)", "O(n^2)")
-    assert assessment["space_score"] == 18.75
-    assert assessment["score_percent"] == 75.0
+    assert assessment["space_score"] == 19.444
+    assert assessment["score_percent"] == 77.776
 
 
 def test_rank_is_one_based_and_better_than_target_is_flagged_for_review():

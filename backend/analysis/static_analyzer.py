@@ -1,5 +1,6 @@
 import re
 
+from .complexity_normalizer import normalize_complexity
 from .models import ComplexityAnalysis
 
 
@@ -162,6 +163,9 @@ def _has_bellman_ford(source: str) -> bool:
 def _is_tree_context(source: str) -> bool:
     """Returns True if code operates on a tree / BST / heap data structure."""
     src = source.lower()
+    # Exclude binary search patterns: "low", "right", "mid" together indicate array binary search, not trees
+    if bool(re.search(r"\blow\b", src)) and bool(re.search(r"\bright\b", src)) and bool(re.search(r"\bmid\b", src)):
+        return False
     tree_keywords = [
         r"\btreenode\b", r"\bnode\s*\*", r"\broot\b", r"\bleft\b", r"\bright\b",
         r"\bbst\b", r"\bbinarytree\b", r"\bheapify\b", r"\bbuildheap\b", r"\bheapsort\b",
@@ -416,14 +420,20 @@ def _has_recursive_binary_search(source: str) -> bool:
 
 
 def _has_log_loop(source: str) -> bool:
-    """Detects a logarithmically-bounded loop: variable doubled/halved each step."""
-    return bool(re.search(
-        r"\b\w+\s*(?:\*=\s*2|/=\s*2|>>=\s*1|<<=\s*1)",
-        source
-    ) or re.search(
-        r"\b\w+\s*=\s*\w+\s*(?:\*\s*2|/\s*2)\b",
-        source
-    ))
+    """Detects a logarithmically-bounded loop: variable doubled/halved each step, or binary search pointer updates."""
+    # Classic log patterns: x *= 2, x /= 2, x >>= 1, x <<= 1, x = x * 2, x = x / 2
+    if bool(re.search(r"\b\w+\s*(?:\*=\s*2|/=\s*2|>>=\s*1|<<=\s*1)", source)) or \
+       bool(re.search(r"\b\w+\s*=\s*\w+\s*(?:\*\s*2|/\s*2)\b", source)):
+        return True
+
+    # Binary search pattern: while(low <= right) with mid = (low+right)/2 and low = mid+1 / right = mid-1
+    src_lower = source.lower()
+    has_mid_calc = bool(re.search(r"\bmid\s*=\s*\(?\s*(?:low|left|l)\s*\+\s*(?:right|high|r|right)\s*\)?\s*/\s*2", src_lower))
+    has_pointer_update = bool(re.search(r"\b(?:low|left|l)\s*=\s*mid\s*[+\-]\s*1", src_lower)) or \
+                         bool(re.search(r"\b(?:right|high|r)\s*=\s*mid\s*[+\-]\s*1", src_lower))
+    has_log_condition = bool(re.search(r"while\s*\(\s*(?:low|left|l)\s*<=?\s*(?:right|high|r)", src_lower))
+
+    return has_mid_calc and has_pointer_update and has_log_condition
 
 
 def _has_factorial_pattern(source: str) -> bool:
@@ -770,7 +780,21 @@ def analyze_cpp(source: str) -> ComplexityAnalysis:
             time_complexity = f"O(log {target_sym})"
             confidence = 0.82
 
-        elif _has_sort(source) or _has_binary_search_call(source):
+        elif _has_sort(source):
+            log_v = _get_log_target_var(source, default_var=outer_v)
+            if outer_v != log_v:
+                signals.append(f"single loop ({outer_v}) with sort on ({log_v}) detected")
+                time_complexity = f"O({outer_v} {log_v} log {log_v})"
+            elif outer_v in {"m", "v", "e"}:
+                target_sym = "V" if outer_v == "v" else ("E" if outer_v == "e" else "m")
+                signals.append(f"single loop ({target_sym}) with sort detected")
+                time_complexity = f"O({target_sym}^2 log {target_sym})"
+            else:
+                signals.append("single loop (n) with sort detected")
+                time_complexity = "O(n^2 log n)"
+            confidence = 0.86
+
+        elif _has_binary_search_call(source):
             log_v = _get_log_target_var(source, default_var=outer_v)
             if outer_v != log_v:
                 signals.append(f"single loop ({outer_v}) with logarithmic operation on ({log_v}) detected")
@@ -843,8 +867,8 @@ def analyze_cpp(source: str) -> ComplexityAnalysis:
     signals.append(space_signal)
 
     return ComplexityAnalysis(
-        time_complexity=time_complexity,
-        space_complexity=space_complexity,
+        time_complexity=normalize_complexity(time_complexity),
+        space_complexity=normalize_complexity(space_complexity),
         confidence=round(min(confidence, space_confidence), 3),
         method="static",
         status="ANALYZED",
