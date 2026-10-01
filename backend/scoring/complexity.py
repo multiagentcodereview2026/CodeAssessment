@@ -20,6 +20,7 @@ TIME_COMPLEXITY_LEVELS = (
     "O(n log n)",
     "O(n^2)",
     "O(n^3)",
+    "O(n^4+)",
     "O(2^n)",
     "O(n!)",
 )
@@ -38,12 +39,17 @@ def normalize_complexity(complexity: Optional[str]) -> Optional[str]:
     if not complexity or not isinstance(complexity, str):
         return None
 
-    compact = complexity.strip().lower()
+    raw = complexity.strip().lower()
+    compact = raw
     compact = compact.replace("²", "^2").replace("³", "^3")
     compact = compact.replace("ⁿ", "^n").replace("√", "sqrt")
     compact = compact.replace("**", "^")
     compact = re.sub(r"\s+", "", compact)
-    compact = compact.replace("*", "")
+    # Normalize common log spellings and harmless constant factors.
+    compact = compact.replace("log₂", "log").replace("log10", "log")
+    compact = compact.replace("log_2", "log").replace("log_10", "log")
+    compact = compact.replace("ln", "log")
+    compact = re.sub(r"^o\(\d+\*", "o(", compact)
 
     replacements = {
         "o(1)": "O(1)",
@@ -62,14 +68,74 @@ def normalize_complexity(complexity: Optional[str]) -> Optional[str]:
         "o(2^n)": "O(2^n)",
         "o(n!)": "O(n!)",
     }
-    return replacements.get(compact, complexity.strip())
+    normalized = replacements.get(compact)
+    if normalized:
+        return normalized
+
+    # Equivalent logarithmic bounds that use multiple input-size variables.
+    # They remain logarithmic for the problem's input scale and can safely
+    # enter the fixed ladder; other multi-variable expressions stay review-only.
+    if re.fullmatch(r"o\(log\((min|max)\([a-z],?[a-z]\)\)\)", compact):
+        return "O(log n)"
+    if compact in {"o(log(m+n))", "o(log(m+n))"}:
+        return "O(log n)"
+    # For this platform, m+n represents the total input size and is mapped
+    # to the single-size linear buckets used by the fixed scoring ladder.
+    if compact in {"o(m+n)", "o(n+m)", "o(rows+cols)", "o(cols+rows)"}:
+        return "O(n)"
+    if compact in {
+        "o((m+n)log(m+n))",
+        "o((n+m)log(n+m))",
+        "o(m+nlog(m+n))",
+    }:
+        return "O(n log n)"
+
+    # The ladder intentionally buckets every polynomial above cubic into one
+    # rank. This keeps O(n^4), O(n^5), and O(n^k) comparable without adding
+    # unbounded ranks while preserving exponential and factorial levels.
+    polynomial_match = re.fullmatch(r"o\(n\^(\d+)\)", compact)
+    if polynomial_match and int(polynomial_match.group(1)) >= 4:
+        return "O(n^4+)"
+    polynomial_match = re.fullmatch(r"o\(n(\d+)\)", compact)
+    if polynomial_match and int(polynomial_match.group(1)) >= 4:
+        return "O(n^4+)"
+
+    # Fixed ten-bucket projection of the wider asymptotic hierarchy. These
+    # rules cover common logarithmic powers and fractional polynomial terms.
+    if re.fullmatch(r"o\((log|loglog|logloglog|log\*)n?\)", compact):
+        return "O(log n)"
+    if re.fullmatch(r"o\(log\^\d+n\)", compact):
+        return "O(log n)"
+    if re.fullmatch(r"o\(\(?logn\)?\^\d+\)", compact):
+        return "O(log n)"
+    if compact in {"o(sqrtlogn)", "o(n^(1/4))", "o(n^(1/3))", "o(sqrtn)"}:
+        return "O(sqrt n)"
+    if compact in {"o(n/logn)", "o(n/log^2n)", "o(n^(1/2))"}:
+        return "O(sqrt n)"
+    if compact in {"o(nloglogn)", "o(nlog^2n)", "o(nlog^3n)", "o(n^(3/2))"}:
+        return "O(n log n)"
+    if compact in {"o(n^2/logn)", "o(n^2/log^2n)"}:
+        return "O(n^2)"
+    if compact in {"o(n^2loglogn)", "o(n^2logn)", "o(n^2log^2n)", "o(n^(5/2))"}:
+        return "O(n^3)"
+    if compact in {"o(n^3logn)", "o(n^3log^2n)"}:
+        return "O(n^4+)"
+    if re.fullmatch(r"o\(n\^\(logn\)\)", compact):
+        return "O(n^4+)"
+    if compact in {"o(2^sqrt(n))", "o(2^sqrt n)"}:
+        return "O(n^4+)"
+    if re.fullmatch(r"o\((2|3|4)\^n\*?n?(\^2)?\)", compact):
+        return "O(2^n)"
+    if re.fullmatch(r"o\(c\^n\)", compact):
+        return "O(2^n)"
+    return complexity.strip()
 
 
 def complexity_rank(complexity: str) -> int:
     normalized = normalize_complexity(complexity)
     if normalized not in TIME_COMPLEXITY_LEVELS:
         raise ValueError(f"Unsupported single-variable complexity: {complexity}")
-    # The approved assessment policy uses ranks 1 through 9, not zero-based
+    # The approved assessment policy uses ranks 1 through 10, not zero-based
     # array indexes. This makes the stored rank and its explanation unambiguous.
     return TIME_COMPLEXITY_LEVELS.index(normalized) + 1
 
@@ -122,7 +188,8 @@ def private_time_complexity_breakdown(
     optimal_rank = complexity_rank(normalized_target)
     student_rank = complexity_rank(normalized_student)
     difference = student_rank - optimal_rank
-    penalty = 0.0 if difference <= 0 else min(25.0, difference * 2.777777777777778)
+    # Ten levels create nine intervals between the best and worst ranks.
+    penalty = 0.0 if difference <= 0 else min(25.0, difference * (25.0 / 9.0))
     marks = round(max(0.0, min(25.0, 25.0 - penalty)), 3)
 
     if difference <= 0:
@@ -156,7 +223,7 @@ def private_time_complexity_breakdown(
 def private_space_complexity_breakdown(
     optimal_space: Optional[str], student_space: Optional[str]
 ) -> dict[str, Any]:
-    """Apply the same private 1–9 rank-distance policy to auxiliary space."""
+    """Apply the same private 1–10 rank-distance policy to auxiliary space."""
     result = private_time_complexity_breakdown(optimal_space, student_space)
     result["student_space_complexity"] = result.get("student_time_complexity")
     if result.get("status") == "SCORED":

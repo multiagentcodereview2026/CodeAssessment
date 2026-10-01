@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Code, ArrowRight, CheckCircle, Search, Filter } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 
 const SkeletonCard = () => (
   <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between animate-pulse">

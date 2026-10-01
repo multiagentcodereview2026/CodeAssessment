@@ -1,9 +1,9 @@
+/* eslint-disable react-hooks/set-state-in-effect, no-empty, no-unused-vars */
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircle, Clock, Cpu, Target, ArrowUp, Zap, Code2, ArrowLeft } from 'lucide-react';
-import { LineChart, Line, ResponsiveContainer } from 'recharts';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 
 const ScoreBar = ({ label, score, maxScore, colorClass, delay = 0 }) => (
   <motion.div 

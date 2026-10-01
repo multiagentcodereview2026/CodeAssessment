@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 
 const progressData = [
   { date: 'Apr 1', score: 30 }, { date: 'Apr 8', score: 45 }, { date: 'Apr 15', score: 42 }, 

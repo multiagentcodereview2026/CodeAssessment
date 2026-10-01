@@ -1,26 +1,35 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-
-const AuthContext = createContext(null);
+import { useState, useEffect, useCallback } from 'react';
+import { AuthContext } from './auth-context';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => Boolean(localStorage.getItem('evaluator_token')));
 
   useEffect(() => {
-    // Restore session from localStorage
     const storedToken = localStorage.getItem('evaluator_token');
-    const storedUser = localStorage.getItem('evaluator_user');
-    if (storedToken && storedUser) {
-      try {
+    if (!storedToken) return;
+
+    fetch('/api/auth/me', { headers: { Authorization: `Bearer ${storedToken}` } })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Stored session is no longer valid');
+        const userData = await response.json();
+        const userObj = {
+          id: userData.id,
+          username: userData.username || userData.id,
+          name: userData.name,
+          email: userData.email,
+          role: userData.role
+        };
         setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-      } catch (e) {
+        setUser(userObj);
+        localStorage.setItem('evaluator_user', JSON.stringify(userObj));
+      })
+      .catch(() => {
         localStorage.removeItem('evaluator_token');
         localStorage.removeItem('evaluator_user');
-      }
-    }
-    setLoading(false);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   // Authenticated fetch helper — attaches Bearer token automatically
@@ -37,7 +46,14 @@ export const AuthProvider = ({ children }) => {
     if (options.body && !(options.body instanceof FormData) && !(options.body instanceof URLSearchParams)) {
       headers['Content-Type'] = headers['Content-Type'] || 'application/json';
     }
-    return fetch(url, { ...options, headers });
+    const response = await fetch(url, { ...options, headers });
+    if (response.status === 401) {
+      setToken(null);
+      setUser(null);
+      localStorage.removeItem('evaluator_token');
+      localStorage.removeItem('evaluator_user');
+    }
+    return response;
   }, [token]);
 
   // Register a new user
@@ -61,52 +77,35 @@ export const AuthProvider = ({ children }) => {
 
   // Login via API
   const login = async (username, password, selectedRole = 'student') => {
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: username,
-          role: selectedRole,
-          password: password || 'password'
-        })
-      });
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: username,
+        role: selectedRole,
+        password
+      })
+    });
 
-      if (response.ok) {
-        const userData = await response.json();
-        const userObj = {
-          id: userData.id,
-          username: userData.id,
-          name: userData.name || userData.id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-          email: userData.email,
-          role: userData.role || selectedRole || 'student'
-        };
-        setUser(userObj);
-        setToken('session-token');
-        localStorage.setItem('evaluator_token', 'session-token');
-        localStorage.setItem('evaluator_user', JSON.stringify(userObj));
-        return userObj;
-      }
-    } catch (e) {
-      console.warn("Backend auth unavailable, falling back to mock login:", e);
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Login failed');
     }
 
-    // Testing fallback: allow login with any credentials when backend is down or mock test
-    const cleanId = username?.trim() || (selectedRole === 'instructor' ? 'demo_instructor' : 'demo_student');
-    const formattedName = cleanId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    const determinedRole = selectedRole || (cleanId.toLowerCase().includes('instructor') ? 'instructor' : 'student');
-    const mockUser = {
-      id: cleanId,
-      username: cleanId,
-      name: formattedName,
-      email: `${cleanId.toLowerCase()}@kmit.in`,
-      role: determinedRole
+    const userData = await response.json();
+    const userObj = {
+      id: userData.id,
+      username: userData.username || userData.id,
+      name: userData.name || userData.id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+      email: userData.email,
+      role: userData.role || selectedRole || 'student'
     };
-    setUser(mockUser);
-    setToken('mock-token');
-    localStorage.setItem('evaluator_user', JSON.stringify(mockUser));
-    localStorage.setItem('evaluator_token', 'mock-token');
-    return mockUser;
+    if (!userData.access_token) throw new Error('Authentication response did not include a session token');
+    setUser(userObj);
+    setToken(userData.access_token);
+    localStorage.setItem('evaluator_token', userData.access_token);
+    localStorage.setItem('evaluator_user', JSON.stringify(userObj));
+    return userObj;
   };
 
   const switchRole = (newRole) => {
@@ -116,11 +115,21 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('evaluator_user', JSON.stringify(updatedUser));
   };
 
-  const logout = () => {
-    setUser(null);
-    setToken(null);
-    localStorage.removeItem('evaluator_user');
-    localStorage.removeItem('evaluator_token');
+  const logout = async () => {
+    const currentToken = token || localStorage.getItem('evaluator_token');
+    try {
+      if (currentToken) {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${currentToken}` }
+        });
+      }
+    } finally {
+      setUser(null);
+      setToken(null);
+      localStorage.removeItem('evaluator_user');
+      localStorage.removeItem('evaluator_token');
+    }
   };
 
   return (
@@ -130,4 +139,3 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-export const useAuth = () => useContext(AuthContext);

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GraduationCap, Code2, Users, ArrowRight, ShieldCheck, Mail, Lock, User, Sparkles, Eye, EyeOff } from 'lucide-react';
 
@@ -16,25 +16,6 @@ const Login = () => {
   const [success, setSuccess] = useState('');
   const { login, register } = useAuth();
   const navigate = useNavigate();
-
-  // Auto-fill demo credentials for login mode
-  useEffect(() => {
-    if (mode === 'login') {
-      if (role === 'student') {
-        setUsername('demo_student');
-        setPassword('demo_student');
-      } else {
-        setUsername('demo_instructor');
-        setPassword('demo_instructor');
-      }
-    } else {
-      setUsername('');
-      setPassword('');
-      setEmail('');
-    }
-    setError('');
-    setSuccess('');
-  }, [role, mode]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -150,7 +131,10 @@ const Login = () => {
               <div className="flex items-center justify-center"><GraduationCap className="w-4 h-4 mr-2" /> Student</div>
             </button>
             <button
-              onClick={() => setRole('instructor')}
+              onClick={() => {
+                setRole('instructor');
+                setMode('login');
+              }}
               className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-300 ${
                 role === 'instructor' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
@@ -174,14 +158,16 @@ const Login = () => {
             >
               Sign In
             </button>
-            <button
-              onClick={() => setMode('register')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all duration-300 ${
-                mode === 'register' ? `bg-${accentColor}-600 text-white shadow-sm` : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Register
-            </button>
+            {role === 'student' && (
+              <button
+                onClick={() => setMode('register')}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all duration-300 ${
+                  mode === 'register' ? `bg-${accentColor}-600 text-white shadow-sm` : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Register
+              </button>
+            )}
           </motion.div>
 
           <AnimatePresence mode="wait">

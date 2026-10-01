@@ -1,256 +1,274 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import {
-  CalendarCheck,
-  Plus,
-  Calendar,
-  BookOpen,
-  CheckCircle2,
-  Clock,
-  ArrowRight,
-  Sparkles,
-  FileCode2,
-  Trash2,
-  BarChart3
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { BarChart3, Calendar, FileCode2, Plus, Trash2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/useAuth';
 import { Assignment } from '../../types';
 import { Modal } from '../common/Modal';
-import { MOCK_PROBLEMS } from '../../mock/data';
+
+type ProblemOption = { id: string; title: string; difficulty: string; category?: string };
 
 export const AssignmentsManagerView: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { authFetch } = useAuth();
   const { assignments, addAssignment, deleteAssignment, courses } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedAsgForAnalytics, setSelectedAsgForAnalytics] = useState<Assignment | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [course, setCourse] = useState(courses[0]?.code ? `${courses[0].code} ${courses[0].title}` : 'CSE-301 Data Structures');
-  const [dueDate, setDueDate] = useState('15 June, 2026');
-  const [selectedProbIds, setSelectedProbIds] = useState<string[]>(['prob-1', 'prob-2']);
+  const [selectedCourseId, setSelectedCourseId] = useState(searchParams.get('courseId') || '');
+  const [dueDate, setDueDate] = useState('');
+  const [selectedProblemIds, setSelectedProblemIds] = useState<string[]>([]);
+  const [problemOptions, setProblemOptions] = useState<ProblemOption[]>([]);
+  const [problemsLoading, setProblemsLoading] = useState(true);
+  const [problemLoadError, setProblemLoadError] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const handleToggleProb = (id: string) => {
-    if (selectedProbIds.includes(id)) {
-      setSelectedProbIds(selectedProbIds.filter((p) => p !== id));
-    } else {
-      setSelectedProbIds([...selectedProbIds, id]);
+  useEffect(() => {
+    let cancelled = false;
+    authFetch('/api/problems', { cache: 'no-store' })
+      .then(async (response: Response) => {
+        if (!response.ok) throw new Error('Problem Bank could not be loaded.');
+        return response.json();
+      })
+      .then((data: unknown) => {
+        if (!cancelled) setProblemOptions(Array.isArray(data) ? data : []);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setProblemLoadError(error instanceof Error ? error.message : 'Problem Bank could not be loaded.');
+      })
+      .finally(() => {
+        if (!cancelled) setProblemsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [authFetch]);
+
+  const toggleProblem = (problemId: string) => {
+    setSelectedProblemIds((current) => current.includes(problemId)
+      ? current.filter((id) => id !== problemId)
+      : [...current, problemId]);
+  };
+
+  const createAssignment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const course = courses.find((item) => String(item.id) === selectedCourseId) || courses[0];
+    if (!course || !title.trim() || selectedProblemIds.length === 0) return;
+
+    setSaving(true);
+    const assignment: Assignment & { courseId: number; problemIds: string[] } = {
+      id: `pending-${Date.now()}`,
+      title: title.trim(),
+      description: description.trim(),
+      course: `${course.code} ${course.title}`,
+      problemsCount: selectedProblemIds.length,
+      problemIds: selectedProblemIds,
+      submittedCount: 0,
+      totalCount: 0,
+      avgScore: 0,
+      dueDate,
+      status: 'Active',
+      courseId: Number(course.id)
+    };
+
+    try {
+      await addAssignment(assignment);
+      setIsModalOpen(false);
+      setTitle('');
+      setDescription('');
+      setDueDate('');
+      setSelectedProblemIds([]);
+    } catch {
+      // AppContext displays the API error and leaves the draft available to retry.
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleCreateAssignment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editAssignmentId, setEditAssignmentId] = useState<string>('');
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editStatus, setEditStatus] = useState('ACTIVE');
+  const [editHasSubmissions, setEditHasSubmissions] = useState(false);
+  const [editProblemIds, setEditProblemIds] = useState<string[]>([]);
+  const [editCourseId, setEditCourseId] = useState('');
 
-    const newAssignment: Assignment = {
-      id: `asg-${Date.now()}`,
-      title: title.trim(),
-      description: description.trim() || 'Algorithmic problem set with automated multi-agent rubric grading.',
-      course,
-      problemsCount: selectedProbIds.length,
-      problemIds: selectedProbIds,
-      submittedCount: 0,
-      totalCount: 48,
-      avgScore: 0,
-      dueDate,
-      status: 'Active'
-    };
-
-    addAssignment(newAssignment);
-    setIsModalOpen(false);
-    setTitle('');
-    setDescription('');
+  const openEditModal = (assignment: Assignment & { courseId?: number }) => {
+    setEditAssignmentId(String(assignment.id));
+    setEditTitle(assignment.title);
+    setEditDescription(assignment.description || '');
+    setEditDueDate(assignment.dueDate || '');
+    setEditStatus(assignment.status.toUpperCase() === 'CLOSED' ? 'CLOSED' : 'ACTIVE');
+    setEditHasSubmissions(assignment.submittedCount > 0);
+    setEditProblemIds(assignment.problemIds || []);
+    setEditCourseId(String(assignment.courseId || ''));
+    setIsEditModalOpen(true);
   };
 
-  const handleOpenAnalytics = (asg: Assignment) => {
-    navigate('/instructor/analytics');
+  const updateAssignment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editAssignmentId) return;
+    setSaving(true);
+    
+    try {
+      const response = await authFetch(`/api/instructor/assignments/${editAssignmentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editHasSubmissions ? undefined : editTitle.trim(),
+          description: editHasSubmissions ? undefined : editDescription.trim(),
+          due_date: editHasSubmissions ? undefined : (editDueDate ? new Date(editDueDate).toISOString() : null),
+          status: editStatus,
+          problem_ids: editHasSubmissions ? undefined : editProblemIds
+        })
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(()=>({}));
+        throw new Error(err.detail || 'Failed to update assignment');
+      }
+      setIsEditModalOpen(false);
+      // We can force a reload of assignments by window.location.reload() or rely on context if we update it.
+      window.location.reload(); 
+    } catch (err) {
+       alert(err instanceof Error ? err.message : 'Failed to update assignment');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="space-y-6 pb-12 animate-fadeIn">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <main className="space-y-6 pb-12">
+      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Assignments Management
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Create, schedule, and configure sandbox constraints and automated AI grading rubrics.
-          </p>
+          <h1 className="text-2xl font-bold text-slate-900">Assignments</h1>
+          <p className="mt-1 text-sm text-slate-500">Manage coursework linked to your saved courses.</p>
         </div>
-
         <button
           onClick={() => setIsModalOpen(true)}
-          className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+          disabled={!courses.length}
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
         >
-          <Plus className="w-4 h-4" />
-          <span>+ Create Assignment</span>
+          <Plus className="h-4 w-4" /> Create assignment
         </button>
-      </div>
+      </header>
 
-      {/* Assignment Cards */}
-      <div className="space-y-4">
-        {assignments.map((asg) => (
-          <div
-            key={asg.id}
-            className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-7 shadow-xs hover:border-emerald-300 card-hover transition-all flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6"
-          >
-            <div className="flex items-start gap-4">
-              <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-2xl flex-shrink-0 shadow-xs">
-                <FileCode2 className="w-6 h-6" />
-              </div>
-              <div className="space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <h3 className="text-base font-bold text-slate-900">{asg.title}</h3>
-                  <span className="px-2.5 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                    {asg.status}
-                  </span>
-                  <span className="text-xs font-mono text-slate-500 flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    Due: {asg.dueDate}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 max-w-xl">{asg.description}</p>
-                <div className="flex items-center gap-4 text-xs text-slate-500 pt-1 font-mono">
-                  <span>Course: <strong className="text-slate-800 font-sans">{asg.course}</strong></span>
-                  <span>Problems: <strong className="text-slate-800">{asg.problemsCount}</strong></span>
+      {assignments.length === 0 ? (
+        <p className="border-y border-slate-200 py-10 text-center text-sm text-slate-500">No assignments yet.</p>
+      ) : (
+        <div className="divide-y divide-slate-200 border-y border-slate-200">
+          {assignments.map((assignment) => (
+            <article key={assignment.id} className="flex flex-col justify-between gap-4 py-5 sm:flex-row sm:items-center">
+              <div className="flex items-start gap-3">
+                <FileCode2 className="mt-0.5 h-5 w-5 text-emerald-700" />
+                <div>
+                  <h2 className="font-semibold text-slate-900">{assignment.title}</h2>
+                  <p className="mt-1 text-xs text-slate-500">{assignment.course} · {assignment.problemsCount} problems · {assignment.status}</p>
+                  <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500"><Calendar className="h-3.5 w-3.5" />{assignment.dueDate}</p>
                 </div>
               </div>
-            </div>
-
-            {/* Submission Rate & Average */}
-            <div className="flex items-center gap-6 w-full lg:w-auto justify-between lg:justify-end border-t lg:border-t-0 pt-4 lg:pt-0 border-slate-100">
-              <div className="text-right">
-                <span className="text-[11px] text-slate-400 uppercase font-semibold block">Submissions</span>
-                <span className="text-sm font-extrabold text-slate-900 font-mono">
-                  {asg.submittedCount} / {asg.totalCount}
-                </span>
+              <div className="flex items-center gap-5">
+                <div className="text-right text-xs text-slate-600">
+                  <div>{assignment.submittedCount}/{assignment.totalCount} submissions</div>
+                  <div>{assignment.avgScore == null ? 'No graded submissions yet' : `Average ${assignment.avgScore}%`}</div>
+                </div>
+                <button title="Edit assignment" onClick={() => openEditModal(assignment)} className="rounded-md p-2 text-slate-600 hover:bg-slate-100 font-semibold text-xs border border-slate-200">Edit</button>
+                <button title="View assignment analytics" onClick={() => navigate(`/instructor/analytics?assignmentId=${assignment.id}`)} className="rounded-md p-2 text-slate-600 hover:bg-slate-100"><BarChart3 className="h-4 w-4" /></button>
+                <button title="Archive assignment" onClick={() => void deleteAssignment(assignment.id).catch(() => {})} className="rounded-md p-2 text-slate-600 hover:bg-rose-50 hover:text-rose-700"><Trash2 className="h-4 w-4" /></button>
               </div>
+            </article>
+          ))}
+        </div>
+      )}
 
-              <div className="text-right">
-                <span className="text-[11px] text-slate-400 uppercase font-semibold block">Average Score</span>
-                <span className="text-sm font-extrabold text-emerald-600 font-mono">
-                  {asg.avgScore ? `${asg.avgScore}%` : 'N/A'}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleOpenAnalytics(asg)}
-                  className="px-4 py-2.5 bg-slate-900 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 hover:scale-105 active:scale-95 cursor-pointer"
-                >
-                  <BarChart3 className="w-3.5 h-3.5" />
-                  <span>Analytics</span>
-                </button>
-                <button
-                  onClick={() => deleteAssignment(asg.id)}
-                  title="Delete Assignment"
-                  className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+      {/* Edit Modal */}
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Edit assignment" subtitle={editHasSubmissions ? "Submissions exist. You can only update the status." : "Update assignment details and problems."} maxWidth="xl">
+        <form onSubmit={updateAssignment} className="space-y-4 text-sm">
+          {editHasSubmissions && (
+             <div className="p-3 bg-yellow-50 text-yellow-800 text-xs rounded border border-yellow-200">
+                This assignment has submissions. Content, problems, and dates are locked.
+             </div>
+          )}
+          <label className="block font-semibold text-slate-700">Title
+            <input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} required disabled={editHasSubmissions} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 disabled:bg-slate-100" />
+          </label>
+          <label className="block font-semibold text-slate-700">Description
+            <textarea value={editDescription} onChange={(event) => setEditDescription(event.target.value)} rows={3} disabled={editHasSubmissions} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 disabled:bg-slate-100" />
+          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+             <label className="block font-semibold text-slate-700">Status
+               <select value={editStatus} onChange={(event) => setEditStatus(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5">
+                  <option value="ACTIVE">Active</option>
+                  <option value="CLOSED">Closed</option>
+               </select>
+            </label>
+            <label className="block font-semibold text-slate-700">Due date
+              <input type="date" value={editDueDate} onChange={(event) => setEditDueDate(event.target.value)} disabled={editHasSubmissions} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 disabled:bg-slate-100" />
+            </label>
           </div>
-        ))}
-      </div>
-
-      {/* Create Assignment Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Create New Coding Assignment"
-        subtitle="Configure problem sets, due dates, and grading constraints"
-        maxWidth="xl"
-      >
-        <form onSubmit={handleCreateAssignment} className="space-y-4 text-xs">
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">Assignment Title</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              placeholder="e.g. Dynamic Programming & Memoization Lab"
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium"
-            />
-          </div>
-
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">Instructions / Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              placeholder="Provide context and complexity constraints..."
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-sans"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Course Cohort</label>
-              <select
-                value={course}
-                onChange={(e) => setCourse(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium cursor-pointer"
-              >
-                {courses.map(c => (
-                  <option key={c.id} value={`${c.code} ${c.title}`}>
-                    {c.code} - {c.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Due Date</label>
-              <input
-                type="text"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block font-bold text-slate-700 mb-2">Select Problems from Bank:</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200">
-              {MOCK_PROBLEMS.map((prob) => {
-                const selected = selectedProbIds.includes(prob.id);
+          <fieldset>
+            <legend className="mb-2 font-semibold text-slate-700">Problem Bank</legend>
+            <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+              {problemsLoading && <p className="p-3 text-slate-500">Loading problems…</p>}
+              {problemOptions.map((problem) => {
+                const checked = editProblemIds.includes(problem.id);
                 return (
-                  <div
-                    key={prob.id}
-                    onClick={() => handleToggleProb(prob.id)}
-                    className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between text-xs transition-all ${
-                      selected ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold shadow-xs' : 'bg-white border-slate-200 text-slate-700'
-                    }`}
-                  >
-                    <span>{prob.title}</span>
-                    <span className="text-[10px] text-slate-400 font-mono">{prob.difficulty}</span>
-                  </div>
+                  <label key={problem.id} className={`flex cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2 ${checked ? 'bg-emerald-50' : 'hover:bg-slate-50'} ${editHasSubmissions ? 'opacity-70 cursor-not-allowed' : ''}`}>
+                    <span className="flex min-w-0 items-center gap-2"><input type="checkbox" checked={checked} disabled={editHasSubmissions} onChange={() => setEditProblemIds(c => c.includes(problem.id) ? c.filter(id=>id!==problem.id) : [...c, problem.id])} /><span className="truncate">{problem.title}</span></span>
+                    <span className="shrink-0 text-xs text-slate-500">{problem.difficulty}</span>
+                  </label>
                 );
               })}
             </div>
-          </div>
-
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-bold transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer"
-            >
-              Publish Assignment
-            </button>
-          </div>
+          </fieldset>
+          <footer className="flex justify-end gap-2 border-t border-slate-200 pt-4">
+            <button type="button" onClick={() => setIsEditModalOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-700">Cancel</button>
+            <button type="submit" disabled={saving || (!editHasSubmissions && !editProblemIds.length)} className="rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white disabled:opacity-50">{saving ? 'Saving…' : 'Save changes'}</button>
+          </footer>
         </form>
       </Modal>
-    </div>
+
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Create coding assignment" subtitle="Choose a course and real Problem Bank entries" maxWidth="xl">
+        <form onSubmit={createAssignment} className="space-y-4 text-sm">
+          <label className="block font-semibold text-slate-700">Title
+            <input value={title} onChange={(event) => setTitle(event.target.value)} required className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
+          </label>
+          <label className="block font-semibold text-slate-700">Description
+            <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
+          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block font-semibold text-slate-700">Course
+              <select value={courses.some((item) => String(item.id) === selectedCourseId) ? selectedCourseId : String(courses[0]?.id || '')} onChange={(event) => setSelectedCourseId(event.target.value)} required className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5">
+                {courses.map((course) => <option key={course.id} value={String(course.id)}>{course.code} · {course.title}</option>)}
+              </select>
+            </label>
+            <label className="block font-semibold text-slate-700">Due date
+              <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
+            </label>
+          </div>
+          <fieldset>
+            <legend className="mb-2 font-semibold text-slate-700">Problem Bank</legend>
+            <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+              {problemsLoading && <p className="p-3 text-slate-500">Loading problems…</p>}
+              {problemLoadError && <p role="alert" className="p-3 text-rose-700">{problemLoadError}</p>}
+              {!problemsLoading && !problemLoadError && problemOptions.length === 0 && <p className="p-3 text-slate-500">No problems are available.</p>}
+              {problemOptions.map((problem) => {
+                const checked = selectedProblemIds.includes(problem.id);
+                return (
+                  <label key={problem.id} className={`flex cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2 ${checked ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}>
+                    <span className="flex min-w-0 items-center gap-2"><input type="checkbox" checked={checked} onChange={() => toggleProblem(problem.id)} /><span className="truncate">{problem.title}</span></span>
+                    <span className="shrink-0 text-xs text-slate-500">{problem.difficulty}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+          <footer className="flex justify-end gap-2 border-t border-slate-200 pt-4">
+            <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-700">Cancel</button>
+            <button type="submit" disabled={saving || !courses.length || !selectedProblemIds.length || problemsLoading || Boolean(problemLoadError)} className="rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white disabled:opacity-50">{saving ? 'Saving…' : 'Publish assignment'}</button>
+          </footer>
+        </form>
+      </Modal>
+    </main>
   );
 };

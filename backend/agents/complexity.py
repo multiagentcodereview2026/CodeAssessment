@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
+import re
 
 from pydantic import BaseModel, Field
 
@@ -50,6 +51,49 @@ def unavailable_analysis(reason: str) -> Dict[str, Any]:
     }
 
 
+def infer_static_complexity(source_code: str) -> Dict[str, Any]:
+    """Conservative local fallback for common, recognizable code shapes.
+
+    This is intentionally modest: it provides useful results during model
+    outages and returns review-required values for patterns it cannot justify.
+    """
+    code = source_code.lower()
+    has_loop = bool(re.search(r"\b(for|while)\s*\(", code))
+    has_binary_search = (
+        has_loop and "mid" in code and
+        ("left" in code or "low" in code) and
+        ("right" in code or "high" in code)
+    )
+    has_sort = bool(re.search(r"\b(sort|stable_sort)\s*\(", code))
+    nested_loop = bool(re.search(
+        r"(?:for|while)[^\n]{0,180}\n(?:\s|\{)*[^\n]*(?:for|while)\s*\(", code
+    ))
+
+    if has_binary_search:
+        time_complexity = "O(log n)"
+    elif has_sort:
+        time_complexity = "O(n log n)"
+    elif nested_loop:
+        time_complexity = "O(n^2)"
+    elif has_loop:
+        time_complexity = "O(n)"
+    else:
+        time_complexity = None
+
+    allocates_linear_storage = bool(re.search(
+        r"\b(vector|unordered_map|unordered_set|map|set|array)\b|\.push_back\s*\(",
+        code,
+    ))
+    space_complexity = "O(n)" if allocates_linear_storage else ("O(1)" if time_complexity else None)
+    return {
+        "time_complexity": time_complexity,
+        "space_complexity": space_complexity,
+        "bottlenecks": ["Local static fallback used because the complexity model was unavailable."],
+        "optimization_suggestion": "Verify the inferred complexity during review." if time_complexity else "Manual complexity review is required.",
+        "reasoning": "Conservative local loop, sorting, search, and allocation pattern analysis.",
+    }
+
+
 async def analyze_student_complexity(
     problem: Dict[str, Any], source_code: str, language: str
 ) -> Dict[str, Any]:
@@ -73,6 +117,8 @@ async def analyze_student_complexity(
         ComplexityOutput,
         unavailable_analysis("The complexity analysis model was unavailable, so no complexity was inferred."),
     )
+    if not result.get("time_complexity") and not result.get("space_complexity"):
+        result = infer_static_complexity(source_code)
     return {
         "time_complexity": normalize_complexity(result.get("time_complexity")),
         "space_complexity": normalize_complexity(result.get("space_complexity")),

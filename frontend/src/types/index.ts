@@ -191,7 +191,7 @@ export interface CategoryScore {
 }
 
 export interface StudentProgress {
-  overallScore: number;
+  overallScore: number | null;
   problemsSolved: number;
   totalProblems: number;
   currentStreak: number;
@@ -229,7 +229,7 @@ export interface Assignment {
   problemIds: string[];
   submittedCount: number;
   totalCount: number;
-  avgScore: number;
+  avgScore: number | null;
   dueDate: string;
   status: 'Active' | 'Upcoming' | 'Closed';
 }

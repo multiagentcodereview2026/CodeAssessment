@@ -23,23 +23,27 @@ export const CoursesManagerView: React.FC = () => {
   const [newTitle, setNewTitle] = useState('');
   const [newTerm, setNewTerm] = useState('Spring 2026');
 
-  const handleCreateCourse = (e: React.FormEvent) => {
+  const handleCreateCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
-    addCourse({
-      id: `c-${Date.now()}`,
-      code: newCode.trim().toUpperCase() || 'CSE-305',
-      title: newTitle.trim(),
-      term: newTerm,
-      studentsCount: 0,
-      activeAssignments: 0,
-      avgGrade: 'N/A'
-    });
+    try {
+      await addCourse({
+        id: '',
+        code: newCode.trim().toUpperCase(),
+        title: newTitle.trim(),
+        term: newTerm,
+        studentsCount: 0,
+        activeAssignments: 0,
+        avgGrade: 'N/A'
+      });
 
-    setIsModalOpen(false);
-    setNewCode('');
-    setNewTitle('');
+      setIsModalOpen(false);
+      setNewCode('');
+      setNewTitle('');
+    } catch {
+      // The context reports the API error; keep the form open for retry.
+    }
   };
 
   return (
@@ -79,8 +83,12 @@ export const CoursesManagerView: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono text-slate-400">{course.term}</span>
                   <button
-                    onClick={() => deleteCourse(course.id)}
-                    title="Delete Course"
+                    onClick={() => {
+                      if (window.confirm(`Archive ${course.code} ${course.title}?`)) {
+                        void deleteCourse(course.id).catch(() => {});
+                      }
+                    }}
+                    title="Archive Course"
                     className="text-slate-300 hover:text-rose-600 p-1 transition-colors cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -94,7 +102,7 @@ export const CoursesManagerView: React.FC = () => {
 
               <div className="grid grid-cols-3 gap-3 pt-4 border-t border-slate-100 text-center">
                 <div
-                  onClick={() => navigate('/instructor/students')}
+                  onClick={() => navigate(`/instructor/courses/${course.id}?tab=students`)}
                   className="p-3 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-emerald-50/50 cursor-pointer transition-colors"
                 >
                   <span className="text-[10px] text-slate-400 font-semibold block">Students</span>
@@ -104,7 +112,7 @@ export const CoursesManagerView: React.FC = () => {
                 </div>
 
                 <div
-                  onClick={() => navigate('/instructor/problems')}
+                  onClick={() => navigate(`/instructor/courses/${course.id}?tab=assignments`)}
                   className="p-3 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-emerald-50/50 cursor-pointer transition-colors"
                 >
                   <span className="text-[10px] text-slate-400 font-semibold block">Questions</span>
@@ -127,7 +135,7 @@ export const CoursesManagerView: React.FC = () => {
 
             <div className="flex items-center justify-between pt-4 border-t border-slate-100">
               <button
-                onClick={() => navigate('/instructor/students')}
+                onClick={() => navigate(`/instructor/courses/${course.id}?tab=students`)}
                 className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 cursor-pointer"
               >
                 <span>View Cohort Roster</span>
@@ -135,7 +143,7 @@ export const CoursesManagerView: React.FC = () => {
               </button>
 
               <button
-                onClick={() => navigate('/instructor/problems')}
+                onClick={() => navigate(`/instructor/courses/${course.id}`)}
                 className="px-4 py-2 bg-slate-900 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer"
               >
                 Manage Class

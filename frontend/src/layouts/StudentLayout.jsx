@@ -3,6 +3,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Code2,
+  BookOpen,
   ListOrdered,
   LineChart,
   MessageSquareText,
@@ -16,7 +17,7 @@ import {
   ShieldCheck,
   BellRing
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { useApp } from '../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -49,6 +50,7 @@ const StudentLayout = () => {
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { name: 'My Courses', path: '/courses', icon: BookOpen },
     { name: 'Problems', path: '/problems', icon: Code2 },
     { name: 'Submissions', path: '/submissions', icon: ListOrdered },
     { name: 'Analytics & Progress', path: '/analytics', icon: LineChart },

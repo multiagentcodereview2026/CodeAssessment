@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation, Link } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider } from './context/AuthContext';
+import { useAuth } from './context/useAuth';
 import { AppProvider } from './context/AppContext';
 import Login from './pages/Login';
 import StudentLayout from './layouts/StudentLayout';
@@ -16,11 +17,13 @@ import { SubmissionsList } from './components/student/SubmissionsList';
 import { AnalyticsProgressView } from './components/student/AnalyticsProgressView';
 import { FeedbackRecommendationsView } from './components/student/FeedbackRecommendationsView';
 import { StudentProfileView } from './components/student/StudentProfileView';
+import { MyCoursesView } from './components/student/MyCoursesView';
 
 // Instructor Feature Components from git
 import { InstructorDashboard } from './components/instructor/InstructorDashboard';
 import { CoursesManagerView } from './components/instructor/CoursesManagerView';
-import { StudentRosterView } from './components/instructor/StudentRosterView';
+import { CourseDetailsView } from './components/instructor/CourseDetailsView';
+import { AssignmentsManagerView } from './components/instructor/AssignmentsManagerView';
 import { ClassAnalyticsView } from './components/instructor/ClassAnalyticsView';
 import { SimilarityReviewView } from './components/instructor/SimilarityReviewView';
 import { ReportsExportView } from './components/instructor/ReportsExportView';
@@ -97,10 +100,11 @@ function AppRoutes() {
           <Route element={<StudentLayout />}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<StudentDashboard />} />
+            <Route path="courses" element={<MyCoursesView />} />
             <Route path="problems" element={<ProblemsListView />} />
             <Route path="submissions" element={<SubmissionsList />} />
             <Route path="submissions/:id" element={<AssessmentResultView />} />
-            <Route path="result" element={<AssessmentResultView />} />
+            <Route path="result" element={<Navigate to="/submissions" replace />} />
             <Route path="analytics" element={<AnalyticsProgressView />} />
             <Route path="progress" element={<AnalyticsProgressView />} />
             <Route path="feedback" element={<FeedbackRecommendationsView />} />
@@ -119,8 +123,9 @@ function AppRoutes() {
           <Route index element={<Navigate to="/instructor/dashboard" replace />} />
           <Route path="dashboard" element={<InstructorDashboard />} />
           <Route path="courses" element={<CoursesManagerView />} />
-          <Route path="students" element={<StudentRosterView />} />
-          <Route path="assignments" element={<Navigate to="/instructor/problems" replace />} />
+          <Route path="courses/:courseId" element={<CourseDetailsView />} />
+          <Route path="students" element={<Navigate to="/instructor/courses" replace />} />
+          <Route path="assignments" element={<AssignmentsManagerView />} />
           <Route path="problems" element={<ProblemsListView />} />
           <Route path="analytics" element={<ClassAnalyticsView />} />
           <Route path="similarity" element={<SimilarityReviewView />} />

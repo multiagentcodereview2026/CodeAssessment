@@ -41,7 +41,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
 
   const handleOpenReport = (subId: string) => {
     openAssessmentResult(subId);
-    navigate('/result');
+    navigate(`/submissions/${encodeURIComponent(subId)}`);
   };
 
   const handleStartPractice = (probId: string) => {
