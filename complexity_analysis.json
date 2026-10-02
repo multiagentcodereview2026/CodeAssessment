@@ -1,0 +1,202 @@
+{
+  "summary": {
+    "total": 1886,
+    "sources": {
+      "reviewed-optimal-tc-mapping": {
+        "count": 561,
+        "needs_review": 0
+      },
+      "reviewed-ground-truth": {
+        "count": 232,
+        "needs_review": 0
+      },
+      "reference-solution-or-candidate-review": {
+        "count": 1075,
+        "needs_review": 1075
+      },
+      "canonical-fixed-review": {
+        "count": 12,
+        "needs_review": 0
+      },
+      "reviewed-catalog-correction": {
+        "count": 1,
+        "needs_review": 0
+      },
+      "verified-20260927": {
+        "count": 5,
+        "needs_review": 0
+      }
+    },
+    "confidence_brackets": {
+      "high": 811,
+      "medium": 0,
+      "low": 1075
+    },
+    "needs_review_count": 1075,
+    "suspicious_patterns": []
+  },
+  "sample_verified": [
+    {
+      "id": "leetcode-2613",
+      "title": "Beautiful Pairs",
+      "tc": "O(n)",
+      "sc": "O(n)",
+      "source": "canonical-fixed-review",
+      "confidence": 1.0
+    },
+    {
+      "id": "leetcode-376",
+      "title": "Wiggle Subsequence",
+      "tc": "O(n)",
+      "sc": "O(1)",
+      "source": "reviewed-ground-truth",
+      "confidence": 1.0
+    },
+    {
+      "id": "leetcode-68",
+      "title": "Text Justification",
+      "tc": "O(n)",
+      "sc": "O(1)",
+      "source": "reviewed-optimal-tc-mapping",
+      "confidence": 1.0
+    },
+    {
+      "id": "leetcode-3258",
+      "title": "Count Substrings That Satisfy K Constraint I",
+      "tc": "O(n)",
+      "sc": "O(n)",
+      "source": "reviewed-optimal-tc-mapping",
+      "confidence": 1.0
+    },
+    {
+      "id": "leetcode-875",
+      "title": "Koko Eating Bananas",
+      "tc": "O(n log m)",
+      "sc": "O(1)",
+      "source": "reviewed-ground-truth",
+      "confidence": 1.0
+    },
+    {
+      "id": "leetcode-788",
+      "title": "Rotated Digits",
+      "tc": "O(log n)",
+      "sc": "O(log n)",
+      "source": "reviewed-ground-truth",
+      "confidence": 1.0
+    },
+    {
+      "id": "leetcode-733",
+      "title": "Flood Fill",
+      "tc": "O(mn)",
+      "sc": "O(mn)",
+      "source": "reviewed-ground-truth",
+      "confidence": 1.0
+    },
+    {
+      "id": "leetcode-452",
+      "title": "Minimum Number Of Arrows To Burst Balloons",
+      "tc": "O(n log n)",
+      "sc": "O(1)",
+      "source": "reviewed-optimal-tc-mapping",
+      "confidence": 1.0
+    },
+    {
+      "id": "leetcode-3231",
+      "title": "Minimum Number Of Increasing Subsequence To Be Removed",
+      "tc": "O(n log n)",
+      "sc": "O(1)",
+      "source": "reviewed-optimal-tc-mapping",
+      "confidence": 1.0
+    },
+    {
+      "id": "leetcode-349",
+      "title": "Intersection Of Two Arrays",
+      "tc": "O(m+n)",
+      "sc": "O(m+n)",
+      "source": "reviewed-ground-truth",
+      "confidence": 1.0
+    }
+  ],
+  "sample_needs_review": [
+    {
+      "id": "leetcode-1013",
+      "title": "Partition Array Into Three Parts With Equal Sum",
+      "tc": "O(n)",
+      "sc": "O(1)",
+      "source": "reference-solution-or-candidate-review",
+      "confidence": 0.5
+    },
+    {
+      "id": "leetcode-3014",
+      "title": "Minimum Number Of Pushes To Type Word I",
+      "tc": "O(n)",
+      "sc": "O(1)",
+      "source": "reference-solution-or-candidate-review",
+      "confidence": 0.5
+    },
+    {
+      "id": "leetcode-462",
+      "title": "Minimum Moves To Equal Array Elements Ii",
+      "tc": "O(n log n)",
+      "sc": "O(n)",
+      "source": "reference-solution-or-candidate-review",
+      "confidence": 0.5
+    },
+    {
+      "id": "leetcode-453",
+      "title": "Minimum Moves To Equal Array Elements",
+      "tc": "O(n)",
+      "sc": "O(1)",
+      "source": "reference-solution-or-candidate-review",
+      "confidence": 0.5
+    },
+    {
+      "id": "leetcode-1062",
+      "title": "Longest Repeating Substring",
+      "tc": "O(n^2)",
+      "sc": "O(n)",
+      "source": "reference-solution-or-candidate-review",
+      "confidence": 0.5
+    },
+    {
+      "id": "leetcode-1925",
+      "title": "Count Square Sum Triples",
+      "tc": "O(n^2)",
+      "sc": "O(1)",
+      "source": "reference-solution-or-candidate-review",
+      "confidence": 0.5
+    },
+    {
+      "id": "leetcode-1996",
+      "title": "The Number Of Weak Characters In The Game",
+      "tc": "O(n log n)",
+      "sc": "O(1)",
+      "source": "reference-solution-or-candidate-review",
+      "confidence": 0.5
+    },
+    {
+      "id": "leetcode-3411",
+      "title": "Maximum Subarray With Equal Products",
+      "tc": "O(n^2)",
+      "sc": "O(1)",
+      "source": "reference-solution-or-candidate-review",
+      "confidence": 0.5
+    },
+    {
+      "id": "leetcode-393",
+      "title": "Utf 8 Validation",
+      "tc": "O(n)",
+      "sc": "O(1)",
+      "source": "reference-solution-or-candidate-review",
+      "confidence": 0.5
+    },
+    {
+      "id": "leetcode-1796",
+      "title": "Second Largest Digit In A String",
+      "tc": "O(n)",
+      "sc": "O(1)",
+      "source": "reference-solution-or-candidate-review",
+      "confidence": 0.5
+    }
+  ]
+}
