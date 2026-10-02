@@ -1,0 +1,2816 @@
+================================================================================
+                    7 CODING INTERVIEW QUESTIONS
+            WITH 3 APPROACHES (BRUTE FORCE, BETTER, OPTIMAL)
+                    FULL CODE WITH STDIN/STDOUT & MAIN()
+                           TC/SC ANALYSIS
+================================================================================
+
+================================================================================
+QUESTION 1: 3SUM - FIND ALL TRIPLETS THAT SUM TO ZERO
+================================================================================
+
+PROBLEM STATEMENT:
+Given an integer array nums, return all the triplets [nums[i], nums[j], nums[k]]
+such that i != j, i != k, j != k, and nums[i] + nums[j] + nums[k] == 0.
+Solution set must not contain duplicate triplets.
+
+Example:
+  Input: nums = [-2, 0, 0, 2, 2]
+  Output: [[-2, 0, 2]]
+
+Constraints:
+  - 3 <= nums.length <= 3000
+  - -10^5 <= nums[i] <= 10^5
+
+---
+
+APPROACH 1: BRUTE FORCE (Three Nested Loops + Set)
+TC: O(n³ log n)  |  SC: O(n)
+
+C++:
+```cpp
+#include <iostream>
+#include <vector>
+#include <set>
+#include <algorithm>
+using namespace std;
+
+vector<vector<int>> threeSum(vector<int>& nums) {
+    set<vector<int>> result_set;
+    int n = nums.size();
+
+    for (int i = 0; i < n; i++) {
+        for (int j = i + 1; j < n; j++) {
+            for (int k = j + 1; k < n; k++) {
+                if (nums[i] + nums[j] + nums[k] == 0) {
+                    vector<int> triplet = {nums[i], nums[j], nums[k]};
+                    sort(triplet.begin(), triplet.end());
+                    result_set.insert(triplet);
+                }
+            }
+        }
+    }
+
+    vector<vector<int>> result(result_set.begin(), result_set.end());
+    return result;
+}
+
+int main() {
+    int n;
+    cin >> n;
+
+    vector<int> nums(n);
+    for (int i = 0; i < n; i++) {
+        cin >> nums[i];
+    }
+
+    vector<vector<int>> result = threeSum(nums);
+
+    for (auto& triplet : result) {
+        cout << triplet[0] << " " << triplet[1] << " " << triplet[2] << endl;
+    }
+
+    return 0;
+}
+```
+
+Python:
+```python
+def threeSum(nums):
+    result_set = set()
+    n = len(nums)
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            for k in range(j + 1, n):
+                if nums[i] + nums[j] + nums[k] == 0:
+                    triplet = tuple(sorted([nums[i], nums[j], nums[k]]))
+                    result_set.add(triplet)
+
+    return [list(t) for t in result_set]
+
+if __name__ == "__main__":
+    n = int(input())
+    nums = list(map(int, input().split()))
+
+    result = threeSum(nums)
+    for triplet in result:
+        print(triplet[0], triplet[1], triplet[2])
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static List<List<Integer>> threeSum(int[] nums) {
+        Set<List<Integer>> result_set = new HashSet<>();
+        int n = nums.length;
+
+        for (int i = 0; i < n; i++) {
+            for (int j = i + 1; j < n; j++) {
+                for (int k = j + 1; k < n; k++) {
+                    if (nums[i] + nums[j] + nums[k] == 0) {
+                        List<Integer> triplet = Arrays.asList(nums[i], nums[j], nums[k]);
+                        Collections.sort(triplet);
+                        result_set.add(triplet);
+                    }
+                }
+            }
+        }
+
+        return new ArrayList<>(result_set);
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int n = sc.nextInt();
+
+        int[] nums = new int[n];
+        for (int i = 0; i < n; i++) {
+            nums[i] = sc.nextInt();
+        }
+
+        List<List<Integer>> result = threeSum(nums);
+        for (List<Integer> triplet : result) {
+            System.out.println(triplet.get(0) + " " + triplet.get(1) + " " + triplet.get(2));
+        }
+    }
+}
+```
+
+---
+
+APPROACH 2: SORTING + HASH SET
+TC: O(n² log n)  |  SC: O(n)
+
+C++:
+```cpp
+#include <iostream>
+#include <vector>
+#include <set>
+#include <algorithm>
+using namespace std;
+
+vector<vector<int>> threeSum(vector<int>& nums) {
+    set<vector<int>> result_set;
+    sort(nums.begin(), nums.end());
+    int n = nums.size();
+
+    for (int i = 0; i < n; i++) {
+        set<int> seen;
+        int target = -nums[i];
+
+        for (int j = i + 1; j < n; j++) {
+            int complement = target - nums[j];
+
+            if (seen.count(complement)) {
+                vector<int> triplet = {nums[i], complement, nums[j]};
+                sort(triplet.begin(), triplet.end());
+                result_set.insert(triplet);
+            }
+
+            seen.insert(nums[j]);
+        }
+    }
+
+    vector<vector<int>> result(result_set.begin(), result_set.end());
+    return result;
+}
+
+int main() {
+    int n;
+    cin >> n;
+
+    vector<int> nums(n);
+    for (int i = 0; i < n; i++) {
+        cin >> nums[i];
+    }
+
+    vector<vector<int>> result = threeSum(nums);
+
+    for (auto& triplet : result) {
+        cout << triplet[0] << " " << triplet[1] << " " << triplet[2] << endl;
+    }
+
+    return 0;
+}
+```
+
+Python:
+```python
+def threeSum(nums):
+    result_set = set()
+    nums.sort()
+    n = len(nums)
+
+    for i in range(n):
+        seen = set()
+        target = -nums[i]
+
+        for j in range(i + 1, n):
+            complement = target - nums[j]
+
+            if complement in seen:
+                triplet = tuple(sorted([nums[i], complement, nums[j]]))
+                result_set.add(triplet)
+
+            seen.add(nums[j])
+
+    return [list(t) for t in result_set]
+
+if __name__ == "__main__":
+    n = int(input())
+    nums = list(map(int, input().split()))
+
+    result = threeSum(nums)
+    for triplet in result:
+        print(triplet[0], triplet[1], triplet[2])
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static List<List<Integer>> threeSum(int[] nums) {
+        Set<List<Integer>> result_set = new HashSet<>();
+        Arrays.sort(nums);
+        int n = nums.length;
+
+        for (int i = 0; i < n; i++) {
+            Set<Integer> seen = new HashSet<>();
+            int target = -nums[i];
+
+            for (int j = i + 1; j < n; j++) {
+                int complement = target - nums[j];
+
+                if (seen.contains(complement)) {
+                    List<Integer> triplet = Arrays.asList(nums[i], complement, nums[j]);
+                    Collections.sort(triplet);
+                    result_set.add(triplet);
+                }
+
+                seen.add(nums[j]);
+            }
+        }
+
+        return new ArrayList<>(result_set);
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int n = sc.nextInt();
+
+        int[] nums = new int[n];
+        for (int i = 0; i < n; i++) {
+            nums[i] = sc.nextInt();
+        }
+
+        List<List<Integer>> result = threeSum(nums);
+        for (List<Integer> triplet : result) {
+            System.out.println(triplet.get(0) + " " + triplet.get(1) + " " + triplet.get(2));
+        }
+    }
+}
+```
+
+---
+
+APPROACH 3: SORTING + TWO-POINTER (OPTIMAL)
+TC: O(n²)  |  SC: O(1)
+
+C++:
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+vector<vector<int>> threeSum(vector<int>& nums) {
+    vector<vector<int>> result;
+    sort(nums.begin(), nums.end());
+    int n = nums.size();
+
+    for (int i = 0; i < n - 2; i++) {
+        if (nums[i] > 0) break;
+        if (i > 0 && nums[i] == nums[i - 1]) continue;
+
+        int left = i + 1, right = n - 1;
+
+        while (left < right) {
+            int sum = nums[i] + nums[left] + nums[right];
+
+            if (sum == 0) {
+                result.push_back({nums[i], nums[left], nums[right]});
+
+                while (left < right && nums[left] == nums[left + 1]) left++;
+                while (left < right && nums[right] == nums[right - 1]) right--;
+
+                left++;
+                right--;
+            } else if (sum < 0) {
+                left++;
+            } else {
+                right--;
+            }
+        }
+    }
+
+    return result;
+}
+
+int main() {
+    int n;
+    cin >> n;
+
+    vector<int> nums(n);
+    for (int i = 0; i < n; i++) {
+        cin >> nums[i];
+    }
+
+    vector<vector<int>> result = threeSum(nums);
+
+    for (auto& triplet : result) {
+        cout << triplet[0] << " " << triplet[1] << " " << triplet[2] << endl;
+    }
+
+    return 0;
+}
+```
+
+Python:
+```python
+def threeSum(nums):
+    result = []
+    nums.sort()
+    n = len(nums)
+
+    for i in range(n - 2):
+        if nums[i] > 0:
+            break
+        if i > 0 and nums[i] == nums[i - 1]:
+            continue
+
+        left, right = i + 1, n - 1
+
+        while left < right:
+            total = nums[i] + nums[left] + nums[right]
+
+            if total == 0:
+                result.append([nums[i], nums[left], nums[right]])
+
+                while left < right and nums[left] == nums[left + 1]:
+                    left += 1
+                while left < right and nums[right] == nums[right - 1]:
+                    right -= 1
+
+                left += 1
+                right -= 1
+            elif total < 0:
+                left += 1
+            else:
+                right -= 1
+
+    return result
+
+if __name__ == "__main__":
+    n = int(input())
+    nums = list(map(int, input().split()))
+
+    result = threeSum(nums)
+    for triplet in result:
+        print(triplet[0], triplet[1], triplet[2])
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static List<List<Integer>> threeSum(int[] nums) {
+        List<List<Integer>> result = new ArrayList<>();
+        Arrays.sort(nums);
+        int n = nums.length;
+
+        for (int i = 0; i < n - 2; i++) {
+            if (nums[i] > 0) break;
+            if (i > 0 && nums[i] == nums[i - 1]) continue;
+
+            int left = i + 1, right = n - 1;
+
+            while (left < right) {
+                int sum = nums[i] + nums[left] + nums[right];
+
+                if (sum == 0) {
+                    result.add(Arrays.asList(nums[i], nums[left], nums[right]));
+
+                    while (left < right && nums[left] == nums[left + 1]) left++;
+                    while (left < right && nums[right] == nums[right - 1]) right--;
+
+                    left++;
+                    right--;
+                } else if (sum < 0) {
+                    left++;
+                } else {
+                    right--;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int n = sc.nextInt();
+
+        int[] nums = new int[n];
+        for (int i = 0; i < n; i++) {
+            nums[i] = sc.nextInt();
+        }
+
+        List<List<Integer>> result = threeSum(nums);
+        for (List<Integer> triplet : result) {
+            System.out.println(triplet.get(0) + " " + triplet.get(1) + " " + triplet.get(2));
+        }
+    }
+}
+```
+
+SCORE: Approach 1: 3/10 | Approach 2: 6/10 | Approach 3: 10/10
+
+================================================================================
+QUESTION 2: 3SUM CLOSEST - FIND TRIPLET SUM CLOSEST TO TARGET
+================================================================================
+
+PROBLEM STATEMENT:
+Given an integer array nums of length n and an integer target, find three
+integers in nums such that the sum is closest to target. Return the sum of
+the three integers.
+
+Example:
+  Input: nums = [1, 2, 4, 8, 16, 32, 64, 128], target = 82
+  Output: 82
+
+Constraints:
+  - 3 <= nums.length <= 500
+  - -1000 <= nums[i] <= 1000
+  - -10^4 <= target <= 10^4
+
+---
+
+APPROACH 1: BRUTE FORCE (Three Nested Loops)
+TC: O(n³)  |  SC: O(1)
+
+C++:
+```cpp
+#include <iostream>
+#include <vector>
+#include <climits>
+#include <algorithm>
+using namespace std;
+
+int threeSumClosest(vector<int>& nums, int target) {
+    int n = nums.size();
+    int closest_sum = nums[0] + nums[1] + nums[2];
+    int min_diff = INT_MAX;
+
+    for (int i = 0; i < n; i++) {
+        for (int j = i + 1; j < n; j++) {
+            for (int k = j + 1; k < n; k++) {
+                int sum = nums[i] + nums[j] + nums[k];
+                int diff = abs(sum - target);
+
+                if (diff < min_diff) {
+                    min_diff = diff;
+                    closest_sum = sum;
+                }
+            }
+        }
+    }
+
+    return closest_sum;
+}
+
+int main() {
+    int n, target;
+    cin >> n >> target;
+
+    vector<int> nums(n);
+    for (int i = 0; i < n; i++) {
+        cin >> nums[i];
+    }
+
+    cout << threeSumClosest(nums, target) << endl;
+
+    return 0;
+}
+```
+
+Python:
+```python
+def threeSumClosest(nums, target):
+    n = len(nums)
+    closest_sum = nums[0] + nums[1] + nums[2]
+    min_diff = float('inf')
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            for k in range(j + 1, n):
+                sum_val = nums[i] + nums[j] + nums[k]
+                diff = abs(sum_val - target)
+
+                if diff < min_diff:
+                    min_diff = diff
+                    closest_sum = sum_val
+
+    return closest_sum
+
+if __name__ == "__main__":
+    n, target = map(int, input().split())
+    nums = list(map(int, input().split()))
+    print(threeSumClosest(nums, target))
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static int threeSumClosest(int[] nums, int target) {
+        int n = nums.length;
+        int closest_sum = nums[0] + nums[1] + nums[2];
+        int min_diff = Integer.MAX_VALUE;
+
+        for (int i = 0; i < n; i++) {
+            for (int j = i + 1; j < n; j++) {
+                for (int k = j + 1; k < n; k++) {
+                    int sum = nums[i] + nums[j] + nums[k];
+                    int diff = Math.abs(sum - target);
+
+                    if (diff < min_diff) {
+                        min_diff = diff;
+                        closest_sum = sum;
+                    }
+                }
+            }
+        }
+
+        return closest_sum;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int n = sc.nextInt();
+        int target = sc.nextInt();
+
+        int[] nums = new int[n];
+        for (int i = 0; i < n; i++) {
+            nums[i] = sc.nextInt();
+        }
+
+        System.out.println(threeSumClosest(nums, target));
+    }
+}
+```
+
+---
+
+APPROACH 2: SORTING + TWO-POINTER
+TC: O(n²)  |  SC: O(1)
+
+C++:
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <climits>
+using namespace std;
+
+int threeSumClosest(vector<int>& nums, int target) {
+    sort(nums.begin(), nums.end());
+    int n = nums.size();
+    int closest_sum = nums[0] + nums[1] + nums[2];
+    int min_diff = INT_MAX;
+
+    for (int i = 0; i < n - 2; i++) {
+        int left = i + 1, right = n - 1;
+
+        while (left < right) {
+            int sum = nums[i] + nums[left] + nums[right];
+            int diff = abs(sum - target);
+
+            if (diff < min_diff) {
+                min_diff = diff;
+                closest_sum = sum;
+            }
+
+            if (sum < target) {
+                left++;
+            } else if (sum > target) {
+                right--;
+            } else {
+                return sum;
+            }
+        }
+    }
+
+    return closest_sum;
+}
+
+int main() {
+    int n, target;
+    cin >> n >> target;
+
+    vector<int> nums(n);
+    for (int i = 0; i < n; i++) {
+        cin >> nums[i];
+    }
+
+    cout << threeSumClosest(nums, target) << endl;
+
+    return 0;
+}
+```
+
+Python:
+```python
+def threeSumClosest(nums, target):
+    nums.sort()
+    n = len(nums)
+    closest_sum = nums[0] + nums[1] + nums[2]
+    min_diff = float('inf')
+
+    for i in range(n - 2):
+        left, right = i + 1, n - 1
+
+        while left < right:
+            sum_val = nums[i] + nums[left] + nums[right]
+            diff = abs(sum_val - target)
+
+            if diff < min_diff:
+                min_diff = diff
+                closest_sum = sum_val
+
+            if sum_val < target:
+                left += 1
+            elif sum_val > target:
+                right -= 1
+            else:
+                return sum_val
+
+    return closest_sum
+
+if __name__ == "__main__":
+    n, target = map(int, input().split())
+    nums = list(map(int, input().split()))
+    print(threeSumClosest(nums, target))
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static int threeSumClosest(int[] nums, int target) {
+        Arrays.sort(nums);
+        int n = nums.length;
+        int closest_sum = nums[0] + nums[1] + nums[2];
+        int min_diff = Integer.MAX_VALUE;
+
+        for (int i = 0; i < n - 2; i++) {
+            int left = i + 1, right = n - 1;
+
+            while (left < right) {
+                int sum = nums[i] + nums[left] + nums[right];
+                int diff = Math.abs(sum - target);
+
+                if (diff < min_diff) {
+                    min_diff = diff;
+                    closest_sum = sum;
+                }
+
+                if (sum < target) {
+                    left++;
+                } else if (sum > target) {
+                    right--;
+                } else {
+                    return sum;
+                }
+            }
+        }
+
+        return closest_sum;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int n = sc.nextInt();
+        int target = sc.nextInt();
+
+        int[] nums = new int[n];
+        for (int i = 0; i < n; i++) {
+            nums[i] = sc.nextInt();
+        }
+
+        System.out.println(threeSumClosest(nums, target));
+    }
+}
+```
+
+---
+
+APPROACH 3: SORTING + TWO-POINTER WITH EARLY EXIT (OPTIMAL)
+TC: O(n²)  |  SC: O(1)
+
+C++:
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <climits>
+using namespace std;
+
+int threeSumClosest(vector<int>& nums, int target) {
+    sort(nums.begin(), nums.end());
+    int n = nums.size();
+    int closest_sum = nums[0] + nums[1] + nums[2];
+
+    for (int i = 0; i < n - 2; i++) {
+        int left = i + 1, right = n - 1;
+
+        while (left < right) {
+            int sum = nums[i] + nums[left] + nums[right];
+
+            if (abs(sum - target) < abs(closest_sum - target)) {
+                closest_sum = sum;
+            }
+
+            if (sum == target) {
+                return sum;
+            } else if (sum < target) {
+                left++;
+            } else {
+                right--;
+            }
+        }
+    }
+
+    return closest_sum;
+}
+
+int main() {
+    int n, target;
+    cin >> n >> target;
+
+    vector<int> nums(n);
+    for (int i = 0; i < n; i++) {
+        cin >> nums[i];
+    }
+
+    cout << threeSumClosest(nums, target) << endl;
+
+    return 0;
+}
+```
+
+Python:
+```python
+def threeSumClosest(nums, target):
+    nums.sort()
+    n = len(nums)
+    closest_sum = nums[0] + nums[1] + nums[2]
+
+    for i in range(n - 2):
+        left, right = i + 1, n - 1
+
+        while left < right:
+            sum_val = nums[i] + nums[left] + nums[right]
+
+            if abs(sum_val - target) < abs(closest_sum - target):
+                closest_sum = sum_val
+
+            if sum_val == target:
+                return sum_val
+            elif sum_val < target:
+                left += 1
+            else:
+                right -= 1
+
+    return closest_sum
+
+if __name__ == "__main__":
+    n, target = map(int, input().split())
+    nums = list(map(int, input().split()))
+    print(threeSumClosest(nums, target))
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static int threeSumClosest(int[] nums, int target) {
+        Arrays.sort(nums);
+        int n = nums.length;
+        int closest_sum = nums[0] + nums[1] + nums[2];
+
+        for (int i = 0; i < n - 2; i++) {
+            int left = i + 1, right = n - 1;
+
+            while (left < right) {
+                int sum = nums[i] + nums[left] + nums[right];
+
+                if (Math.abs(sum - target) < Math.abs(closest_sum - target)) {
+                    closest_sum = sum;
+                }
+
+                if (sum == target) {
+                    return sum;
+                } else if (sum < target) {
+                    left++;
+                } else {
+                    right--;
+                }
+            }
+        }
+
+        return closest_sum;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int n = sc.nextInt();
+        int target = sc.nextInt();
+
+        int[] nums = new int[n];
+        for (int i = 0; i < n; i++) {
+            nums[i] = sc.nextInt();
+        }
+
+        System.out.println(threeSumClosest(nums, target));
+    }
+}
+```
+
+SCORE: Approach 1: 3/10 | Approach 2: 8/10 | Approach 3: 10/10
+
+================================================================================
+QUESTION 3: 4SUM - FIND ALL QUADRUPLETS THAT SUM TO TARGET
+================================================================================
+
+PROBLEM STATEMENT:
+Given an array nums of n integers, return all unique quadruplets
+[nums[a], nums[b], nums[c], nums[d]] such that:
+- 0 <= a, b, c, d < n
+- a, b, c, d are distinct
+- nums[a] + nums[b] + nums[c] + nums[d] == target
+- No duplicate quadruplets
+
+Example:
+  Input: nums = [1000000000, 1000000000, 1000000000, 1000000000], target = -294967296
+  Output: []
+
+Constraints:
+  - 1 <= nums.length <= 200
+  - -10^9 <= nums[i] <= 10^9
+  - -10^9 <= target <= 10^9
+
+---
+
+APPROACH 1: BRUTE FORCE (Four Nested Loops + Set)
+TC: O(n⁴ log n)  |  SC: O(n)
+
+C++:
+```cpp
+#include <iostream>
+#include <vector>
+#include <set>
+#include <algorithm>
+using namespace std;
+
+vector<vector<int>> fourSum(vector<int>& nums, int target) {
+    set<vector<int>> result_set;
+    int n = nums.size();
+
+    for (int i = 0; i < n; i++) {
+        for (int j = i + 1; j < n; j++) {
+            for (int k = j + 1; k < n; k++) {
+                for (int l = k + 1; l < n; l++) {
+                    long long sum = (long long)nums[i] + nums[j] + nums[k] + nums[l];
+                    if (sum == target) {
+                        vector<int> quad = {nums[i], nums[j], nums[k], nums[l]};
+                        sort(quad.begin(), quad.end());
+                        result_set.insert(quad);
+                    }
+                }
+            }
+        }
+    }
+
+    vector<vector<int>> result(result_set.begin(), result_set.end());
+    return result;
+}
+
+int main() {
+    int n, target;
+    cin >> n >> target;
+
+    vector<int> nums(n);
+    for (int i = 0; i < n; i++) {
+        cin >> nums[i];
+    }
+
+    vector<vector<int>> result = fourSum(nums, target);
+
+    for (auto& quad : result) {
+        cout << quad[0] << " " << quad[1] << " " << quad[2] << " " << quad[3] << endl;
+    }
+
+    return 0;
+}
+```
+
+Python:
+```python
+def fourSum(nums, target):
+    result_set = set()
+    n = len(nums)
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            for k in range(j + 1, n):
+                for l in range(k + 1, n):
+                    if nums[i] + nums[j] + nums[k] + nums[l] == target:
+                        quad = tuple(sorted([nums[i], nums[j], nums[k], nums[l]]))
+                        result_set.add(quad)
+
+    return [list(q) for q in result_set]
+
+if __name__ == "__main__":
+    n, target = map(int, input().split())
+    nums = list(map(int, input().split()))
+
+    result = fourSum(nums, target)
+    for quad in result:
+        print(quad[0], quad[1], quad[2], quad[3])
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static List<List<Integer>> fourSum(int[] nums, int target) {
+        Set<List<Integer>> result_set = new HashSet<>();
+        int n = nums.length;
+
+        for (int i = 0; i < n; i++) {
+            for (int j = i + 1; j < n; j++) {
+                for (int k = j + 1; k < n; k++) {
+                    for (int l = k + 1; l < n; l++) {
+                        long sum = (long)nums[i] + nums[j] + nums[k] + nums[l];
+                        if (sum == target) {
+                            List<Integer> quad = Arrays.asList(nums[i], nums[j], nums[k], nums[l]);
+                            Collections.sort(quad);
+                            result_set.add(quad);
+                        }
+                    }
+                }
+            }
+        }
+
+        return new ArrayList<>(result_set);
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int n = sc.nextInt();
+        int target = sc.nextInt();
+
+        int[] nums = new int[n];
+        for (int i = 0; i < n; i++) {
+            nums[i] = sc.nextInt();
+        }
+
+        List<List<Integer>> result = fourSum(nums, target);
+        for (List<Integer> quad : result) {
+            System.out.println(quad.get(0) + " " + quad.get(1) + " " + quad.get(2) + " " + quad.get(3));
+        }
+    }
+}
+```
+
+---
+
+APPROACH 2: SORTING + THREE-POINTER NESTED
+TC: O(n³)  |  SC: O(1)
+
+C++:
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+vector<vector<int>> fourSum(vector<int>& nums, int target) {
+    vector<vector<int>> result;
+    sort(nums.begin(), nums.end());
+    int n = nums.size();
+
+    for (int i = 0; i < n - 3; i++) {
+        if (i > 0 && nums[i] == nums[i - 1]) continue;
+
+        for (int j = i + 1; j < n - 2; j++) {
+            if (j > i + 1 && nums[j] == nums[j - 1]) continue;
+
+            int left = j + 1, right = n - 1;
+
+            while (left < right) {
+                long long sum = (long long)nums[i] + nums[j] + nums[left] + nums[right];
+
+                if (sum == target) {
+                    result.push_back({nums[i], nums[j], nums[left], nums[right]});
+
+                    while (left < right && nums[left] == nums[left + 1]) left++;
+                    while (left < right && nums[right] == nums[right - 1]) right--;
+
+                    left++;
+                    right--;
+                } else if (sum < target) {
+                    left++;
+                } else {
+                    right--;
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+int main() {
+    int n, target;
+    cin >> n >> target;
+
+    vector<int> nums(n);
+    for (int i = 0; i < n; i++) {
+        cin >> nums[i];
+    }
+
+    vector<vector<int>> result = fourSum(nums, target);
+
+    for (auto& quad : result) {
+        cout << quad[0] << " " << quad[1] << " " << quad[2] << " " << quad[3] << endl;
+    }
+
+    return 0;
+}
+```
+
+Python:
+```python
+def fourSum(nums, target):
+    result = []
+    nums.sort()
+    n = len(nums)
+
+    for i in range(n - 3):
+        if i > 0 and nums[i] == nums[i - 1]:
+            continue
+
+        for j in range(i + 1, n - 2):
+            if j > i + 1 and nums[j] == nums[j - 1]:
+                continue
+
+            left, right = j + 1, n - 1
+
+            while left < right:
+                total = nums[i] + nums[j] + nums[left] + nums[right]
+
+                if total == target:
+                    result.append([nums[i], nums[j], nums[left], nums[right]])
+
+                    while left < right and nums[left] == nums[left + 1]:
+                        left += 1
+                    while left < right and nums[right] == nums[right - 1]:
+                        right -= 1
+
+                    left += 1
+                    right -= 1
+                elif total < target:
+                    left += 1
+                else:
+                    right -= 1
+
+    return result
+
+if __name__ == "__main__":
+    n, target = map(int, input().split())
+    nums = list(map(int, input().split()))
+
+    result = fourSum(nums, target)
+    for quad in result:
+        print(quad[0], quad[1], quad[2], quad[3])
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static List<List<Integer>> fourSum(int[] nums, int target) {
+        List<List<Integer>> result = new ArrayList<>();
+        Arrays.sort(nums);
+        int n = nums.length;
+
+        for (int i = 0; i < n - 3; i++) {
+            if (i > 0 && nums[i] == nums[i - 1]) continue;
+
+            for (int j = i + 1; j < n - 2; j++) {
+                if (j > i + 1 && nums[j] == nums[j - 1]) continue;
+
+                int left = j + 1, right = n - 1;
+
+                while (left < right) {
+                    long sum = (long)nums[i] + nums[j] + nums[left] + nums[right];
+
+                    if (sum == target) {
+                        result.add(Arrays.asList(nums[i], nums[j], nums[left], nums[right]));
+
+                        while (left < right && nums[left] == nums[left + 1]) left++;
+                        while (left < right && nums[right] == nums[right - 1]) right--;
+
+                        left++;
+                        right--;
+                    } else if (sum < target) {
+                        left++;
+                    } else {
+                        right--;
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int n = sc.nextInt();
+        int target = sc.nextInt();
+
+        int[] nums = new int[n];
+        for (int i = 0; i < n; i++) {
+            nums[i] = sc.nextInt();
+        }
+
+        List<List<Integer>> result = fourSum(nums, target);
+        for (List<Integer> quad : result) {
+            System.out.println(quad.get(0) + " " + quad.get(1) + " " + quad.get(2) + " " + quad.get(3));
+        }
+    }
+}
+```
+
+---
+
+APPROACH 3: SORTING + TWO-POINTER WITH OPTIMIZATION (OPTIMAL)
+TC: O(n³)  |  SC: O(1)
+
+C++:
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+vector<vector<int>> fourSum(vector<int>& nums, int target) {
+    vector<vector<int>> result;
+    sort(nums.begin(), nums.end());
+    int n = nums.size();
+
+    for (int i = 0; i < n - 3; i++) {
+        if (i > 0 && nums[i] == nums[i - 1]) continue;
+
+        long long min_sum = (long long)nums[i] + nums[i + 1] + nums[i + 2] + nums[i + 3];
+        long long max_sum = (long long)nums[i] + nums[n - 3] + nums[n - 2] + nums[n - 1];
+
+        if (max_sum < target) continue;
+        if (min_sum > target) break;
+
+        for (int j = i + 1; j < n - 2; j++) {
+            if (j > i + 1 && nums[j] == nums[j - 1]) continue;
+
+            int left = j + 1, right = n - 1;
+            long long target_2sum = target - nums[i] - nums[j];
+
+            while (left < right) {
+                long long two_sum = (long long)nums[left] + nums[right];
+
+                if (two_sum == target_2sum) {
+                    result.push_back({nums[i], nums[j], nums[left], nums[right]});
+
+                    while (left < right && nums[left] == nums[left + 1]) left++;
+                    while (left < right && nums[right] == nums[right - 1]) right--;
+
+                    left++;
+                    right--;
+                } else if (two_sum < target_2sum) {
+                    left++;
+                } else {
+                    right--;
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+int main() {
+    int n, target;
+    cin >> n >> target;
+
+    vector<int> nums(n);
+    for (int i = 0; i < n; i++) {
+        cin >> nums[i];
+    }
+
+    vector<vector<int>> result = fourSum(nums, target);
+
+    for (auto& quad : result) {
+        cout << quad[0] << " " << quad[1] << " " << quad[2] << " " << quad[3] << endl;
+    }
+
+    return 0;
+}
+```
+
+Python:
+```python
+def fourSum(nums, target):
+    result = []
+    nums.sort()
+    n = len(nums)
+
+    for i in range(n - 3):
+        if i > 0 and nums[i] == nums[i - 1]:
+            continue
+
+        min_sum = nums[i] + nums[i + 1] + nums[i + 2] + nums[i + 3]
+        max_sum = nums[i] + nums[n - 3] + nums[n - 2] + nums[n - 1]
+
+        if max_sum < target:
+            continue
+        if min_sum > target:
+            break
+
+        for j in range(i + 1, n - 2):
+            if j > i + 1 and nums[j] == nums[j - 1]:
+                continue
+
+            left, right = j + 1, n - 1
+            target_2sum = target - nums[i] - nums[j]
+
+            while left < right:
+                two_sum = nums[left] + nums[right]
+
+                if two_sum == target_2sum:
+                    result.append([nums[i], nums[j], nums[left], nums[right]])
+
+                    while left < right and nums[left] == nums[left + 1]:
+                        left += 1
+                    while left < right and nums[right] == nums[right - 1]:
+                        right -= 1
+
+                    left += 1
+                    right -= 1
+                elif two_sum < target_2sum:
+                    left += 1
+                else:
+                    right -= 1
+
+    return result
+
+if __name__ == "__main__":
+    n, target = map(int, input().split())
+    nums = list(map(int, input().split()))
+
+    result = fourSum(nums, target)
+    for quad in result:
+        print(quad[0], quad[1], quad[2], quad[3])
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static List<List<Integer>> fourSum(int[] nums, int target) {
+        List<List<Integer>> result = new ArrayList<>();
+        Arrays.sort(nums);
+        int n = nums.length;
+
+        for (int i = 0; i < n - 3; i++) {
+            if (i > 0 && nums[i] == nums[i - 1]) continue;
+
+            long min_sum = (long)nums[i] + nums[i + 1] + nums[i + 2] + nums[i + 3];
+            long max_sum = (long)nums[i] + nums[n - 3] + nums[n - 2] + nums[n - 1];
+
+            if (max_sum < target) continue;
+            if (min_sum > target) break;
+
+            for (int j = i + 1; j < n - 2; j++) {
+                if (j > i + 1 && nums[j] == nums[j - 1]) continue;
+
+                int left = j + 1, right = n - 1;
+                long target_2sum = target - nums[i] - nums[j];
+
+                while (left < right) {
+                    long two_sum = (long)nums[left] + nums[right];
+
+                    if (two_sum == target_2sum) {
+                        result.add(Arrays.asList(nums[i], nums[j], nums[left], nums[right]));
+
+                        while (left < right && nums[left] == nums[left + 1]) left++;
+                        while (left < right && nums[right] == nums[right - 1]) right--;
+
+                        left++;
+                        right--;
+                    } else if (two_sum < target_2sum) {
+                        left++;
+                    } else {
+                        right--;
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int n = sc.nextInt();
+        int target = sc.nextInt();
+
+        int[] nums = new int[n];
+        for (int i = 0; i < n; i++) {
+            nums[i] = sc.nextInt();
+        }
+
+        List<List<Integer>> result = fourSum(nums, target);
+        for (List<Integer> quad : result) {
+            System.out.println(quad.get(0) + " " + quad.get(1) + " " + quad.get(2) + " " + quad.get(3));
+        }
+    }
+}
+```
+
+SCORE: Approach 1: 2/10 | Approach 2: 7/10 | Approach 3: 10/10
+
+================================================================================
+QUESTION 4: MEDIAN OF TWO SORTED ARRAYS
+================================================================================
+
+PROBLEM STATEMENT:
+Given two sorted arrays nums1 and nums2 of size m and n respectively,
+return the median of the two sorted arrays. The overall run time complexity
+should be O(log(m+n)).
+
+Example:
+  Input: nums1 = [1, 3], nums2 = [2]
+  Output: 2.0
+
+Example:
+  Input: nums1 = [1, 2], nums2 = [3, 4]
+  Output: 2.5
+
+Constraints:
+  - nums1.length == m, nums2.length == n
+  - 0 <= m <= 1000, 0 <= n <= 1000
+  - 1 <= m + n <= 2000
+  - -10^6 <= nums1[i], nums2[i] <= 10^6
+
+---
+
+APPROACH 1: MERGE + FIND MEDIAN
+TC: O(m + n)  |  SC: O(m + n)
+
+C++:
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <iomanip>
+using namespace std;
+
+double findMedianSortedArrays(vector<int>& nums1, vector<int>& nums2) {
+    vector<int> merged;
+    int i = 0, j = 0;
+
+    while (i < nums1.size() && j < nums2.size()) {
+        if (nums1[i] <= nums2[j]) {
+            merged.push_back(nums1[i++]);
+        } else {
+            merged.push_back(nums2[j++]);
+        }
+    }
+
+    while (i < nums1.size()) merged.push_back(nums1[i++]);
+    while (j < nums2.size()) merged.push_back(nums2[j++]);
+
+    int n = merged.size();
+    if (n % 2 == 1) {
+        return merged[n / 2];
+    } else {
+        return (merged[n / 2 - 1] + merged[n / 2]) / 2.0;
+    }
+}
+
+int main() {
+    int m, n;
+    cin >> m >> n;
+
+    vector<int> nums1(m), nums2(n);
+    for (int i = 0; i < m; i++) cin >> nums1[i];
+    for (int i = 0; i < n; i++) cin >> nums2[i];
+
+    cout << fixed << setprecision(1) << findMedianSortedArrays(nums1, nums2) << endl;
+
+    return 0;
+}
+```
+
+Python:
+```python
+def findMedianSortedArrays(nums1, nums2):
+    merged = []
+    i = j = 0
+
+    while i < len(nums1) and j < len(nums2):
+        if nums1[i] <= nums2[j]:
+            merged.append(nums1[i])
+            i += 1
+        else:
+            merged.append(nums2[j])
+            j += 1
+
+    merged.extend(nums1[i:])
+    merged.extend(nums2[j:])
+
+    n = len(merged)
+    if n % 2 == 1:
+        return float(merged[n // 2])
+    else:
+        return (merged[n // 2 - 1] + merged[n // 2]) / 2.0
+
+if __name__ == "__main__":
+    m, n = map(int, input().split())
+    nums1 = list(map(int, input().split())) if m > 0 else []
+    nums2 = list(map(int, input().split())) if n > 0 else []
+
+    print(findMedianSortedArrays(nums1, nums2))
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static double findMedianSortedArrays(int[] nums1, int[] nums2) {
+        List<Integer> merged = new ArrayList<>();
+        int i = 0, j = 0;
+
+        while (i < nums1.length && j < nums2.length) {
+            if (nums1[i] <= nums2[j]) {
+                merged.add(nums1[i++]);
+            } else {
+                merged.add(nums2[j++]);
+            }
+        }
+
+        while (i < nums1.length) merged.add(nums1[i++]);
+        while (j < nums2.length) merged.add(nums2[j++]);
+
+        int n = merged.size();
+        if (n % 2 == 1) {
+            return merged.get(n / 2);
+        } else {
+            return (merged.get(n / 2 - 1) + merged.get(n / 2)) / 2.0;
+        }
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int m = sc.nextInt();
+        int n = sc.nextInt();
+
+        int[] nums1 = new int[m];
+        for (int i = 0; i < m; i++) nums1[i] = sc.nextInt();
+
+        int[] nums2 = new int[n];
+        for (int i = 0; i < n; i++) nums2[i] = sc.nextInt();
+
+        System.out.println(findMedianSortedArrays(nums1, nums2));
+    }
+}
+```
+
+---
+
+APPROACH 2: BINARY SEARCH ON PARTITION
+TC: O(log(min(m, n)))  |  SC: O(1)
+
+C++:
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <climits>
+#include <iomanip>
+using namespace std;
+
+double findMedianSortedArrays(vector<int>& nums1, vector<int>& nums2) {
+    if (nums1.size() > nums2.size()) {
+        return findMedianSortedArrays(nums2, nums1);
+    }
+
+    int m = nums1.size();
+    int n = nums2.size();
+    int low = 0, high = m;
+
+    while (low <= high) {
+        int cut1 = (low + high) / 2;
+        int cut2 = (m + n + 1) / 2 - cut1;
+
+        int left1 = (cut1 == 0) ? INT_MIN : nums1[cut1 - 1];
+        int left2 = (cut2 == 0) ? INT_MIN : nums2[cut2 - 1];
+        int right1 = (cut1 == m) ? INT_MAX : nums1[cut1];
+        int right2 = (cut2 == n) ? INT_MAX : nums2[cut2];
+
+        if (left1 <= right2 && left2 <= right1) {
+            if ((m + n) % 2 == 0) {
+                return (max(left1, left2) + min(right1, right2)) / 2.0;
+            } else {
+                return max(left1, left2);
+            }
+        } else if (left1 > right2) {
+            high = cut1 - 1;
+        } else {
+            low = cut1 + 1;
+        }
+    }
+
+    return -1.0;
+}
+
+int main() {
+    int m, n;
+    cin >> m >> n;
+
+    vector<int> nums1(m), nums2(n);
+    for (int i = 0; i < m; i++) cin >> nums1[i];
+    for (int i = 0; i < n; i++) cin >> nums2[i];
+
+    cout << fixed << setprecision(1) << findMedianSortedArrays(nums1, nums2) << endl;
+
+    return 0;
+}
+```
+
+Python:
+```python
+def findMedianSortedArrays(nums1, nums2):
+    if len(nums1) > len(nums2):
+        return findMedianSortedArrays(nums2, nums1)
+
+    m, n = len(nums1), len(nums2)
+    low, high = 0, m
+
+    while low <= high:
+        cut1 = (low + high) // 2
+        cut2 = (m + n + 1) // 2 - cut1
+
+        left1 = float('-inf') if cut1 == 0 else nums1[cut1 - 1]
+        left2 = float('-inf') if cut2 == 0 else nums2[cut2 - 1]
+        right1 = float('inf') if cut1 == m else nums1[cut1]
+        right2 = float('inf') if cut2 == n else nums2[cut2]
+
+        if left1 <= right2 and left2 <= right1:
+            if (m + n) % 2 == 0:
+                return (max(left1, left2) + min(right1, right2)) / 2.0
+            else:
+                return float(max(left1, left2))
+        elif left1 > right2:
+            high = cut1 - 1
+        else:
+            low = cut1 + 1
+
+    return -1.0
+
+if __name__ == "__main__":
+    m, n = map(int, input().split())
+    nums1 = list(map(int, input().split())) if m > 0 else []
+    nums2 = list(map(int, input().split())) if n > 0 else []
+
+    print(findMedianSortedArrays(nums1, nums2))
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static double findMedianSortedArrays(int[] nums1, int[] nums2) {
+        if (nums1.length > nums2.length) {
+            return findMedianSortedArrays(nums2, nums1);
+        }
+
+        int m = nums1.length;
+        int n = nums2.length;
+        int low = 0, high = m;
+
+        while (low <= high) {
+            int cut1 = (low + high) / 2;
+            int cut2 = (m + n + 1) / 2 - cut1;
+
+            int left1 = (cut1 == 0) ? Integer.MIN_VALUE : nums1[cut1 - 1];
+            int left2 = (cut2 == 0) ? Integer.MIN_VALUE : nums2[cut2 - 1];
+            int right1 = (cut1 == m) ? Integer.MAX_VALUE : nums1[cut1];
+            int right2 = (cut2 == n) ? Integer.MAX_VALUE : nums2[cut2];
+
+            if (left1 <= right2 && left2 <= right1) {
+                if ((m + n) % 2 == 0) {
+                    return (Math.max(left1, left2) + Math.min(right1, right2)) / 2.0;
+                } else {
+                    return Math.max(left1, left2);
+                }
+            } else if (left1 > right2) {
+                high = cut1 - 1;
+            } else {
+                low = cut1 + 1;
+            }
+        }
+
+        return -1.0;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int m = sc.nextInt();
+        int n = sc.nextInt();
+
+        int[] nums1 = new int[m];
+        for (int i = 0; i < m; i++) nums1[i] = sc.nextInt();
+
+        int[] nums2 = new int[n];
+        for (int i = 0; i < n; i++) nums2[i] = sc.nextInt();
+
+        System.out.println(findMedianSortedArrays(nums1, nums2));
+    }
+}
+```
+
+---
+
+APPROACH 3: OPTIMIZED BINARY SEARCH (OPTIMAL)
+TC: O(log(min(m, n)))  |  SC: O(1)
+
+C++:
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <climits>
+#include <iomanip>
+using namespace std;
+
+double findMedianSortedArrays(vector<int>& nums1, vector<int>& nums2) {
+    if (nums1.size() > nums2.size()) {
+        return findMedianSortedArrays(nums2, nums1);
+    }
+
+    int m = nums1.size();
+    int n = nums2.size();
+    int low = 0, high = m;
+    int halfLen = (m + n + 1) / 2;
+
+    while (low <= high) {
+        int cut1 = (low + high) / 2;
+        int cut2 = halfLen - cut1;
+
+        int left1 = (cut1 == 0) ? INT_MIN : nums1[cut1 - 1];
+        int left2 = (cut2 == 0) ? INT_MIN : nums2[cut2 - 1];
+        int right1 = (cut1 == m) ? INT_MAX : nums1[cut1];
+        int right2 = (cut2 == n) ? INT_MAX : nums2[cut2];
+
+        if (left1 <= right2 && left2 <= right1) {
+            if ((m + n) % 2 == 0) {
+                return (max(left1, left2) + min(right1, right2)) / 2.0;
+            } else {
+                return max(left1, left2);
+            }
+        } else if (left1 > right2) {
+            high = cut1 - 1;
+        } else {
+            low = cut1 + 1;
+        }
+    }
+
+    return -1.0;
+}
+
+int main() {
+    int m, n;
+    cin >> m >> n;
+
+    vector<int> nums1(m), nums2(n);
+    for (int i = 0; i < m; i++) cin >> nums1[i];
+    for (int i = 0; i < n; i++) cin >> nums2[i];
+
+    cout << fixed << setprecision(1) << findMedianSortedArrays(nums1, nums2) << endl;
+
+    return 0;
+}
+```
+
+Python:
+```python
+def findMedianSortedArrays(nums1, nums2):
+    if len(nums1) > len(nums2):
+        return findMedianSortedArrays(nums2, nums1)
+
+    m, n = len(nums1), len(nums2)
+    low, high = 0, m
+    halfLen = (m + n + 1) // 2
+
+    while low <= high:
+        cut1 = (low + high) // 2
+        cut2 = halfLen - cut1
+
+        left1 = float('-inf') if cut1 == 0 else nums1[cut1 - 1]
+        left2 = float('-inf') if cut2 == 0 else nums2[cut2 - 1]
+        right1 = float('inf') if cut1 == m else nums1[cut1]
+        right2 = float('inf') if cut2 == n else nums2[cut2]
+
+        if left1 <= right2 and left2 <= right1:
+            if (m + n) % 2 == 0:
+                return (max(left1, left2) + min(right1, right2)) / 2.0
+            else:
+                return float(max(left1, left2))
+        elif left1 > right2:
+            high = cut1 - 1
+        else:
+            low = cut1 + 1
+
+    return -1.0
+
+if __name__ == "__main__":
+    m, n = map(int, input().split())
+    nums1 = list(map(int, input().split())) if m > 0 else []
+    nums2 = list(map(int, input().split())) if n > 0 else []
+
+    print(findMedianSortedArrays(nums1, nums2))
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static double findMedianSortedArrays(int[] nums1, int[] nums2) {
+        if (nums1.length > nums2.length) {
+            return findMedianSortedArrays(nums2, nums1);
+        }
+
+        int m = nums1.length;
+        int n = nums2.length;
+        int low = 0, high = m;
+        int halfLen = (m + n + 1) / 2;
+
+        while (low <= high) {
+            int cut1 = (low + high) / 2;
+            int cut2 = halfLen - cut1;
+
+            int left1 = (cut1 == 0) ? Integer.MIN_VALUE : nums1[cut1 - 1];
+            int left2 = (cut2 == 0) ? Integer.MIN_VALUE : nums2[cut2 - 1];
+            int right1 = (cut1 == m) ? Integer.MAX_VALUE : nums1[cut1];
+            int right2 = (cut2 == n) ? Integer.MAX_VALUE : nums2[cut2];
+
+            if (left1 <= right2 && left2 <= right1) {
+                if ((m + n) % 2 == 0) {
+                    return (Math.max(left1, left2) + Math.min(right1, right2)) / 2.0;
+                } else {
+                    return Math.max(left1, left2);
+                }
+            } else if (left1 > right2) {
+                high = cut1 - 1;
+            } else {
+                low = cut1 + 1;
+            }
+        }
+
+        return -1.0;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int m = sc.nextInt();
+        int n = sc.nextInt();
+
+        int[] nums1 = new int[m];
+        for (int i = 0; i < m; i++) nums1[i] = sc.nextInt();
+
+        int[] nums2 = new int[n];
+        for (int i = 0; i < n; i++) nums2[i] = sc.nextInt();
+
+        System.out.println(findMedianSortedArrays(nums1, nums2));
+    }
+}
+```
+
+SCORE: Approach 1: 5/10 | Approach 2: 8/10 | Approach 3: 10/10
+
+================================================================================
+QUESTION 5: PALINDROME NUMBER
+================================================================================
+
+PROBLEM STATEMENT:
+Given an integer x, return true if x is a palindrome, and false otherwise.
+Follow-up: Could you solve it without converting the integer to a string?
+
+Example:
+  Input: x = 1221
+  Output: true
+
+Example:
+  Input: x = -121
+  Output: false (negative numbers are not palindromes)
+
+Constraints:
+  - -2^31 <= x <= 2^31 - 1
+
+---
+
+APPROACH 1: CONVERT TO STRING
+TC: O(log x)  |  SC: O(log x)
+
+C++:
+```cpp
+#include <iostream>
+#include <string>
+using namespace std;
+
+bool isPalindrome(int x) {
+    string s = to_string(x);
+    string rev_s = s;
+    reverse(rev_s.begin(), rev_s.end());
+    return s == rev_s;
+}
+
+int main() {
+    int x;
+    cin >> x;
+
+    cout << (isPalindrome(x) ? "true" : "false") << endl;
+
+    return 0;
+}
+```
+
+Python:
+```python
+def isPalindrome(x):
+    s = str(x)
+    return s == s[::-1]
+
+if __name__ == "__main__":
+    x = int(input())
+    print("true" if isPalindrome(x) else "false")
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static boolean isPalindrome(int x) {
+        String s = String.valueOf(x);
+        String rev_s = new StringBuilder(s).reverse().toString();
+        return s.equals(rev_s);
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int x = sc.nextInt();
+
+        System.out.println(isPalindrome(x) ? "true" : "false");
+    }
+}
+```
+
+---
+
+APPROACH 2: REVERSE NUMBER (No String)
+TC: O(log x)  |  SC: O(1)
+
+C++:
+```cpp
+#include <iostream>
+#include <climits>
+using namespace std;
+
+bool isPalindrome(int x) {
+    if (x < 0) return false;
+
+    long long reversed = 0;
+    long long original = x;
+
+    while (x > 0) {
+        int digit = x % 10;
+        reversed = reversed * 10 + digit;
+        x /= 10;
+    }
+
+    return original == reversed;
+}
+
+int main() {
+    int x;
+    cin >> x;
+
+    cout << (isPalindrome(x) ? "true" : "false") << endl;
+
+    return 0;
+}
+```
+
+Python:
+```python
+def isPalindrome(x):
+    if x < 0:
+        return False
+
+    reversed_num = 0
+    original = x
+
+    while x > 0:
+        digit = x % 10
+        reversed_num = reversed_num * 10 + digit
+        x //= 10
+
+    return original == reversed_num
+
+if __name__ == "__main__":
+    x = int(input())
+    print("true" if isPalindrome(x) else "false")
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static boolean isPalindrome(int x) {
+        if (x < 0) return false;
+
+        long reversed = 0;
+        long original = x;
+
+        while (x > 0) {
+            int digit = x % 10;
+            reversed = reversed * 10 + digit;
+            x /= 10;
+        }
+
+        return original == reversed;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int x = sc.nextInt();
+
+        System.out.println(isPalindrome(x) ? "true" : "false");
+    }
+}
+```
+
+---
+
+APPROACH 3: TWO-POINTER REVERSE HALF (OPTIMAL)
+TC: O(log x)  |  SC: O(1)
+
+C++:
+```cpp
+#include <iostream>
+using namespace std;
+
+bool isPalindrome(int x) {
+    if (x < 0 || (x % 10 == 0 && x != 0)) return false;
+
+    int reversed = 0;
+    while (x > reversed) {
+        reversed = reversed * 10 + x % 10;
+        x /= 10;
+    }
+
+    return x == reversed || x == reversed / 10;
+}
+
+int main() {
+    int x;
+    cin >> x;
+
+    cout << (isPalindrome(x) ? "true" : "false") << endl;
+
+    return 0;
+}
+```
+
+Python:
+```python
+def isPalindrome(x):
+    if x < 0 or (x % 10 == 0 and x != 0):
+        return False
+
+    reversed_num = 0
+    while x > reversed_num:
+        reversed_num = reversed_num * 10 + x % 10
+        x //= 10
+
+    return x == reversed_num or x == reversed_num // 10
+
+if __name__ == "__main__":
+    x = int(input())
+    print("true" if isPalindrome(x) else "false")
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static boolean isPalindrome(int x) {
+        if (x < 0 || (x % 10 == 0 && x != 0)) return false;
+
+        int reversed = 0;
+        while (x > reversed) {
+            reversed = reversed * 10 + x % 10;
+            x /= 10;
+        }
+
+        return x == reversed || x == reversed / 10;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int x = sc.nextInt();
+
+        System.out.println(isPalindrome(x) ? "true" : "false");
+    }
+}
+```
+
+SCORE: Approach 1: 6/10 | Approach 2: 8/10 | Approach 3: 10/10
+
+================================================================================
+QUESTION 6: ROMAN TO INTEGER
+================================================================================
+
+PROBLEM STATEMENT:
+Roman numerals are represented by seven different symbols: I(1), V(5), X(10),
+L(50), C(100), D(500), M(1000). Given a roman numeral string, convert it to
+an integer.
+
+Rules: Generally, symbols are ordered from largest to smallest (left to right).
+However, in a few specific cases, a smaller value symbol can appear before a
+larger value symbol to indicate subtraction (IV=4, IX=9, XL=40, XC=90, CD=400, CM=900).
+
+Example:
+  Input: s = "III"
+  Output: 3
+
+Example:
+  Input: s = "MCMXCIV"
+  Output: 1994
+
+Constraints:
+  - 1 <= s.length <= 15
+  - s contains only characters ('I', 'V', 'X', 'L', 'C', 'D', 'M')
+  - It is guaranteed that s is a valid roman numeral in the range [1, 3999]
+
+---
+
+APPROACH 1: HASH MAP + LINEAR SCAN
+TC: O(n)  |  SC: O(1)
+
+C++:
+```cpp
+#include <iostream>
+#include <string>
+#include <unordered_map>
+using namespace std;
+
+int romanToInt(string s) {
+    unordered_map<char, int> roman_values;
+    roman_values['I'] = 1;
+    roman_values['V'] = 5;
+    roman_values['X'] = 10;
+    roman_values['L'] = 50;
+    roman_values['C'] = 100;
+    roman_values['D'] = 500;
+    roman_values['M'] = 1000;
+
+    int result = 0;
+    for (int i = 0; i < s.length(); i++) {
+        if (i + 1 < s.length() && roman_values[s[i]] < roman_values[s[i + 1]]) {
+            result -= roman_values[s[i]];
+        } else {
+            result += roman_values[s[i]];
+        }
+    }
+
+    return result;
+}
+
+int main() {
+    string s;
+    cin >> s;
+
+    cout << romanToInt(s) << endl;
+
+    return 0;
+}
+```
+
+Python:
+```python
+def romanToInt(s):
+    roman_values = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000}
+
+    result = 0
+    for i in range(len(s)):
+        if i + 1 < len(s) and roman_values[s[i]] < roman_values[s[i + 1]]:
+            result -= roman_values[s[i]]
+        else:
+            result += roman_values[s[i]]
+
+    return result
+
+if __name__ == "__main__":
+    s = input()
+    print(romanToInt(s))
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static int romanToInt(String s) {
+        Map<Character, Integer> roman_values = new HashMap<>();
+        roman_values.put('I', 1);
+        roman_values.put('V', 5);
+        roman_values.put('X', 10);
+        roman_values.put('L', 50);
+        roman_values.put('C', 100);
+        roman_values.put('D', 500);
+        roman_values.put('M', 1000);
+
+        int result = 0;
+        for (int i = 0; i < s.length(); i++) {
+            if (i + 1 < s.length() && roman_values.get(s.charAt(i)) < roman_values.get(s.charAt(i + 1))) {
+                result -= roman_values.get(s.charAt(i));
+            } else {
+                result += roman_values.get(s.charAt(i));
+            }
+        }
+
+        return result;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        String s = sc.nextLine();
+
+        System.out.println(romanToInt(s));
+    }
+}
+```
+
+---
+
+APPROACH 2: SWITCH CASE + SUBTRACTION RULES
+TC: O(n)  |  SC: O(1)
+
+C++:
+```cpp
+#include <iostream>
+#include <string>
+using namespace std;
+
+int getValue(char c) {
+    switch(c) {
+        case 'I': return 1;
+        case 'V': return 5;
+        case 'X': return 10;
+        case 'L': return 50;
+        case 'C': return 100;
+        case 'D': return 500;
+        case 'M': return 1000;
+        default: return 0;
+    }
+}
+
+int romanToInt(string s) {
+    int result = 0;
+    for (int i = 0; i < s.length(); i++) {
+        int current = getValue(s[i]);
+        int next = (i + 1 < s.length()) ? getValue(s[i + 1]) : 0;
+
+        if (current < next) {
+            result -= current;
+        } else {
+            result += current;
+        }
+    }
+
+    return result;
+}
+
+int main() {
+    string s;
+    cin >> s;
+
+    cout << romanToInt(s) << endl;
+
+    return 0;
+}
+```
+
+Python:
+```python
+def romanToInt(s):
+    def getValue(c):
+        values = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000}
+        return values[c]
+
+    result = 0
+    for i in range(len(s)):
+        current = getValue(s[i])
+        next_val = getValue(s[i + 1]) if i + 1 < len(s) else 0
+
+        if current < next_val:
+            result -= current
+        else:
+            result += current
+
+    return result
+
+if __name__ == "__main__":
+    s = input()
+    print(romanToInt(s))
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static int getValue(char c) {
+        switch(c) {
+            case 'I': return 1;
+            case 'V': return 5;
+            case 'X': return 10;
+            case 'L': return 50;
+            case 'C': return 100;
+            case 'D': return 500;
+            case 'M': return 1000;
+            default: return 0;
+        }
+    }
+
+    public static int romanToInt(String s) {
+        int result = 0;
+        for (int i = 0; i < s.length(); i++) {
+            int current = getValue(s.charAt(i));
+            int next = (i + 1 < s.length()) ? getValue(s.charAt(i + 1)) : 0;
+
+            if (current < next) {
+                result -= current;
+            } else {
+                result += current;
+            }
+        }
+
+        return result;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        String s = sc.nextLine();
+
+        System.out.println(romanToInt(s));
+    }
+}
+```
+
+---
+
+APPROACH 3: RIGHT TO LEFT SCAN (OPTIMAL)
+TC: O(n)  |  SC: O(1)
+
+C++:
+```cpp
+#include <iostream>
+#include <string>
+#include <unordered_map>
+using namespace std;
+
+int romanToInt(string s) {
+    unordered_map<char, int> values = {
+        {'I', 1}, {'V', 5}, {'X', 10}, {'L', 50},
+        {'C', 100}, {'D', 500}, {'M', 1000}
+    };
+
+    int result = 0;
+    int prev_value = 0;
+
+    for (int i = s.length() - 1; i >= 0; i--) {
+        int current_value = values[s[i]];
+
+        if (current_value < prev_value) {
+            result -= current_value;
+        } else {
+            result += current_value;
+        }
+
+        prev_value = current_value;
+    }
+
+    return result;
+}
+
+int main() {
+    string s;
+    cin >> s;
+
+    cout << romanToInt(s) << endl;
+
+    return 0;
+}
+```
+
+Python:
+```python
+def romanToInt(s):
+    values = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000}
+
+    result = 0
+    prev_value = 0
+
+    for i in range(len(s) - 1, -1, -1):
+        current_value = values[s[i]]
+
+        if current_value < prev_value:
+            result -= current_value
+        else:
+            result += current_value
+
+        prev_value = current_value
+
+    return result
+
+if __name__ == "__main__":
+    s = input()
+    print(romanToInt(s))
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static int romanToInt(String s) {
+        Map<Character, Integer> values = new HashMap<>();
+        values.put('I', 1);
+        values.put('V', 5);
+        values.put('X', 10);
+        values.put('L', 50);
+        values.put('C', 100);
+        values.put('D', 500);
+        values.put('M', 1000);
+
+        int result = 0;
+        int prev_value = 0;
+
+        for (int i = s.length() - 1; i >= 0; i--) {
+            int current_value = values.get(s.charAt(i));
+
+            if (current_value < prev_value) {
+                result -= current_value;
+            } else {
+                result += current_value;
+            }
+
+            prev_value = current_value;
+        }
+
+        return result;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        String s = sc.nextLine();
+
+        System.out.println(romanToInt(s));
+    }
+}
+```
+
+SCORE: Approach 1: 7/10 | Approach 2: 8/10 | Approach 3: 10/10
+
+================================================================================
+QUESTION 7: CONTAINER WITH MOST WATER
+================================================================================
+
+PROBLEM STATEMENT:
+You are given an integer array height of length n. There are n vertical lines
+drawn such that the two endpoints of the i-th line are (i, 0) and (i, height[i]).
+Find two lines that together with x-axis form a container, such that the
+container holds the most water.
+
+Return the maximum area of water a container can store.
+
+Example:
+  Input: height = [1, 8, 6, 2, 5, 4, 8, 3, 7]
+  Output: 49
+
+Constraints:
+  - n == height.length
+  - 2 <= n <= 10^5
+  - 0 <= height[i] <= 10^4
+
+---
+
+APPROACH 1: BRUTE FORCE (All Pairs)
+TC: O(n²)  |  SC: O(1)
+
+C++:
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+int maxArea(vector<int>& height) {
+    int max_area = 0;
+    int n = height.size();
+
+    for (int i = 0; i < n; i++) {
+        for (int j = i + 1; j < n; j++) {
+            int width = j - i;
+            int h = min(height[i], height[j]);
+            int area = width * h;
+            max_area = max(max_area, area);
+        }
+    }
+
+    return max_area;
+}
+
+int main() {
+    int n;
+    cin >> n;
+
+    vector<int> height(n);
+    for (int i = 0; i < n; i++) {
+        cin >> height[i];
+    }
+
+    cout << maxArea(height) << endl;
+
+    return 0;
+}
+```
+
+Python:
+```python
+def maxArea(height):
+    max_area = 0
+    n = len(height)
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            width = j - i
+            h = min(height[i], height[j])
+            area = width * h
+            max_area = max(max_area, area)
+
+    return max_area
+
+if __name__ == "__main__":
+    n = int(input())
+    height = list(map(int, input().split()))
+    print(maxArea(height))
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static int maxArea(int[] height) {
+        int max_area = 0;
+        int n = height.length;
+
+        for (int i = 0; i < n; i++) {
+            for (int j = i + 1; j < n; j++) {
+                int width = j - i;
+                int h = Math.min(height[i], height[j]);
+                int area = width * h;
+                max_area = Math.max(max_area, area);
+            }
+        }
+
+        return max_area;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int n = sc.nextInt();
+
+        int[] height = new int[n];
+        for (int i = 0; i < n; i++) {
+            height[i] = sc.nextInt();
+        }
+
+        System.out.println(maxArea(height));
+    }
+}
+```
+
+---
+
+APPROACH 2: SORTING + GREEDY
+TC: O(n log n)  |  SC: O(1)
+
+C++:
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+int maxArea(vector<int>& height) {
+    int max_area = 0;
+    int n = height.size();
+
+    vector<pair<int, int>> heights;
+    for (int i = 0; i < n; i++) {
+        heights.push_back({height[i], i});
+    }
+
+    sort(heights.rbegin(), heights.rend());
+
+    int min_idx = INT_MAX;
+
+    for (int i = 0; i < n; i++) {
+        int h = heights[i].first;
+        int idx = heights[i].second;
+
+        if (min_idx != INT_MAX) {
+            int width = abs(min_idx - idx);
+            int area = width * h;
+            max_area = max(max_area, area);
+        }
+
+        min_idx = min(min_idx, idx);
+    }
+
+    return max_area;
+}
+
+int main() {
+    int n;
+    cin >> n;
+
+    vector<int> height(n);
+    for (int i = 0; i < n; i++) {
+        cin >> height[i];
+    }
+
+    cout << maxArea(height) << endl;
+
+    return 0;
+}
+```
+
+Python:
+```python
+def maxArea(height):
+    max_area = 0
+    n = len(height)
+
+    heights = [(height[i], i) for i in range(n)]
+    heights.sort(reverse=True)
+
+    min_idx = float('inf')
+
+    for h, idx in heights:
+        if min_idx != float('inf'):
+            width = abs(min_idx - idx)
+            area = width * h
+            max_area = max(max_area, area)
+
+        min_idx = min(min_idx, idx)
+
+    return max_area
+
+if __name__ == "__main__":
+    n = int(input())
+    height = list(map(int, input().split()))
+    print(maxArea(height))
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static int maxArea(int[] height) {
+        int max_area = 0;
+        int n = height.length;
+
+        List<int[]> heights = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            heights.add(new int[]{height[i], i});
+        }
+
+        heights.sort((a, b) -> Integer.compare(b[0], a[0]));
+
+        int min_idx = Integer.MAX_VALUE;
+
+        for (int[] pair : heights) {
+            int h = pair[0];
+            int idx = pair[1];
+
+            if (min_idx != Integer.MAX_VALUE) {
+                int width = Math.abs(min_idx - idx);
+                int area = width * h;
+                max_area = Math.max(max_area, area);
+            }
+
+            min_idx = Math.min(min_idx, idx);
+        }
+
+        return max_area;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int n = sc.nextInt();
+
+        int[] height = new int[n];
+        for (int i = 0; i < n; i++) {
+            height[i] = sc.nextInt();
+        }
+
+        System.out.println(maxArea(height));
+    }
+}
+```
+
+---
+
+APPROACH 3: TWO-POINTER (OPTIMAL)
+TC: O(n)  |  SC: O(1)
+
+C++:
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+int maxArea(vector<int>& height) {
+    int max_area = 0;
+    int left = 0, right = height.size() - 1;
+
+    while (left < right) {
+        int width = right - left;
+        int h = min(height[left], height[right]);
+        int area = width * h;
+        max_area = max(max_area, area);
+
+        if (height[left] < height[right]) {
+            left++;
+        } else {
+            right--;
+        }
+    }
+
+    return max_area;
+}
+
+int main() {
+    int n;
+    cin >> n;
+
+    vector<int> height(n);
+    for (int i = 0; i < n; i++) {
+        cin >> height[i];
+    }
+
+    cout << maxArea(height) << endl;
+
+    return 0;
+}
+```
+
+Python:
+```python
+def maxArea(height):
+    max_area = 0
+    left, right = 0, len(height) - 1
+
+    while left < right:
+        width = right - left
+        h = min(height[left], height[right])
+        area = width * h
+        max_area = max(max_area, area)
+
+        if height[left] < height[right]:
+            left += 1
+        else:
+            right -= 1
+
+    return max_area
+
+if __name__ == "__main__":
+    n = int(input())
+    height = list(map(int, input().split()))
+    print(maxArea(height))
+```
+
+Java:
+```java
+import java.util.*;
+
+public class Main {
+    public static int maxArea(int[] height) {
+        int max_area = 0;
+        int left = 0, right = height.length - 1;
+
+        while (left < right) {
+            int width = right - left;
+            int h = Math.min(height[left], height[right]);
+            int area = width * h;
+            max_area = Math.max(max_area, area);
+
+            if (height[left] < height[right]) {
+                left++;
+            } else {
+                right--;
+            }
+        }
+
+        return max_area;
+    }
+
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        int n = sc.nextInt();
+
+        int[] height = new int[n];
+        for (int i = 0; i < n; i++) {
+            height[i] = sc.nextInt();
+        }
+
+        System.out.println(maxArea(height));
+    }
+}
+```
+
+SCORE: Approach 1: 3/10 | Approach 2: 6/10 | Approach 3: 10/10
+
+================================================================================
+                            SUMMARY TABLE
+================================================================================
+
+QUESTION | DIFFICULTY | BRUTE FORCE TC | BETTER TC | OPTIMAL TC | OPTIMAL SC
+----------|------------|----------------|-----------|------------|------------
+1. 3Sum | Medium | O(n³) | O(n²) | O(n²) | O(1)
+2. 3Sum Closest | Medium | O(n³) | O(n²) | O(n²) | O(1)
+3. 4Sum | Hard | O(n⁴) | O(n³) | O(n³) | O(1)
+4. Median 2 Arrays | Hard | O(m+n) | O(log n) | O(log n) | O(1)
+5. Palindrome | Easy | O(n) | O(n) | O(n) | O(1)
+6. Roman to Int | Easy | O(n) | O(n) | O(n) | O(1)
+7. Container Water | Medium | O(n²) | O(n log n) | O(n) | O(1)
+
+================================================================================
+END OF DOCUMENT
+================================================================================
