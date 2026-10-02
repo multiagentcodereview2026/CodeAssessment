@@ -36,22 +36,18 @@ class VariableInfo:
     name: str
     scope_depth: int
     is_loop_bound: bool = False
-    bound_value: Optional[str] = None  # e.g., "n", "m", "V", "E"
+    bound_value: Optional[str] = None
 
 
 @dataclass
 class FunctionInfo:
     """Tracks function definitions and recursive call patterns."""
     name: str
-    node: 'Node'
+    node: Optional['Node']
     recursive_calls: int = 0
     has_memoization: bool = False
     call_sites: List['Node'] = None
     calls_inside_loop: bool = False
-
-    def __post_init__(self):
-        if self.call_sites is None:
-            self.call_sites = []
 
 
 class ASTComplexityAnalyzer:
@@ -99,9 +95,13 @@ class ASTComplexityAnalyzer:
         recursion_analysis = self._analyze_recursion()
 
         # Phase 3: Detect patterns
-        has_sort = self._has_sort_call()
+        has_sort, sort_inside_loop = self._analyze_sort_calls()
         has_binary_search = self._detect_binary_search()
         graph_context = self._detect_graph_context()
+        is_log_step = self._detect_logarithmic_loop(self.root)
+        has_multi_bounds, param_names = self._detect_multiple_input_bounds()
+        is_const_lookup = self._is_constant_lookup()
+        has_dyn_alloc = self._has_dynamic_allocation(is_const_lookup)
 
         return ComplexityIR(
             language=self.language,
@@ -110,61 +110,109 @@ class ASTComplexityAnalyzer:
                 structure=loop_analysis["structure"],
                 bounds=loop_analysis["bounds"],
                 has_sort=has_sort,
-                has_binary_search=has_binary_search
+                sort_inside_loop=sort_inside_loop,
+                has_binary_search=has_binary_search,
+                is_logarithmic_step=is_log_step,
+                multiple_input_bounds=has_multi_bounds,
+                distinct_params=param_names
             ),
             recursion=RecursionIR(
                 is_recursive=recursion_analysis.get("is_recursive", False),
                 branch_factor=recursion_analysis.get("branch_factor", 0),
                 has_memoization=recursion_analysis.get("has_memoization", False),
-                pattern=recursion_analysis.get("pattern", "linear")
+                pattern=recursion_analysis.get("pattern", "linear"),
+                is_divide_and_conquer=recursion_analysis.get("is_divide_and_conquer", False),
+                has_linear_combine=recursion_analysis.get("has_linear_combine", False),
+                has_auxiliary_array=recursion_analysis.get("has_auxiliary_array", False)
             ),
             graph=GraphIR(
                 is_graph=graph_context.get("is_graph", False),
                 structure='adj_list' if graph_context.get("has_adj_list") else ('adj_matrix' if graph_context.get("has_adj_matrix") else None)
             ),
-            has_dynamic_allocation=self._has_dynamic_allocation()
+            has_dynamic_allocation=has_dyn_alloc,
+            is_constant_lookup=is_const_lookup,
+            multiple_input_bounds=has_multi_bounds
         )
 
-    def _has_dynamic_allocation(self) -> bool:
+    def _is_constant_lookup(self) -> bool:
+        """Detect if map or dictionary is purely a constant fixed-size lookup table."""
+        src = self.source
+        src_lower = src.lower()
+
+        # Check for Roman numeral or constant literal map initialization
+        has_literal_init = bool(re.search(r"unordered_map\s*<[^>]+>\s*\w+\s*=\s*\{", src)) or \
+                           bool(re.search(r"map\s*<[^>]+>\s*\w+\s*=\s*\{", src)) or \
+                           bool(re.search(r"\{\s*['\"][A-Za-z0-9]['\"]\s*:\s*\d+", src)) or \
+                           bool(re.search(r"\{\s*\{['\"][A-Za-z0-9]['\"]\s*,\s*\d+\}", src))
+
+        # Fixed array tables like char table[256] or int count[26]
+        has_fixed_table = bool(re.search(r"\w+\s*\[\s*(?:26|128|256|1000)\s*\]", src))
+
+        # Check if any dynamic insertion happens inside a loop
+        has_dynamic_map_insert = bool(re.search(r"\b\w+\[[^\]]+\]\s*=\s*i\b", src)) or \
+                                 bool(re.search(r"\b\w+\.put\s*\(", src_lower)) or \
+                                 bool(re.search(r"\b\w+\.insert\s*\(", src_lower)) or \
+                                 bool(re.search(r"\b\w+\[target\s*-", src_lower))
+
+        if (has_literal_init or has_fixed_table) and not has_dynamic_map_insert:
+            return True
+
+        return False
+
+    def _has_dynamic_allocation(self, is_const_lookup: bool = False) -> bool:
         """Detect if code allocates non-constant dynamic data structures."""
         src = self.source.lower()
 
-        # Dynamic heap structures
-        dynamic_structures = [
-            r"unordered_map\s*<",
-            r"unordered_set\s*<",
-            r"\bmap\s*<",
-            r"\bset\s*<",
-            r"\bqueue\s*<",
-            r"\bstack\s*<",
-            r"\bpriority_queue\s*<",
-            r"hashmap\b",
-            r"hashset\b",
-            r"treemap\b",
-            r"treeset\b",
-            r"\bdict\s*\(",
-            r"\{\s*:\s*\}",
-            r"collections\.defaultdict",
-            r"\bnew\s+\w+\s*\[\s*(?!\d+\s*\])",  # new int[n]
-        ]
-        if any(re.search(p, src) for p in dynamic_structures):
-            return True
+        if is_const_lookup:
+            # If it's purely a constant lookup table and no other dynamic arrays exist
+            pass
+        else:
+            # Dynamic heap structures that grow with input
+            dynamic_structures = [
+                r"unordered_map\s*<",
+                r"unordered_set\s*<",
+                r"\bmap\s*<",
+                r"\bset\s*<",
+                r"\bqueue\s*<",
+                r"\bstack\s*<",
+                r"\bpriority_queue\s*<",
+                r"hashmap\b",
+                r"hashset\b",
+                r"treemap\b",
+                r"treeset\b",
+                r"\bdict\s*\(",
+                r"collections\.defaultdict",
+                r"\bnew\s+\w+\s*\[\s*(?!\d+\s*\])",  # new int[n]
+            ]
+            if any(re.search(p, src) for p in dynamic_structures):
+                return True
 
-        # Check vectors with variable size (e.g. vector<int> dp(n) or vector<int> c(n, 1))
-        # Ignore function return types like vector<int> f(string& s) and fixed-size vectors like vector<int> last(26)
+            # Dynamic dictionary in Python
+            if re.search(r"\bseen\s*=\s*\{", src) or re.search(r"\bmap\s*=\s*\{", src):
+                return True
+
+        # Check vector with dynamic push_back or variable size
+        if re.search(r"\.push_back\s*\(", src) or re.search(r"\.append\s*\(", src):
+            # Exception: returning fixed answer tuples like result.push_back({a, b, c}) or res.append([a, b, c])
+            # where return type is output list of tuples for 3sum/4sum (output space is not auxiliary space)
+            if re.search(r"\.push_back\s*\(\s*\{", src) or re.search(r"\.append\s*\(\s*\[", src):
+                pass
+            elif re.search(r"(?:merged|ans|temp|list)\.push_back", src) or \
+                 re.search(r"(?:merged|temp)\.append", src) or \
+                 re.search(r"\.push_back\s*\(\s*(?:a|b|nums1|nums2|arr)\[", src):
+                return True
+
+        # Check vectors with variable size constructor (e.g. vector<int> temp(n) or vector<int> dp(n))
         vector_matches = re.finditer(r"vector\s*<[^>]+>\s+\w+\s*\(\s*([^,\)]+)", src)
         for m in vector_matches:
             size_arg = m.group(1).strip()
-            # Ignore function signatures
             if any(t in size_arg for t in ['int', 'string', 'char', 'auto', 'const', 'bool', 'float', 'double', '&', '*']):
                 continue
-            # If size_arg is purely a small constant number, it's O(1)
             if re.match(r"^\d+$", size_arg):
                 val = int(size_arg)
                 if val > 1000:
                     return True
             else:
-                # Variable size like n, a.size(), g.size(), etc.
                 return True
 
         # Java dynamic array allocation: new int[n]
@@ -187,11 +235,7 @@ class ASTComplexityAnalyzer:
                     name_node = self._find_child(declarator, "identifier") or self._find_child(declarator, "field_identifier")
                     if name_node:
                         func_name = self._get_node_text(name_node)
-            elif self.language == "java":
-                name_node = self._find_child(node, "identifier")
-                if name_node:
-                    func_name = self._get_node_text(name_node)
-            elif self.language == "python":
+            elif self.language in {"java", "python"}:
                 name_node = self._find_child(node, "identifier")
                 if name_node:
                     func_name = self._get_node_text(name_node)
@@ -219,7 +263,7 @@ class ASTComplexityAnalyzer:
             identifier = self._find_child(node, "identifier")
             if identifier:
                 var_name = self._get_node_text(identifier)
-                if var_name.lower() in {"n", "m", "v", "e", "size"}:
+                if var_name.lower() in {"n", "m", "v", "e", "size", "a", "b", "nums1", "nums2"}:
                     self.variables[var_name] = VariableInfo(
                         name=var_name,
                         scope_depth=self.current_scope_depth,
@@ -244,11 +288,12 @@ class ASTComplexityAnalyzer:
             }
             if is_loop:
                 loop_count += 1
-                max_depth = max(max_depth, depth + 1)
+                current_depth = depth + 1
+                max_depth = max(max_depth, current_depth)
                 bound = self._extract_loop_bound(n)
                 bounds.append(bound or "n")
                 for child in n.children:
-                    visit(child, depth + 1)
+                    visit(child, current_depth)
             else:
                 for child in n.children:
                     visit(child, depth)
@@ -268,18 +313,18 @@ class ASTComplexityAnalyzer:
         return {
             "bounds": bounds,
             "structure": structure,
-            "max_depth": self.max_loop_depth
+            "max_depth": self.max_loop_depth,
+            "loop_count": loop_count
         }
 
     def _extract_loop_bound(self, loop_node: Node) -> Optional[str]:
         """Extract the complexity variable from loop condition or range."""
         text = self._get_node_text(loop_node).lower()
 
-        # Range-based loops (C++ / Java / Python)
         if loop_node.type in {"for_range_loop", "enhanced_for_statement"} or (
             loop_node.type == "for_statement" and self.language == "python"
         ):
-            for var in ["n", "m", "v", "e"]:
+            for var in ["nums1", "nums2", "n", "m", "v", "e", "a", "b"]:
                 if re.search(rf"\b{var}\b", text):
                     return var
             return "n"
@@ -290,7 +335,7 @@ class ASTComplexityAnalyzer:
 
         cond_text = self._get_node_text(condition).lower() if condition else text
 
-        for var in ["n", "m", "v", "e", "rows", "cols"]:
+        for var in ["nums1", "nums2", "n", "m", "v", "e", "rows", "cols", "a", "b"]:
             if re.search(rf"\b{var}\b", cond_text):
                 return var
 
@@ -299,14 +344,65 @@ class ASTComplexityAnalyzer:
 
         return None
 
+    def _detect_logarithmic_loop(self, node: Node) -> bool:
+        """Detect if loop step divides the loop variable (/= 10, /= 2, >>= 1, etc.)."""
+        src = self.source.lower()
+
+        # Check for division or bit shift inside while/for loops
+        div_patterns = [
+            r"\/=\s*\d+",           # x /= 10, n /= 2
+            r"\b\w+\s*=\s*\w+\s*\/\s*\d+",  # x = x / 10
+            r">>=\s*\d+",          # x >>= 1
+            r"\b\w+\s*=\s*\w+\s*>>\s*\d+",  # x = x >> 1
+            r"\b\w+\s*=\s*\w+\s*\*\s*2",   # x = x * 2
+            r"\*=\s*2",            # x *= 2
+        ]
+        return any(re.search(p, src) for p in div_patterns)
+
+    def _detect_multiple_input_bounds(self) -> Tuple[bool, List[str]]:
+        """Detect if algorithm iterates across multiple input collections (e.g., O(m+n))."""
+        src = self.source.lower()
+
+        # Check function parameters for two array/vector/collection inputs
+        params = []
+        param_match = re.search(r"\(([^)]+)\)", src)
+        if param_match:
+            param_str = param_match.group(1)
+            # Find vector / array / string param names
+            found_params = re.findall(r"(?:vector\s*<[^>]+>|int\s*\[\]|string|list\[[^\]]+\])\s*(?:&|\*)?\s*(\w+)", param_str)
+            if not found_params:
+                found_params = re.findall(r"\b(\w+)\s*:\s*(?:list|str)", param_str)
+            params = found_params
+
+        # Check if loops mention both inputs (e.g. nums1 and nums2, or a and b)
+        if len(params) >= 2:
+            p1, p2 = params[0], params[1]
+            if (p1 in src and p2 in src) and (
+                f"{p1}.size()" in src and f"{p2}.size()" in src or
+                f"len({p1})" in src and f"len({p2})" in src or
+                f"while" in src and p1 in src and p2 in src
+            ):
+                return True, [p1, p2]
+
+        # Explicit m + n indicators
+        if ("nums1" in src and "nums2" in src) or ("arr1" in src and "arr2" in src):
+            return True, ["m", "n"]
+
+        return False, []
+
     def _analyze_recursion(self) -> Dict:
-        """Analyze recursive call patterns, backtracking, and memoization."""
+        """Analyze recursive call patterns, divide-and-conquer, backtracking, and memoization."""
         result = {
             "is_recursive": False,
             "branch_factor": 0,
             "has_memoization": False,
-            "pattern": "none"
+            "pattern": "none",
+            "is_divide_and_conquer": False,
+            "has_linear_combine": False,
+            "has_auxiliary_array": False
         }
+
+        src = self.source.lower()
 
         for func_name, func_info in self.functions.items():
             self_calls, in_loop = self._count_recursive_calls(func_info.node, func_name)
@@ -315,26 +411,43 @@ class ASTComplexityAnalyzer:
                 func_info.calls_inside_loop = in_loop
                 result["is_recursive"] = True
 
-                # Check for memoization
+                # 1. Check for memoization
                 if self._has_memoization_check(func_info.node):
                     func_info.has_memoization = True
                     result["has_memoization"] = True
                     result["branch_factor"] = 1
                     result["pattern"] = "memoized"
-                elif in_loop:
-                    # Backtracking recursion inside loop
-                    body_text = self._get_node_text(func_info.node).lower()
-                    if "swap" in body_text or "queen" in body_text or "perm" in body_text or re.search(r"\[[^\]]+\]\s*\[[^\]]+\]", body_text):
-                        # Permutations / N-Queens
+                    return result
+
+                # 2. Check for Divide & Conquer (MergeSort, QuickSort, etc.)
+                body_text = self._get_node_text(func_info.node).lower() if func_info.node else src
+
+                has_mid_split = "mid" in body_text or "m" in body_text or "left + (right - left) / 2" in body_text or "(l + r) / 2" in body_text
+                has_partition_split = "partition" in body_text or "pi" in body_text or "pivot" in body_text or "swap" in body_text
+                has_merge_call = "merge" in body_text or "temp" in body_text
+
+                if self_calls == 2 and (has_mid_split or has_partition_split or has_merge_call):
+                    result["is_divide_and_conquer"] = True
+                    result["branch_factor"] = 2
+                    result["pattern"] = "divide_and_conquer"
+                    result["has_linear_combine"] = True
+
+                    # Check auxiliary space for merge sort vs quick sort
+                    has_aux_space = bool(re.search(r"vector\s*<\s*int\s*>\s*temp", src)) or \
+                                    bool(re.search(r"new\s+int\s*\[", src)) or \
+                                    bool(re.search(r"temp\s*\[", src)) or \
+                                    "merge" in src
+                    result["has_auxiliary_array"] = has_aux_space
+                    return result
+
+                # 3. Backtracking recursion inside loop
+                if in_loop:
+                    if "swap" in body_text or "queen" in body_text or "perm" in body_text:
                         result["branch_factor"] = 5
                         result["pattern"] = "n-ary"
-                    elif "target" in body_text or "sum" in body_text or "subset" in body_text or "-" in body_text:
-                        # Combination sum / subset recursion
+                    else:
                         result["branch_factor"] = 2
                         result["pattern"] = "branching"
-                    else:
-                        result["branch_factor"] = 5
-                        result["pattern"] = "n-ary"
                 elif self_calls == 1:
                     result["branch_factor"] = max(result["branch_factor"], 1)
                     result["pattern"] = "tail" if self._is_tail_recursive(func_info.node, func_name) else "linear"
@@ -348,6 +461,9 @@ class ASTComplexityAnalyzer:
         """Count how many times a function calls itself and check if any call is inside a loop."""
         count = 0
         call_in_loop = False
+
+        if not node:
+            return 0, False
 
         is_loop = node.type in {
             "for_statement", "for_range_loop", "enhanced_for_statement",
@@ -370,9 +486,9 @@ class ASTComplexityAnalyzer:
 
         return count, call_in_loop
 
-    def _has_memoization_check(self, node: Node) -> bool:
+    def _has_memoization_check(self, node: Optional[Node]) -> bool:
         """Detect if function uses memoization (checks dp/memo/cache array or map)."""
-        text = self._get_node_text(node).lower()
+        text = self._get_node_text(node).lower() if node else self.source.lower()
 
         memo_patterns = [
             r"\bdp\[",
@@ -388,8 +504,10 @@ class ASTComplexityAnalyzer:
         ]
         return any(re.search(pattern, text) for pattern in memo_patterns)
 
-    def _is_tail_recursive(self, node: Node, func_name: str) -> bool:
+    def _is_tail_recursive(self, node: Optional[Node], func_name: str) -> bool:
         """Check if recursion is tail-recursive."""
+        if not node:
+            return False
         returns = []
         self._find_all_returns(node, returns)
 
@@ -406,10 +524,33 @@ class ASTComplexityAnalyzer:
         for child in node.children:
             self._find_all_returns(child, results)
 
-    def _has_sort_call(self) -> bool:
-        """Detect if code calls sort or sorted."""
+    def _analyze_sort_calls(self) -> Tuple[bool, bool]:
+        """Detect if code calls sort and whether sort is called inside a loop."""
         text = self.source.lower()
-        return bool(re.search(r"\b(?:std::)?sort\s*\(|Arrays\.sort\(|Collections\.sort\(|\.sort\(|sorted\(", text))
+        has_sort = bool(re.search(r"\b(?:std::)?sort\s*\(|Arrays\.sort\(|Collections\.sort\(|\.sort\(|sorted\(", text))
+
+        if not has_sort:
+            return False, False
+
+        # Check if sort is inside a loop
+        sort_inside_loop = False
+        def check_sort_in_loop(n: Node, in_loop: bool):
+            nonlocal sort_inside_loop
+            is_loop = n.type in {"for_statement", "for_range_loop", "enhanced_for_statement", "while_statement", "do_statement"}
+            cur_in_loop = in_loop or is_loop
+
+            if n.type in {"call_expression", "method_invocation", "call"}:
+                call_text = self._get_node_text(n).lower()
+                if "sort" in call_text and cur_in_loop:
+                    sort_inside_loop = True
+
+            for child in n.children:
+                check_sort_in_loop(child, cur_in_loop)
+
+        if self.root:
+            check_sort_in_loop(self.root, False)
+
+        return has_sort, sort_inside_loop
 
     def _detect_binary_search(self) -> bool:
         """Detect binary search pattern via AST/code structure."""
@@ -432,7 +573,6 @@ class ASTComplexityAnalyzer:
         graph_keywords = ["adj", "graph", "edge", "edges", "vertex", "vertices", "visited", "vis", "dfs", "bfs", "g[u]"]
         has_graph_keyword = any(kw in text for kw in graph_keywords)
 
-        # Adjacency list: vector<vector<...>>, List<List<...>>, defaultdict(list), or g[u] indexing
         has_adj_list = bool(
             re.search(r"vector\s*<\s*vector\s*<", text)
             or re.search(r"list\s*<\s*list\s*<", text)
@@ -442,7 +582,6 @@ class ASTComplexityAnalyzer:
             or re.search(r"\badj\.get\(", text)
         ) and has_graph_keyword
 
-        # Adjacency matrix: 2D array [V][V] or matrix(V, vector<int>(V))
         has_adj_matrix = bool(
             re.search(r"\[\s*v\s*\]\s*\[\s*v\s*\]", text)
             or re.search(r"matrix\s*\[[^\]]+\]\s*\[[^\]]+\]", text)
@@ -477,5 +616,4 @@ def parse_ast(source: str, language: str = "cpp") -> Optional[ASTComplexityAnaly
 
 
 def parse_cpp_ast(source: str) -> Optional[ASTComplexityAnalyzer]:
-    """Legacy helper for C++ AST analysis."""
     return parse_ast(source, "cpp")
