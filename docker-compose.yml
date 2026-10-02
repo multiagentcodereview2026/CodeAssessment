@@ -37,7 +37,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg://codeassessment:${POSTGRES_PASSWORD:-change-this-before-production}@postgres:5432/codeassessment
       - DOCKER_ENGINE_URL=http://execution-engine:8001/execute
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
+      - JWT_SECRET_KEY=codeassessment-jwt-secret-key-minimum-32-chars-long-12345
       - EXECUTION_CPU_LIMIT=1.0
       - EXECUTION_MEMORY_LIMIT=256m
       - EXECUTION_TIMEOUT_SECONDS=5
