@@ -19,18 +19,22 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
 
     # 1. GRAPH ALGORITHMS
     if graph.is_graph:
-        if graph.structure == "adj_matrix":
+        if graph.traversal_inside_loop:
+            # Traversal inside vertex loop e.g. for s = 0; s < V; s++ reach(s, s, g, vis)
+            time_complexity = "O(V*(V+E))"
+            space_complexity = "O(V+E)"
+        elif graph.structure == "adj_matrix":
             time_complexity = "O(V^2)"
             space_complexity = "O(V^2)"
         elif graph.structure == "adj_list":
             time_complexity = "O(V+E)"
-            space_complexity = "O(V)"
+            space_complexity = "O(V+E)"
         elif graph.structure == "edge_list":
             time_complexity = "O(E)"
             space_complexity = "O(E)"
         else:
             time_complexity = "O(V+E)"
-            space_complexity = "O(V)"
+            space_complexity = "O(V+E)"
 
     # 2. RECURSION PATTERNS
     elif recursion.is_recursive:
@@ -68,39 +72,50 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
                 time_complexity = "O(n)"
                 space_complexity = "O(n)"
 
-    # 3. BINARY SEARCH OR LOGARITHMIC STEP
-    elif loop.has_binary_search or (loop.is_logarithmic_step and loop.depth <= 1):
+    # 3. BINARY SEARCH (STANDALONE)
+    elif loop.has_binary_search and not loop.binary_search_inside_loop and loop.depth <= 1:
         time_complexity = "O(log n)"
         space_complexity = "O(1)"
 
-    # 4. MULTI-INPUT BOUNDS (e.g. Median of 2 sorted arrays)
+    # 4. LOGARITHMIC STEP (e.g. x /= 10)
+    elif loop.is_logarithmic_step and loop.depth <= 1:
+        time_complexity = "O(log n)"
+        space_complexity = "O(1)"
+
+    # 5. MULTI-INPUT BOUNDS (e.g. Median of 2 sorted arrays)
     elif loop.multiple_input_bounds and loop.depth <= 1:
         time_complexity = "O(m+n)"
-        if ir.has_dynamic_allocation:
+        if ir.has_dynamic_allocation and ir.has_merged_both:
             space_complexity = "O(m+n)"
+        elif ir.has_dynamic_allocation:
+            space_complexity = "O(n)"
         else:
             space_complexity = "O(1)"
 
-    # 5. LOOP-BASED ALGORITHMS
+    # 6. LOOP-BASED ALGORITHMS
     elif loop.depth > 0:
+        # Check binary search inside loop
+        if loop.has_binary_search and loop.binary_search_inside_loop:
+            if loop.binary_search_loop_depth >= 2:
+                time_complexity = "O(n^2 log n)"  # e.g. 3Sum with binary search
+            else:
+                time_complexity = "O(n log n)"    # e.g. LIS with lower_bound
         # Check sort interaction
-        if loop.has_sort:
+        elif loop.has_sort:
             if loop.sort_inside_loop:
-                # Sort called inside every iteration of outer loop
                 if loop.depth >= 2:
                     time_complexity = "O(n^2 log n)"
                 else:
                     time_complexity = "O(n log n)"
             else:
-                # Sort called outside (sequential): max(O(n log n), loop_complexity)
+                # Sequential sort outside loop: max(O(n log n), loop_complexity)
                 if loop.depth >= 3:
                     time_complexity = "O(n^3)"  # 4Sum: O(n log n) + O(n^3) = O(n^3)
                 elif loop.depth == 2:
                     time_complexity = "O(n^2)"  # 3Sum: O(n log n) + O(n^2) = O(n^2)
                 else:
-                    time_complexity = "O(n log n)"
+                    time_complexity = "O(n log n)"  # Merge Intervals: O(n log n) + O(n) = O(n log n)
         elif loop.structure == "sequential":
-            # Independent sequential loops: O(n) + O(n) = O(n)
             if loop.multiple_input_bounds:
                 time_complexity = "O(m+n)"
             else:
@@ -116,8 +131,6 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
             unique_bounds = set(loop.bounds)
             if len(unique_bounds) >= 2 and "v" in unique_bounds and "e" in unique_bounds:
                 time_complexity = "O(V+E)"
-            elif len(unique_bounds) >= 2 and ("m" in unique_bounds or "nums2" in unique_bounds):
-                time_complexity = "O(mn)"
             else:
                 time_complexity = "O(n^2)"
         elif loop.depth == 3:
@@ -128,22 +141,26 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
         # Determine space complexity
         if ir.is_constant_lookup:
             space_complexity = "O(1)"
+        elif ir.has_2d_allocation:
+            space_complexity = "O(n^2)"
         elif ir.has_dynamic_allocation:
-            if loop.multiple_input_bounds:
+            if loop.multiple_input_bounds and ir.has_merged_both:
                 space_complexity = "O(m+n)"
             else:
                 space_complexity = "O(n)"
         else:
             space_complexity = "O(1)"
 
-    # 6. JUST SORT, NO LOOPS
+    # 7. JUST SORT, NO LOOPS
     elif loop.has_sort:
         time_complexity = "O(n log n)"
-        space_complexity = "O(1)"
+        space_complexity = "O(n)" if ir.has_dynamic_allocation else "O(1)"
 
-    # Final space check for constant lookups
+    # Final space check for constant lookups and 2D allocations
     if ir.is_constant_lookup:
         space_complexity = "O(1)"
+    elif ir.has_2d_allocation:
+        space_complexity = "O(n^2)"
 
     return ComplexityAnalysis(
         time_complexity=normalize_complexity(time_complexity) or "O(1)",
