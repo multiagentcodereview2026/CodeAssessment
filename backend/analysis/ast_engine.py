@@ -43,12 +43,18 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
             time_complexity = "O(n)"
             space_complexity = "O(n)"
         elif recursion.is_divide_and_conquer:
-            # Divide and Conquer (MergeSort, QuickSort): O(n log n) time
-            time_complexity = "O(n log n)"
-            if recursion.has_auxiliary_array or ir.has_dynamic_allocation:
-                space_complexity = "O(n)"  # MergeSort auxiliary buffer
+            # Divide and Conquer patterns
+            if recursion.pattern == "simple_divide_and_conquer":
+                # Simple D&C like finding max: T(n) = 2T(n/2) + O(1) = O(n)
+                time_complexity = "O(n)"
+                space_complexity = "O(log n)"
             else:
-                space_complexity = "O(log n)"  # QuickSort recursion stack
+                # MergeSort, QuickSort: T(n) = 2T(n/2) + O(n) = O(n log n)
+                time_complexity = "O(n log n)"
+                if recursion.has_auxiliary_array or ir.has_dynamic_allocation:
+                    space_complexity = "O(n)"  # MergeSort auxiliary buffer
+                else:
+                    space_complexity = "O(log n)"  # QuickSort recursion stack
         else:
             branch_factor = recursion.branch_factor
             pattern = recursion.pattern
@@ -94,8 +100,14 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
 
     # 6. LOOP-BASED ALGORITHMS
     elif loop.depth > 0:
+        # Check heap operations inside loops
+        if loop.has_heap_operations:
+            if loop.depth == 1:
+                time_complexity = "O(n log n)"  # Single loop with heap ops
+            else:
+                time_complexity = f"O(n^{loop.depth} log n)"
         # Check binary search inside loop
-        if loop.has_binary_search and loop.binary_search_inside_loop:
+        elif loop.has_binary_search and loop.binary_search_inside_loop:
             if loop.binary_search_loop_depth >= 2:
                 time_complexity = "O(n^2 log n)"  # e.g. 3Sum with binary search
             else:
@@ -131,6 +143,8 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
             unique_bounds = set(loop.bounds)
             if len(unique_bounds) >= 2 and "v" in unique_bounds and "e" in unique_bounds:
                 time_complexity = "O(V+E)"
+            elif loop.has_matrix_bounds:
+                time_complexity = "O(m*n)"
             else:
                 time_complexity = "O(n^2)"
         elif loop.depth == 3:

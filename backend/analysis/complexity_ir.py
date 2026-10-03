@@ -14,6 +14,8 @@ class LoopIR:
     is_logarithmic_step: bool = False
     multiple_input_bounds: bool = False
     distinct_params: List[str] = field(default_factory=list)
+    has_heap_operations: bool = False
+    has_matrix_bounds: bool = False
 
 @dataclass
 class RecursionIR:
