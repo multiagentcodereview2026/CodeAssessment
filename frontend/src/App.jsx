@@ -124,7 +124,7 @@ function AppRoutes() {
           <Route path="dashboard" element={<InstructorDashboard />} />
           <Route path="courses" element={<CoursesManagerView />} />
           <Route path="courses/:courseId" element={<CourseDetailsView />} />
-          <Route path="students" element={<Navigate to="/instructor/courses" replace />} />
+          <Route path="students" element={<CoursesManagerView />} />
           <Route path="assignments" element={<AssignmentsManagerView />} />
           <Route path="problems" element={<ProblemsListView />} />
           <Route path="analytics" element={<ClassAnalyticsView />} />

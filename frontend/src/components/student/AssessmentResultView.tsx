@@ -1,151 +1,78 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, BookOpen, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowLeft, BookOpen, CheckCircle2, Clock3, Code2, HardDrive, Lightbulb, Sparkles, TrendingUp, XCircle } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
+import { CircularGauge } from '../common/CircularGauge';
 
-type Submission = {
-  submission_id: string;
-  student_id: string;
-  problem_id: string;
-  assignment_id: number | null;
-  language: string;
-  code: string;
-  status: string;
-  overall_score: number | null;
-  correctness_score: number | null;
-  complexity_score: number | null;
-  style_score: number | null;
-  similarity_score: number | null;
-  complexity_details: Record<string, unknown> | null;
-  execution_result: Record<string, any> | null;
-  feedback: unknown;
-  recommendations: unknown;
-  improved_code: unknown;
-  projected_score: unknown;
-  created_at: string;
-};
-
-const formatStoredValue = (value: unknown) => {
-  if (value == null) return 'No saved details.';
-  if (typeof value === 'string') return value;
-  return JSON.stringify(value, null, 2);
-};
+type R = Record<string, any>;
+type Submission = { submission_id: string; student_id: string; problem_id: string; assignment_id: number | null; language: string; code: string; status: string; overall_score: number | null; correctness_score: number | null; complexity_score: number | null; style_score: number | null; similarity_score: number | null; complexity_details: R | null; execution_result: R | null; feedback: unknown; recommendations: unknown; improved_code: unknown; projected_score: unknown; created_at: string };
+const obj = (x: unknown): R => x && typeof x === 'object' && !Array.isArray(x) ? x as R : {};
+const str = (x: unknown) => typeof x === 'string' ? x : '';
+const list = (x: unknown): string[] => Array.isArray(x) ? x.filter((v): v is string => typeof v === 'string' && !!v.trim()) : [];
+const num = (x: unknown): number | null => typeof x === 'number' && Number.isFinite(x) ? x : null;
+const grade = (n: number) => n >= 90 ? 'Excellent (A)' : n >= 80 ? 'Very Good (B)' : n >= 70 ? 'Good (C)' : n >= 60 ? 'Satisfactory (D)' : 'Needs Improvement (F)';
 
 export const AssessmentResultView: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { authFetch } = useAuth();
   const [submission, setSubmission] = useState<Submission | null>(null);
-  const [problemTitle, setProblemTitle] = useState('');
+  const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
   useEffect(() => {
-    if (!id) {
-      setError('Choose a saved submission from your history.');
-      setLoading(false);
-      return;
-    }
+    if (!id) { setError('Choose a saved submission from your history.'); setLoading(false); return; }
     let cancelled = false;
-    const load = async () => {
+    (async () => {
       try {
         const response = await authFetch(`/api/submissions/${encodeURIComponent(id)}`, { cache: 'no-store' });
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({}));
-          throw new Error(body.detail || 'Submission could not be loaded.');
-        }
+        if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.detail || 'Submission could not be loaded.'); }
         const data: Submission = await response.json();
         const problemResponse = await authFetch(`/api/problems/${encodeURIComponent(data.problem_id)}`, { cache: 'no-store' });
         const problem = problemResponse.ok ? await problemResponse.json() : null;
-        if (cancelled) return;
-        setSubmission(data);
-        setProblemTitle(problem?.title || data.problem_id);
-      } catch (loadError) {
-        if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Submission could not be loaded.');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    void load();
+        if (!cancelled) { setSubmission(data); setTitle(problem?.title || data.problem_id); }
+      } catch (e) { if (!cancelled) setError(e instanceof Error ? e.message : 'Submission could not be loaded.'); }
+      finally { if (!cancelled) setLoading(false); }
+    })();
     return () => { cancelled = true; };
   }, [authFetch, id]);
 
-  if (loading) return <main className="mx-auto max-w-5xl py-12 text-sm text-slate-500">Loading saved assessment…</main>;
-  if (!submission) {
-    return <main className="mx-auto max-w-3xl space-y-4 py-12">
-      <p role="alert" className="text-sm text-rose-700">{error || 'Submission not found.'}</p>
-      <Link to="/submissions" className="inline-flex items-center gap-2 text-sm font-semibold text-indigo-700"><ArrowLeft className="h-4 w-4" /> Submission history</Link>
-    </main>;
-  }
+  const d = useMemo(() => {
+    if (!submission) return null;
+    const execution = obj(submission.execution_result), complexity = obj(submission.complexity_details), feedback = obj(submission.feedback), recommendations = obj(submission.recommendations), projection = obj(submission.projected_score);
+    const results = Array.isArray(execution.results) ? execution.results : [];
+    const passed = Number(execution.passed_cases || 0), total = Number(execution.total_cases || passed + Number(execution.failed_cases || 0));
+    const accepted = total > 0 && passed === total;
+    const steps = list(feedback.improvement_steps).length ? list(feedback.improvement_steps) : list(recommendations.steps).length ? list(recommendations.steps) : list(feedback.weaknesses);
+    const time = num(complexity.time_score), space = num(complexity.space_score);
+    const rows = [
+      { name: 'Correctness', score: num(submission.correctness_score) == null ? null : submission.correctness_score! * .25, max: 25, color: 'bg-blue-500', detail: total ? `Judge result: ${passed}/${total} tests passed.` : 'Test result unavailable.' },
+      { name: 'Time', score: time, max: num(complexity.time_score_max) ?? (time == null ? 25 : 25), color: 'bg-cyan-500', detail: [str(complexity.time_complexity), str(complexity.time_classification)].filter(Boolean).join(' · ') || 'Time analysis unavailable.' },
+      { name: 'Space', score: space, max: num(complexity.space_score_max) ?? (space == null ? 25 : 25), color: 'bg-amber-500', detail: [str(complexity.space_complexity), str(complexity.space_classification)].filter(Boolean).join(' · ') || 'Space analysis unavailable.' },
+      { name: 'Style', score: num(submission.style_score) == null ? null : submission.style_score! * .2, max: 20, color: 'bg-violet-500', detail: 'Code style assessment' },
+      { name: 'Originality', score: num(submission.similarity_score) == null ? null : (100 - submission.similarity_score!) * .1, max: 10, color: 'bg-emerald-500', detail: submission.similarity_score == null ? 'Similarity analysis unavailable.' : `${submission.similarity_score.toFixed(1)}% similarity risk` },
+      { name: 'Execution', score: typeof execution.compile_status === 'string' ? (execution.compile_status.toLowerCase() === 'success' ? 10 : 0) : null, max: 10, color: 'bg-indigo-500', detail: str(execution.compile_status) || 'Build status unavailable.' }
+    ];
+    const projected = num(projection.projected_score);
+    const gain = num(projection.score_improvement_delta) ?? num(projection.expected_improvement) ?? (projected != null && submission.overall_score != null ? Math.max(0, projected - submission.overall_score) : null);
+    return { execution, complexity, feedback, recommendations, results, passed, total, accepted, steps, rows, projected, gain };
+  }, [submission]);
 
-  const execution = submission.execution_result || {};
-  const results = Array.isArray(execution.results) ? execution.results : [];
-  const passedCases = Number(execution.passed_cases || 0);
-  const totalCases = Number(execution.total_cases || passedCases + Number(execution.failed_cases || 0));
-  const scores = [
-    ['Correctness', submission.correctness_score],
-    ['Complexity', submission.complexity_score],
-    ['Style', submission.style_score],
-    ['Similarity', submission.similarity_score]
-  ] as const;
+  if (loading) return <main className="mx-auto max-w-6xl py-12 text-sm text-slate-500">Loading saved assessment…</main>;
+  if (!submission || !d) return <main className="mx-auto max-w-3xl space-y-4 py-12"><p role="alert" className="text-sm text-rose-700">{error || 'Submission not found.'}</p><Link to="/submissions" className="inline-flex items-center gap-2 text-sm font-semibold text-indigo-700"><ArrowLeft className="h-4 w-4" />Submission history</Link></main>;
+  const score = num(submission.overall_score), failed = d.results.find((x: R) => !['accepted', 'ACCEPTED'].includes(String(x.status)));
+  const summary = str(d.feedback.mentor_feedback) || str(d.feedback.key_insight) || str(d.feedback.summary) || (d.total ? `${d.passed}/${d.total} test cases passed. Review the saved evidence and improvement notes below.` : 'No saved feedback summary is available for this submission.');
+  const projected = d.projected != null && score != null;
 
-  return (
-    <main className="mx-auto max-w-5xl space-y-6 pb-12">
-      <Link to="/submissions" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-indigo-700"><ArrowLeft className="h-4 w-4" /> Submission history</Link>
+  return <main className="mx-auto max-w-7xl space-y-6 pb-14">
+    <div className="flex flex-wrap items-center justify-between gap-3"><Link to="/submissions" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-indigo-700"><ArrowLeft className="h-4 w-4" />Submission history</Link><Link to={`/problems/${encodeURIComponent(submission.problem_id)}`} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-md shadow-indigo-600/20 hover:bg-indigo-700"><Code2 className="h-4 w-4" />Revise solution</Link></div>
+    <header className="rounded-3xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8"><div className="flex flex-col justify-between gap-6 md:flex-row md:items-center"><div className="min-w-0 flex-1 space-y-3"><span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold ${d.accepted ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>{d.accepted ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}{d.total ? `${d.accepted ? 'Accepted' : 'Not accepted'} · ${d.passed}/${d.total} test cases passed` : submission.status}</span><div><h1 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">{title || submission.problem_id}</h1><p className="mt-1 text-sm text-slate-500">Saved assessment result</p></div><div className="flex flex-wrap gap-2 text-xs text-slate-600"><span className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono">ID: <b className="text-slate-800">{submission.submission_id}</b></span><span className="rounded-lg bg-slate-100 px-2.5 py-1">Language: <b className="text-slate-800">{submission.language}</b></span>{num(d.execution.runtime_ms) != null && <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1"><Clock3 className="h-3.5 w-3.5" />Runtime: <b>{d.execution.runtime_ms} ms</b></span>}{str(d.complexity.time_complexity) && <span className="rounded-lg bg-slate-100 px-2.5 py-1">Time: <b>{d.complexity.time_complexity}</b></span>}{num(d.execution.memory_kb) != null && <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1"><HardDrive className="h-3.5 w-3.5" />{(d.execution.memory_kb / 1024).toFixed(1)} MB</span>}<span className="rounded-lg bg-slate-100 px-2.5 py-1">{new Date(submission.created_at).toLocaleString()}</span>{submission.assignment_id != null ? <Link to="/courses" className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2.5 py-1 text-indigo-700"><BookOpen className="h-3.5 w-3.5" />Assignment #{submission.assignment_id}</Link> : <span className="rounded-lg bg-slate-100 px-2.5 py-1">Independent practice</span>}</div></div><div className="flex items-center gap-4 self-start rounded-2xl border border-slate-200 bg-slate-50 p-4 md:self-auto">{score != null && <CircularGauge score={score} maxScore={100} size={110} strokeWidth={9} sublabel="Score" />}<div><span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Overall grade</span><span className="block text-lg font-extrabold text-emerald-600">{score == null ? 'Not scored' : grade(score)}</span>{score != null && <span className="text-xs text-slate-500">Saved evaluation</span>}</div></div></div></header>
 
-      <header className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end">
-        <div>
-          <p className="font-mono text-xs text-slate-500">{submission.submission_id} · {submission.language}</p>
-          <h1 className="mt-1 text-2xl font-bold text-slate-900">{problemTitle}</h1>
-          <p className="mt-1 text-xs text-slate-500">Saved {new Date(submission.created_at).toLocaleString()}</p>
-          {submission.assignment_id != null && <Link to="/courses" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-indigo-700"><BookOpen className="h-3.5 w-3.5" /> Assignment #{submission.assignment_id}</Link>}
-          {submission.assignment_id == null && <p className="mt-2 text-xs text-slate-500">Independent practice</p>}
-        </div>
-        <div className="text-left sm:text-right">
-          <p className="text-xs font-semibold uppercase text-slate-500">Overall score</p>
-          <p className="font-mono text-3xl font-bold text-slate-900">{submission.overall_score == null ? 'N/A' : `${submission.overall_score}/100`}</p>
-          <p className="text-sm text-slate-600">{submission.status}</p>
-        </div>
-      </header>
+    <div className="grid gap-6 xl:grid-cols-12"><section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-950 via-slate-950 to-slate-900 p-6 text-white shadow-lg sm:p-8 xl:col-span-8"><div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-400 via-emerald-400 to-amber-300"/><div className="flex flex-col justify-between gap-6 lg:flex-row"><div className="min-w-0 flex-1 space-y-4"><div className="flex items-center gap-3"><span className="rounded-2xl border border-indigo-400/20 bg-indigo-500/20 p-2.5 text-indigo-200"><Sparkles className="h-5 w-5"/></span><div><span className="text-[11px] font-extrabold uppercase tracking-wider text-indigo-200">Explainable feedback</span><h2 className="text-xl font-extrabold sm:text-2xl">What to improve next</h2></div></div><p className="max-w-3xl text-sm leading-relaxed text-slate-100 sm:text-base">{summary}</p>{d.steps.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{d.steps.slice(0,3).map((step: string,i: number)=><article key={i} className="rounded-2xl border border-white/10 bg-white/[.06] p-4"><div className="flex items-center gap-2 text-xs font-bold text-emerald-300"><CheckCircle2 className="h-4 w-4"/>Improvement {i+1}</div><p className="mt-2 text-xs leading-relaxed text-slate-200">{step}</p></article>)}</div>:<div className="rounded-xl border border-white/10 bg-white/[.04] px-4 py-3 text-sm text-slate-300">No saved improvement steps for this submission.</div>}</div>{projected&&<aside className="w-full shrink-0 rounded-2xl border border-white/10 bg-white/[.06] p-4 lg:w-64"><span className="text-[11px] font-bold uppercase text-slate-300">Projected gain</span><div className="mt-3 flex items-end justify-between"><div><span className="font-mono text-4xl font-extrabold text-emerald-300">+{Number(d.gain.toFixed(1))}</span><span className="ml-1 text-xs text-slate-300">pts</span></div><TrendingUp className="h-6 w-6 text-emerald-300"/></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-emerald-400" style={{width:`${Math.max(0,Math.min(100,d.projected))}%`}}/></div><p className="mt-3 text-xs text-slate-300">Current {score}/100. Projected {d.projected}/100.</p></aside>}</div></section>
+    <section className="space-y-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-4"><div className="flex items-center justify-between border-b border-slate-100 pb-3"><div><h2 className="font-bold text-slate-900">Score evidence</h2><p className="text-xs text-slate-400">Breakdown from this saved evaluation</p></div>{score!=null&&<span className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-xs font-bold">{score}/100</span>}</div><div className="space-y-2.5">{d.rows.map((row: any)=><article key={row.name} className="rounded-2xl border border-slate-200/70 bg-slate-50 p-3"><div className="flex items-center justify-between"><span className="text-xs font-bold text-slate-800">{row.name}</span><span className="font-mono text-xs font-extrabold">{row.score==null?'—':`${Number(row.score.toFixed(1))}/${row.max}`}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full ${row.color}`} style={{width:`${row.score==null?0:Math.max(0,Math.min(100,row.score/row.max*100))}%`}}/></div><p className="mt-1.5 text-[11px] leading-snug text-slate-500">{row.detail}</p></article>)}</div><div className="border-t border-slate-100 pt-3"><div className="flex items-center justify-between text-xs"><b>Test cases</b><span className={`rounded border px-2 py-0.5 ${d.accepted?'border-emerald-200 bg-emerald-50 text-emerald-700':'border-rose-200 bg-rose-50 text-rose-700'}`}>{d.total?`${d.passed}/${d.total} passed`:'No test results'}</span></div>{failed&&<p className="mt-2 text-[11px] text-rose-600">First failed case: {failed.is_hidden?'hidden test case':'public case'}. {failed.is_hidden?'Private test details are hidden.':str(failed.stderr)||str(failed.error_message)||'Output did not match the expected result.'}</p>}</div></section></div>
 
-      <section className="grid gap-3 sm:grid-cols-4" aria-label="Assessment scores">
-        {scores.map(([label, score]) => <article key={label} className="border-b border-slate-200 p-3 sm:border-b-0 sm:border-r">
-          <p className="text-xs text-slate-500">{label}</p>
-          <p className="mt-1 font-mono text-xl font-bold text-slate-900">{score == null ? 'N/A' : `${score}%`}</p>
-        </article>)}
-      </section>
-
-      <section className="border-y border-slate-200 py-5">
-        <div className="flex items-center justify-between">
-          <div><h2 className="font-semibold text-slate-900">Execution</h2><p className="mt-1 text-xs text-slate-500">{passedCases}/{totalCases} test cases passed · {execution.runtime_ms ?? '—'} ms</p></div>
-          {totalCases > 0 && passedCases === totalCases ? <CheckCircle2 className="h-5 w-5 text-emerald-700" /> : <XCircle className="h-5 w-5 text-rose-700" />}
-        </div>
-        {results.length > 0 && <div className="mt-4 divide-y divide-slate-100">
-          {results.map((result, index) => <div key={result.test_case_id || index} className="flex items-center justify-between py-2 text-sm">
-            <span>Case {index + 1}{result.is_hidden ? ' · hidden' : ''}</span>
-            <span className={String(result.status).toLowerCase() === 'accepted' ? 'text-emerald-700' : 'text-rose-700'}>{result.is_hidden ? 'Hidden case' : String(result.status || 'Unknown')}</span>
-          </div>)}
-        </div>}
-      </section>
-
-      {submission.complexity_details && <section className="border-b border-slate-200 py-5">
-        <h2 className="font-semibold text-slate-900">Complexity analysis</h2>
-        <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-50 p-4 text-xs text-slate-700">{formatStoredValue(submission.complexity_details)}</pre>
-      </section>}
-
-      <section className="grid gap-6 md:grid-cols-2">
-        <div className="border-b border-slate-200 py-5"><h2 className="font-semibold text-slate-900">Saved feedback</h2><pre className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{formatStoredValue(submission.feedback)}</pre></div>
-        <div className="border-b border-slate-200 py-5"><h2 className="font-semibold text-slate-900">Recommendations</h2><pre className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{formatStoredValue(submission.recommendations)}</pre></div>
-      </section>
-
-      <details className="border-y border-slate-200 py-4">
-        <summary className="cursor-pointer font-semibold text-slate-900">Submitted source code</summary>
-        <pre className="mt-4 max-h-[32rem] overflow-auto rounded-lg bg-slate-950 p-4 text-xs leading-relaxed text-slate-100"><code>{submission.code}</code></pre>
-      </details>
-
-      {submission.improved_code != null && <details className="border-b border-slate-200 py-4">
-        <summary className="cursor-pointer font-semibold text-slate-900">Saved revised code suggestion</summary>
-        <pre className="mt-4 max-h-[32rem] overflow-auto rounded-lg bg-slate-950 p-4 text-xs leading-relaxed text-slate-100"><code>{formatStoredValue(submission.improved_code)}</code></pre>
-      </details>}
-    </main>
-  );
+    <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between px-5 py-4"><div><h2 className="font-bold text-slate-900">Execution details</h2><p className="mt-1 text-xs text-slate-500">{d.total?`${d.passed}/${d.total} tests passed`:'No test-case details were saved'}{num(d.execution.runtime_ms)!=null?` · ${d.execution.runtime_ms} ms`:''}</p></div>{d.accepted?<CheckCircle2 className="h-5 w-5 text-emerald-600"/>:<XCircle className="h-5 w-5 text-rose-600"/>}</div>{d.results.length>0&&<div className="divide-y divide-slate-100 border-t border-slate-100">{d.results.map((result:R,i:number)=>{const pass=['accepted','ACCEPTED'].includes(String(result.status));return <div key={result.test_case_id||i} className="flex justify-between gap-4 px-5 py-3 text-sm"><span className="text-slate-700">Case {i+1}{result.is_hidden?' · hidden':''}</span><span className={pass?'text-emerald-700':'text-rose-700'}>{result.is_hidden?'Private test':str(result.status)||'Unknown'}</span></div>})}</div>}</section>
+    {(str(d.complexity.reasoning)||str(d.complexity.optimization_suggestion)||str(d.complexity.scoring_reason)||list(d.feedback.strengths).length>0)&&<section className="grid gap-5 md:grid-cols-2">{(str(d.complexity.reasoning)||str(d.complexity.optimization_suggestion)||str(d.complexity.scoring_reason))&&<article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><span className="rounded-xl bg-cyan-50 p-2 text-cyan-700"><Lightbulb className="h-4 w-4"/></span><h2 className="font-bold text-slate-900">Complexity analysis</h2></div>{[d.complexity.reasoning,d.complexity.optimization_suggestion,d.complexity.scoring_reason].filter((x:any)=>typeof x==='string'&&x.trim()).map((x:string,i:number)=><p key={i} className="mt-3 text-sm leading-relaxed text-slate-600">{x}</p>)}</article>}{list(d.feedback.strengths).length>0&&<article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="font-bold text-slate-900">What went well</h2><ul className="mt-3 space-y-2">{list(d.feedback.strengths).map((x,i)=><li key={i} className="text-sm text-slate-600">• {x}</li>)}</ul></article>}</section>}
+    <details className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><summary className="cursor-pointer font-semibold text-slate-800">View submitted source code</summary><pre className="mt-4 max-h-[32rem] overflow-auto rounded-xl bg-slate-950 p-4 text-xs leading-relaxed text-slate-100"><code>{submission.code}</code></pre></details>
+    {submission.improved_code!=null&&<details className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><summary className="cursor-pointer font-semibold text-slate-800">View saved revised code suggestion</summary><pre className="mt-4 max-h-[32rem] overflow-auto rounded-xl bg-slate-950 p-4 text-xs leading-relaxed text-slate-100"><code>{typeof submission.improved_code==='string'?submission.improved_code:JSON.stringify(submission.improved_code,null,2)}</code></pre></details>}
+  </main>;
 };
