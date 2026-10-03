@@ -174,6 +174,18 @@ class EnrollmentResponse(BaseModel):
 class StudentLookupItem(BaseModel):
     student_id: str
     name: str
+class StudentCreateByInstructor(BaseModel):
+    student_id: str
+    name: str
+    email: Optional[str] = None
+
+    @field_validator("student_id", "name")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Student ID and name cannot be empty")
+        return value
 
 class StudentCourseResponse(CourseResponse):
     assignments_count: int = 0

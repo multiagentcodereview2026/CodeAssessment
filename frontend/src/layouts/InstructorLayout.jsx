@@ -47,7 +47,7 @@ const InstructorLayout = () => {
   const navItems = [
     { name: 'Dashboard', path: '/instructor/dashboard', icon: LayoutDashboard },
     { name: 'Courses', path: '/instructor/courses', icon: BookOpen },
-    { name: 'Course Rosters', path: '/instructor/courses', icon: Users },
+    { name: 'Course Rosters', path: '/instructor/students', icon: Users },
     { name: 'Problem Bank', path: '/instructor/problems', icon: Code2 },
     { name: 'Class Analytics', path: '/instructor/analytics', icon: BarChart3 },
     { name: 'Similarity & Plagiarism', path: '/instructor/similarity', icon: ShieldAlert },

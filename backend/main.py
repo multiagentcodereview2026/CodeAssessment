@@ -28,6 +28,7 @@ from schemas import (
     LoginRequest,
     RegisterRequest,
     AuthUser,
+    StudentCreateByInstructor,
     ProblemListItem,
     ProblemDetail,
     SubmissionRequest,
@@ -997,19 +998,136 @@ def archive_course(
 
 @app.get("/api/instructor/students", response_model=List[StudentLookupItem])
 def search_students(
-    query: str = Query(..., min_length=1, max_length=100),
+    query: Optional[str] = Query(None, min_length=1, max_length=100),
+    course_id: Optional[int] = Query(None),
     limit: int = Query(20, ge=1, le=50),
     db: Session = Depends(get_db),
     instructor: models.Instructor = Depends(get_current_instructor),
 ):
-    needle = query.strip()
-    if not needle:
-        return []
-    students = db.query(models.Student).filter(
-        models.Student.student_id.ilike(f"%{needle}%")
-        | models.Student.name.ilike(f"%{needle}%")
-    ).order_by(models.Student.name).limit(limit).all()
-    return [StudentLookupItem(student_id=student.student_id, name=student.name) for student in students]
+    """
+    Search students or return students enrolled in a specific instructor-owned course.
+
+    - query only: search by Student ID or name
+    - course_id only: return the course roster
+    - both: search students and optionally scope to the course
+    """
+
+    if course_id is not None:
+        # Verify the course belongs to the authenticated instructor.
+        get_owned_course(db, instructor.id, course_id)
+
+        students = (
+            db.query(models.Student)
+            .join(
+                models.Enrollment,
+                models.Enrollment.student_id == models.Student.student_id,
+            )
+            .filter(
+                models.Enrollment.course_id == course_id,
+                models.Enrollment.is_active == True,
+            )
+            .order_by(models.Student.name)
+        )
+
+        if query:
+            needle = query.strip()
+            students = students.filter(
+                models.Student.student_id.ilike(f"%{needle}%")
+                | models.Student.name.ilike(f"%{needle}%")
+            )
+
+        students = students.limit(limit).all()
+
+    else:
+        if not query:
+            return []
+
+        needle = query.strip()
+
+        if not needle:
+            return []
+
+        students = (
+            db.query(models.Student)
+            .filter(
+                models.Student.student_id.ilike(f"%{needle}%")
+                | models.Student.name.ilike(f"%{needle}%")
+            )
+            .order_by(models.Student.name)
+            .limit(limit)
+            .all()
+        )
+
+    return [
+        StudentLookupItem(
+            student_id=student.student_id,
+            name=student.name,
+        )
+        for student in students
+    ]
+
+@app.post("/api/instructor/students", response_model=EnrollmentResponse, status_code=status.HTTP_201_CREATED)
+def create_and_enroll_student(
+    payload: StudentCreateByInstructor,
+    course_id: int = Query(...),
+    db: Session = Depends(get_db),
+    instructor: models.Instructor = Depends(get_current_instructor),
+):
+    """Create a student profile and enroll the student in an instructor-owned course."""
+
+    course = get_owned_course(db, instructor.id, course_id)
+
+    student_id = payload.student_id.strip()
+    name = payload.name.strip()
+    email = payload.email.strip() if payload.email else None
+
+    existing_student = (
+        db.query(models.Student)
+        .filter(models.Student.student_id == student_id)
+        .first()
+    )
+
+    if existing_student:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A student with this Student ID already exists. Search for the student and enroll them instead.",
+        )
+
+    student = models.Student(
+        student_id=student_id,
+        name=name,
+        email=email,
+    )
+
+    db.add(student)
+
+    try:
+        db.flush()
+
+        enrollment = models.Enrollment(
+            student_id=student.student_id,
+            course_id=course.id,
+            is_active=True,
+        )
+
+        db.add(enrollment)
+        db.commit()
+        db.refresh(enrollment)
+        db.refresh(student)
+
+    except Exception:
+        db.rollback()
+        raise
+
+    return EnrollmentResponse(
+        id=enrollment.id,
+        student_id=student.student_id,
+        course_id=course.id,
+        enrollment_date=enrollment.enrollment_date,
+        is_active=enrollment.is_active,
+        student_name=student.name,
+        student_email=student.email,
+    )
 
 
 # ============ Instructor Enrollment APIs ============
