@@ -129,7 +129,7 @@ services:
     profiles: ["tools"]
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-120b}
     volumes:
       - ../datasets/newfacade-staging:/newfacade
     command: ["python", "-m", "dataset.enrich_newfacade_complexities", "--source", "/newfacade/normalized-newfacade-stdio-tagged.jsonl", "--output", "/newfacade/normalized-newfacade-stdio-complexity.jsonl"]

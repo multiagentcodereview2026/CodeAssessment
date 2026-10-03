@@ -53,6 +53,7 @@ from schemas import (
     AssignmentWithStats,
     InstructorOverview,
     StudentRosterItem, InstructorStudentProgressResponse,
+    utc_isoformat,
 )
 from docker_runner.executor import execute_code_sandboxed
 from agents.complexity import analyze_student_complexity, unavailable_analysis
@@ -777,7 +778,7 @@ def get_student_analytics(
     unique_solved = len({submission.problem_id for submission in latest if submission.overall_score >= 70})
 
     score_trend = [
-        {"date": submission.created_at.isoformat(), "score": submission.overall_score}
+        {"date": utc_isoformat(submission.created_at), "score": submission.overall_score}
         for submission in sorted(latest, key=lambda item: (item.created_at, item.id or 0))
     ]
     category_scores: dict[str, list[float]] = {}
@@ -1069,40 +1070,92 @@ def search_students(
 @app.post("/api/instructor/students", response_model=EnrollmentResponse, status_code=status.HTTP_201_CREATED)
 def create_and_enroll_student(
     payload: StudentCreateByInstructor,
+    response: Response,
     course_id: int = Query(...),
     db: Session = Depends(get_db),
     instructor: models.Instructor = Depends(get_current_instructor),
 ):
-    """Create a student profile and enroll the student in an instructor-owned course."""
+    """Create or reuse a student profile and enroll them in an owned course."""
 
     course = get_owned_course(db, instructor.id, course_id)
 
     student_id = payload.student_id.strip()
-    name = payload.name.strip()
+    name = payload.name.strip() if payload.name else ""
     email = payload.email.strip() if payload.email else None
 
     existing_student = (
         db.query(models.Student)
-        .filter(models.Student.student_id == student_id)
+        .filter(func.lower(models.Student.student_id) == student_id.lower())
         .first()
     )
 
-    if existing_student:
+    if existing_student is not None:
+        name_changed = name and name.casefold() != existing_student.name.strip().casefold()
+        email_changed = email and email.casefold() != (existing_student.email or "").strip().casefold()
+        if name_changed or email_changed:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Student ID {existing_student.student_id} already has a saved profile with different details. "
+                    "Nothing was changed. Leave name and email blank or use the saved details to enroll this student."
+                ),
+            )
+    elif email:
+        email_owner = (
+            db.query(models.Student)
+            .filter(func.lower(models.Student.email) == email.casefold())
+            .first()
+        )
+        if email_owner is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"This email is already saved under Student ID {email_owner.student_id}. "
+                    "Use that ID to enroll the existing profile instead of creating a duplicate."
+                ),
+            )
+
+    if existing_student is None and not name:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A student with this Student ID already exists. Search for the student and enroll them instead.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Student name is required when creating a new student profile.",
         )
 
-    student = models.Student(
-        student_id=student_id,
-        name=name,
-        email=email,
-    )
-
-    db.add(student)
-
     try:
-        db.flush()
+        student = existing_student
+        if student is None:
+            student = models.Student(
+                student_id=student_id,
+                name=name,
+                email=email,
+            )
+            db.add(student)
+            db.flush()
+
+        existing_enrollment = (
+            db.query(models.Enrollment)
+            .filter(
+                models.Enrollment.student_id == student.student_id,
+                models.Enrollment.course_id == course.id,
+            )
+            .first()
+        )
+
+        if existing_enrollment is not None:
+            if not existing_enrollment.is_active:
+                existing_enrollment.is_active = True
+                db.commit()
+                db.refresh(existing_enrollment)
+            response.status_code = status.HTTP_200_OK
+            return EnrollmentResponse(
+                id=existing_enrollment.id,
+                student_id=student.student_id,
+                course_id=course.id,
+                enrollment_date=existing_enrollment.enrollment_date,
+                is_active=existing_enrollment.is_active,
+                student_name=student.name,
+                student_email=student.email,
+            )
 
         enrollment = models.Enrollment(
             student_id=student.student_id,
@@ -1615,7 +1668,7 @@ def get_instructor_student_progress(
         "latest_submission": {
             "id": latest_sub.submission_id,
             "score": latest_sub.overall_score,
-            "date": latest_sub.created_at.isoformat(),
+            "date": utc_isoformat(latest_sub.created_at),
             "problem_id": latest_sub.problem_id,
             "feedback": latest_sub.feedback,
             "recommendations": latest_sub.recommendations,
@@ -1665,7 +1718,7 @@ def export_course_csv(
         avg_style = round(sum(s.style_score or 0 for s in evaluated_subs) / len(evaluated_subs), 2) if evaluated_subs else "N/A"
         avg_sim = round(sum(s.similarity_score or 0 for s in evaluated_subs) / len(evaluated_subs), 2) if evaluated_subs else "N/A"
         
-        last_sub_date = submissions[0].created_at.isoformat() if submissions else "N/A"
+        last_sub_date = utc_isoformat(submissions[0].created_at) if submissions else "N/A"
         
         writer.writerow([
             student.student_id,
