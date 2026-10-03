@@ -37,6 +37,7 @@ class GraphIR:
 @dataclass
 class ComplexityIR:
     language: str
+    source: str = ""  # Add source code for pattern matching
     loop: LoopIR = field(default_factory=LoopIR)
     recursion: RecursionIR = field(default_factory=RecursionIR)
     graph: GraphIR = field(default_factory=GraphIR)
