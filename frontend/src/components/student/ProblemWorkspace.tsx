@@ -145,6 +145,14 @@ export const ProblemWorkspace: React.FC = () => {
     compileError?: string;
     results: PublicRunCaseResult[];
   } | null>(null);
+  const [verifiedRunKey, setVerifiedRunKey] = useState<string | null>(null);
+  const currentRunKey = JSON.stringify([workspaceProblemId, language, code]);
+  const canSubmit = Boolean(
+    runOutput?.status === 'success'
+    && runOutput.results.length > 0
+    && runOutput.results.every((result) => result.passed)
+    && verifiedRunKey === currentRunKey
+  );
 
   // A draft belongs to one user, problem, and language. It remains in this
   // browser for 60 days after the last edit, including across reloads,
@@ -215,6 +223,7 @@ export const ProblemWorkspace: React.FC = () => {
     // starter program. Only a missing or expired draft receives a skeleton.
     setCode(savedDraft !== null ? savedDraft : getStarterCode(language));
     setRunOutput(null);
+    setVerifiedRunKey(null);
   }, [workspaceProblemId, language, currentUser.id]);
 
   useEffect(() => {
@@ -238,6 +247,7 @@ export const ProblemWorkspace: React.FC = () => {
       localStorage.removeItem(legacyDraftKey(workspaceProblemId, language));
       setCode(getStarterCode(language));
       setRunOutput(null);
+      setVerifiedRunKey(null);
     }
   };
 
@@ -322,6 +332,7 @@ export const ProblemWorkspace: React.FC = () => {
     }
     setIsRunning(true);
     setRunOutput(null);
+    setVerifiedRunKey(null);
     setActiveTestTab(0);
 
     try {
@@ -392,18 +403,30 @@ export const ProblemWorkspace: React.FC = () => {
         };
       });
 
+      const allPublicCasesPassed = !compilationFailed
+        && results.length > 0
+        && results.length === publicCases.length
+        && results.every((result) => result.passed);
+
       setRunOutput({
-        status: !compilationFailed && data.failed_cases === 0 ? 'success' : 'error',
+        status: allPublicCasesPassed ? 'success' : 'error',
         time: `${data.runtime_ms || 18} ms`,
         memory: '4.2 MB',
         reason: compilationFailed
           ? 'Compilation failed. No test cases were executed.'
-          : data.failed_cases > 0 ? (data.results || []).find((result: any) => result.status !== 'accepted' && result.status !== 'ACCEPTED')?.stderr || (data.results || []).find((result: any) => result.status !== 'accepted' && result.status !== 'ACCEPTED')?.status?.replaceAll('_', ' ') || 'Your output did not match the expected output.' : undefined,
+          : !allPublicCasesPassed
+            ? results.find((result) => !result.passed)?.error
+              || (results.length !== publicCases.length ? 'Not all public test cases were executed.' : 'Every public test case must pass before submission.')
+            : undefined,
         compileError: compilationFailed ? (data.compile_error || data.stderr || 'Compilation failed.') : undefined,
         results
       });
+      if (allPublicCasesPassed) {
+        setVerifiedRunKey(JSON.stringify([workspaceProblemId, language, code]));
+      }
     } catch (err: any) {
       const errMsg = err?.message || 'The execution service could not run this code.';
+      setVerifiedRunKey(null);
       setRunOutput({
         status: 'error',
         time: '—',
@@ -426,6 +449,16 @@ export const ProblemWorkspace: React.FC = () => {
 
   // Submit Code (Live 10-Agent LangGraph AI Assessment Pipeline)
   const handleSubmitCode = async () => {
+    if (!canSubmit) {
+      setRunOutput((current) => current || {
+        status: 'error',
+        time: '—',
+        memory: '—',
+        reason: 'Run your code and pass every public test case to enable submission.',
+        results: []
+      });
+      return;
+    }
     saveDraft(workspaceProblemId, language, code);
     if (!remoteProblem) {
       setRunOutput({
@@ -902,12 +935,16 @@ export const ProblemWorkspace: React.FC = () => {
                 </button>
                 <button
                   onClick={handleSubmitCode}
-                  disabled={isRunning || isSubmitting || isProblemLoading || !remoteProblem}
-                  className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold shadow-md shadow-indigo-600/30 flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                  disabled={isRunning || isSubmitting || isProblemLoading || !remoteProblem || !canSubmit}
+                  title={canSubmit ? 'All public test cases passed. You can submit.' : 'Run the current code and pass every public test case to enable submission.'}
+                  className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold shadow-md shadow-indigo-600/30 flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>Submit Code</span>
                 </button>
+                <span className={`text-[10px] ${canSubmit ? 'text-emerald-400' : 'text-slate-400'}`}>
+                  {canSubmit ? 'Public tests passed' : 'Pass public tests to submit'}
+                </span>
               </div>
             </div>
 
@@ -918,7 +955,11 @@ export const ProblemWorkspace: React.FC = () => {
                 language={monacoLanguage[language] || 'plaintext'}
                 theme="vs-dark"
                 value={code}
-                onChange={(value) => setCode(value ?? '')}
+                onChange={(value) => {
+                  setCode(value ?? '');
+                  setRunOutput(null);
+                  setVerifiedRunKey(null);
+                }}
                 onMount={handleEditorMount}
                 options={{
                   automaticLayout: true,

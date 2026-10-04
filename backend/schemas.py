@@ -1,6 +1,15 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List, Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator
+
+
+def utc_isoformat(value: datetime) -> str:
+    """Serialize naive database timestamps as UTC, then emit an explicit UTC marker."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+    return value.isoformat().replace("+00:00", "Z")
 
 # Auth Schemas
 class LoginRequest(BaseModel):
@@ -105,6 +114,10 @@ class SubmissionDetails(SubmissionResponse):
     code: str
     created_at: datetime
 
+    @field_serializer("created_at")
+    def serialize_created_at(self, value: datetime) -> str:
+        return utc_isoformat(value)
+
     class Config:
         from_attributes = True
 
@@ -176,15 +189,15 @@ class StudentLookupItem(BaseModel):
     name: str
 class StudentCreateByInstructor(BaseModel):
     student_id: str
-    name: str
+    name: Optional[str] = None
     email: Optional[str] = None
 
-    @field_validator("student_id", "name")
+    @field_validator("student_id")
     @classmethod
     def validate_required_text(cls, value: str) -> str:
         value = value.strip()
         if not value:
-            raise ValueError("Student ID and name cannot be empty")
+            raise ValueError("Student ID cannot be empty")
         return value
 
 class StudentCourseResponse(CourseResponse):

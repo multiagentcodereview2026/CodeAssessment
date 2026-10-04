@@ -288,8 +288,8 @@ export const CourseDetailsView: React.FC = () => {
 
     if (!courseId) return;
 
-    if (!newStudentId.trim() || !newStudentName.trim()) {
-      setError('Student ID and name are required.');
+    if (!newStudentId.trim()) {
+      setError('Student ID is required.');
       return;
     }
 
@@ -656,7 +656,7 @@ export const CourseDetailsView: React.FC = () => {
                     </div>
 
                     <div className="font-mono text-xs text-slate-500">
-                      {student.student_id}
+                      Student ID: {student.student_id}
                     </div>
 
                     {student.student_email && (
@@ -840,8 +840,8 @@ export const CourseDetailsView: React.FC = () => {
         title="Add Student"
         subtitle={
           course
-            ? `Create a student and enroll them in ${course.course_code}`
-            : 'Create a student and enroll them'
+            ? `Add a new student or reuse an existing profile in ${course.course_code}`
+            : 'Add a new student or reuse an existing profile'
         }
       >
         <form
@@ -865,14 +865,13 @@ export const CourseDetailsView: React.FC = () => {
                 setNewStudentId(e.target.value)
               }
               placeholder="e.g. 22BD1A0501"
-              required
               disabled={busy}
               autoFocus
               className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-emerald-500 focus:bg-white"
             />
 
             <p className="mt-1 text-xs text-slate-400">
-              This must be unique across the student records.
+              If this ID already exists, the saved student profile will be enrolled.
             </p>
           </div>
 
@@ -882,7 +881,7 @@ export const CourseDetailsView: React.FC = () => {
               htmlFor="new-student-name"
               className="mb-1.5 block text-xs font-bold text-slate-700"
             >
-              Student Name
+              Student Name <span className="font-normal text-slate-400">(required for new students)</span>
             </label>
 
             <input
@@ -893,7 +892,6 @@ export const CourseDetailsView: React.FC = () => {
                 setNewStudentName(e.target.value)
               }
               placeholder="Enter student's full name"
-              required
               disabled={busy}
               className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-emerald-500 focus:bg-white"
             />
@@ -927,8 +925,7 @@ export const CourseDetailsView: React.FC = () => {
           {/* Information */}
           <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
             <p className="text-xs leading-5 text-emerald-800">
-              The student profile will be created and
-              automatically enrolled in this course.
+              Enter a name for a new student. An existing Student ID reuses its saved profile; name and email changes are not applied here. The same email cannot be saved under a different Student ID.
             </p>
           </div>
 
@@ -947,14 +944,13 @@ export const CourseDetailsView: React.FC = () => {
               type="submit"
               disabled={
                 busy ||
-                !newStudentId.trim() ||
-                !newStudentName.trim()
+                !newStudentId.trim()
               }
               className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-emerald-600/20 transition-all hover:bg-emerald-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <UserPlus className="h-4 w-4" />
 
-              {busy ? 'Creating...' : 'Create & Enroll'}
+              {busy ? 'Saving...' : 'Add & Enroll'}
             </button>
           </div>
         </form>
