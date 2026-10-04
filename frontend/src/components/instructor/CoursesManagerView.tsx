@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Modal } from '../common/Modal';
+import { DoubleConfirmDialog } from '../common/DoubleConfirmDialog';
 
 export const CoursesManagerView: React.FC = () => {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ export const CoursesManagerView: React.FC = () => {
   const [newCode, setNewCode] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newTerm, setNewTerm] = useState('Spring 2026');
+  const [archiveTarget, setArchiveTarget] = useState<(typeof courses)[number] | null>(null);
 
   const handleCreateCourse = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,11 +85,7 @@ export const CoursesManagerView: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono text-slate-400">{course.term}</span>
                   <button
-                    onClick={() => {
-                      if (window.confirm(`Archive ${course.code} ${course.title}?`)) {
-                        void deleteCourse(course.id).catch(() => {});
-                      }
-                    }}
+                    onClick={() => setArchiveTarget(course)}
                     title="Archive Course"
                     className="text-slate-300 hover:text-rose-600 p-1 transition-colors cursor-pointer"
                   >
@@ -214,6 +212,14 @@ export const CoursesManagerView: React.FC = () => {
           </div>
         </form>
       </Modal>
+      <DoubleConfirmDialog
+        isOpen={Boolean(archiveTarget)}
+        title="Archive this course?"
+        description={`Students will no longer see or access ${archiveTarget?.code} · ${archiveTarget?.title}. Existing submissions will be retained.`}
+        actionLabel="archive course"
+        onClose={() => setArchiveTarget(null)}
+        onConfirm={async () => { if (!archiveTarget) return; await deleteCourse(archiveTarget.id); setArchiveTarget(null); }}
+      />
     </div>
   );
 };

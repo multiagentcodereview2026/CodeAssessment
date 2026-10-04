@@ -42,6 +42,15 @@ class ProblemListItem(BaseModel):
     is_instructor_assigned: bool = False
     course_code: Optional[str] = None
     due_date: Optional[str] = None
+    assignment_id: Optional[int] = None
+    assignment_id: Optional[int] = None
+    description: Optional[str] = None
+    examples: List[Dict[str, Any]] = []
+    constraints: List[str] = []
+    starter_codes: Dict[str, str] = Field(default_factory=dict)
+    test_cases: List[Dict[str, Any]] = []
+    target_time_complexity: Optional[str] = None
+    target_space_complexity: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -59,9 +68,53 @@ class ProblemDetail(BaseModel):
     is_instructor_assigned: bool = False
     course_code: Optional[str] = None
     due_date: Optional[str] = None
+    assignment_id: Optional[int] = None
+    target_time_complexity: Optional[str] = None
+    target_space_complexity: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+class InstructorProblemTestCase(BaseModel):
+    input: str
+    expected_output: str
+    is_hidden: bool = False
+
+
+class InstructorProblemCreate(BaseModel):
+    title: str
+    description: str
+    difficulty: Literal["Easy", "Medium", "Hard"]
+    category: str
+    target_time_complexity: str
+    target_space_complexity: str
+    starter_codes: Dict[str, str] = {}
+    test_cases: List[InstructorProblemTestCase] = Field(min_length=1)
+    course_id: int
+    due_date: Optional[datetime] = None
+
+    @field_validator("title", "description", "category", "target_time_complexity", "target_space_complexity")
+    @classmethod
+    def validate_problem_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("This field cannot be empty")
+        return value
+
+    @field_validator("test_cases")
+    @classmethod
+    def validate_cases(cls, cases: List[InstructorProblemTestCase]) -> List[InstructorProblemTestCase]:
+        if not any(not case.is_hidden for case in cases):
+            raise ValueError("At least one public test case is required")
+        for case in cases:
+            if not case.input.strip() or not case.expected_output.strip():
+                raise ValueError("Test case input and expected output cannot be empty")
+        return cases
+
+
+class InstructorProblemUpdate(InstructorProblemCreate):
+    pass
 
 # Submission Schemas
 class SubmissionRequest(BaseModel):
@@ -155,6 +208,16 @@ class CourseUpdate(BaseModel):
     description: Optional[str] = None
     is_active: Optional[bool] = None
 
+    @field_validator("course_code", "title", "term", "description")
+    @classmethod
+    def normalize_course_text(cls, value: Optional[str], info):
+        if value is None:
+            return value
+        value = value.strip()
+        if info.field_name in {"course_code", "title"} and not value:
+            raise ValueError("Course code and title cannot be empty")
+        return value or None
+
 class CourseResponse(BaseModel):
     id: int
     course_code: str
@@ -180,6 +243,45 @@ class EnrollmentResponse(BaseModel):
     is_active: bool
     student_name: Optional[str] = None
     student_email: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class CourseDiscoveryResponse(BaseModel):
+    id: int
+    course_code: str
+    title: str
+    term: Optional[str] = None
+    description: Optional[str] = None
+    instructor_name: str
+    enrollment_status: str
+    request_id: Optional[int] = None
+
+
+class CourseRequestCreate(BaseModel):
+    course_id: int
+
+
+class CourseRequestResponse(BaseModel):
+    id: int
+    student_id: str
+    student_name: str
+    course_id: int
+    course_code: str
+    course_title: str
+    status: str
+    requested_at: datetime
+
+
+class NotificationResponse(BaseModel):
+    id: int
+    event_type: str
+    title: str
+    message: str
+    target_url: Optional[str] = None
+    is_read: bool
+    created_at: datetime
 
     class Config:
         from_attributes = True
@@ -311,6 +413,8 @@ class StudentRosterItem(BaseModel):
     name: str
     rollNumber: str
     email: Optional[str] = None
+    department: Optional[str] = None
+    enrolled_course_count: int = 0
     submissions_count: int = 0
     avg_score: Optional[float] = None
     trend: Optional[str] = None
@@ -334,6 +438,10 @@ class AssignmentWithStats(AssignmentResponse):
     avg_style: Optional[float] = None
     avg_similarity: Optional[float] = None
     problem_titles: List[str] = []
+    score_distribution: List[Dict[str, Any]] = []
+    topic_performance: List[Dict[str, Any]] = []
+    highest_student: Optional[Dict[str, Any]] = None
+    lowest_student: Optional[Dict[str, Any]] = None
 class InstructorStudentProgressResponse(BaseModel):
     student_id: str
     student_name: str

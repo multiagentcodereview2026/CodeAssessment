@@ -12,21 +12,20 @@ import {
   Bell,
   LogOut,
   ChevronDown,
-  GraduationCap,
-  Sparkles,
-  AlertTriangle
+  GraduationCap
 } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
+import { useNotifications } from '../hooks/useNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const InstructorLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { notifications, unreadCount, notificationError, markRead, markAllRead } = useNotifications();
   
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [unreadNotifs, setUnreadNotifs] = useState(2);
 
   const profileRef = useRef(null);
   const notifRef = useRef(null);
@@ -135,8 +134,8 @@ const InstructorLayout = () => {
                 className="relative p-2 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
               >
                 <Bell className="w-5 h-5" />
-                {unreadNotifs > 0 && (
-                  <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-emerald-600 rounded-full border-2 border-white pulse-glow"></span>
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 min-w-4 rounded-full border-2 border-white bg-emerald-600 px-1 text-center text-[9px] font-bold text-white">{unreadCount}</span>
                 )}
               </button>
 
@@ -153,51 +152,20 @@ const InstructorLayout = () => {
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-extrabold text-slate-900">Faculty Alerts</span>
                         <span className="px-2 py-0.2 rounded-full bg-emerald-50 text-emerald-700 font-mono text-[10px] font-bold">
-                          {unreadNotifs} New
+                          {unreadCount} New
                         </span>
                       </div>
                       <button
-                        onClick={() => setUnreadNotifs(0)}
+                        onClick={() => void markAllRead()}
                         className="text-[11px] font-semibold text-emerald-600 hover:underline cursor-pointer"
                       >
                         Mark all read
                       </button>
                     </div>
 
-                    <div className="space-y-2 text-xs max-h-72 overflow-y-auto custom-scrollbar">
-                      <div 
-                        onClick={() => {
-                          setNotifOpen(false);
-                          navigate('/instructor/similarity');
-                        }}
-                        className="p-3 bg-rose-50/70 hover:bg-rose-50 rounded-2xl border border-rose-100 cursor-pointer transition-colors space-y-1"
-                      >
-                        <div className="flex items-center gap-2 text-rose-800 font-bold text-xs">
-                          <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                          <span>Similarity Alert Flagged</span>
-                        </div>
-                        <p className="text-rose-700 text-[11px] leading-tight">
-                          Two students flagged with 89% AST code token similarity on "Two Sum".
-                        </p>
-                        <span className="text-[10px] text-slate-400 font-mono">15 mins ago</span>
-                      </div>
-
-                      <div 
-                        onClick={() => {
-                          setNotifOpen(false);
-                          navigate('/instructor/problems');
-                        }}
-                        className="p-3 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border border-slate-200/70 cursor-pointer transition-colors space-y-1"
-                      >
-                        <div className="flex items-center gap-2 text-slate-800 font-bold text-xs">
-                          <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Cohort Submissions Completed</span>
-                        </div>
-                        <p className="text-slate-600 text-[11px] leading-tight">
-                          40 of 48 students submitted Assignment #1 with an average of 78.4%.
-                        </p>
-                        <span className="text-[10px] text-slate-400 font-mono">1 hour ago</span>
-                      </div>
+                    {notificationError && <p role="alert" className="rounded-lg bg-rose-50 p-2 text-xs text-rose-700">{notificationError}</p>}
+                    <div className="max-h-72 space-y-2 overflow-y-auto custom-scrollbar">
+                      {notifications.length === 0 ? <p className="py-8 text-center text-xs text-slate-500">No notifications yet.</p> : notifications.map((notification) => <button key={notification.id} onClick={async () => { await markRead(notification.id); setNotifOpen(false); if (notification.target_url) navigate(notification.target_url); }} className={`w-full rounded-2xl border p-3 text-left transition-colors ${notification.is_read ? 'border-slate-200 bg-white hover:bg-slate-50' : 'border-emerald-100 bg-emerald-50/60 hover:bg-emerald-50'}`}><span className="block text-xs font-bold text-slate-800">{notification.title}</span><span className="mt-1 block text-[11px] leading-relaxed text-slate-600">{notification.message}</span><span className="mt-1 block text-[10px] font-mono text-slate-400">{new Date(notification.created_at).toLocaleString()}</span></button>)}
                     </div>
                   </motion.div>
                 )}

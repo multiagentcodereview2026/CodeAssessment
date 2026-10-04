@@ -22,6 +22,7 @@ import { MyCoursesView } from './components/student/MyCoursesView';
 // Instructor Feature Components from git
 import { InstructorDashboard } from './components/instructor/InstructorDashboard';
 import { CoursesManagerView } from './components/instructor/CoursesManagerView';
+import { StudentRosterView } from './components/instructor/StudentRosterView';
 import { CourseDetailsView } from './components/instructor/CourseDetailsView';
 import { AssignmentsManagerView } from './components/instructor/AssignmentsManagerView';
 import { ClassAnalyticsView } from './components/instructor/ClassAnalyticsView';
@@ -124,7 +125,7 @@ function AppRoutes() {
           <Route path="dashboard" element={<InstructorDashboard />} />
           <Route path="courses" element={<CoursesManagerView />} />
           <Route path="courses/:courseId" element={<CourseDetailsView />} />
-          <Route path="students" element={<CoursesManagerView />} />
+          <Route path="students" element={<StudentRosterView />} />
           <Route path="assignments" element={<AssignmentsManagerView />} />
           <Route path="problems" element={<ProblemsListView />} />
           <Route path="analytics" element={<ClassAnalyticsView />} />

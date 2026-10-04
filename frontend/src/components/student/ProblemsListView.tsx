@@ -24,7 +24,9 @@ import {
 import { useApp } from '../../context/AppContext';
 import { DifficultyBadge } from '../common/Badge';
 import { Modal } from '../common/Modal';
+import { DoubleConfirmDialog } from '../common/DoubleConfirmDialog';
 import { Problem, Difficulty } from '../../types';
+import { useAuth } from '../../context/useAuth';
 
 interface TestCaseItem {
   id: string;
@@ -49,10 +51,11 @@ export const ProblemsListView: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isInstructor = location.pathname.startsWith('/instructor');
-  const { openProblemWorkspace, submissions, courses, problems, addProblem, updateProblem, deleteProblem } = useApp();
+  const { openProblemWorkspace, submissions, courses, problems } = useApp();
+  const { authFetch } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'instructor' | 'practice'>(() =>
-    new URLSearchParams(location.search).get('view') === 'instructor' ? 'instructor' : 'practice'
+    location.pathname.startsWith('/instructor') || new URLSearchParams(location.search).get('view') === 'instructor' ? 'instructor' : 'practice'
   );
   const [search, setSearch] = useState('');
   const [difficultyFilter, setDifficultyFilter] = useState<string>('all');
@@ -62,10 +65,13 @@ export const ProblemsListView: React.FC = () => {
   const [isPracticeLoading, setIsPracticeLoading] = useState(() => readCachedPracticeCatalogue().length === 0);
   const [instructorProblems, setInstructorProblems] = useState<Problem[]>([]);
   const [isInstructorLoading, setIsInstructorLoading] = useState(true);
+  const [instructorLoadError, setInstructorLoadError] = useState('');
 
   useEffect(() => {
     if (!isInstructor) {
       setActiveTab(new URLSearchParams(location.search).get('view') === 'instructor' ? 'instructor' : 'practice');
+    } else {
+      setActiveTab('instructor');
     }
   }, [isInstructor, location.search]);
 
@@ -79,6 +85,7 @@ export const ProblemsListView: React.FC = () => {
         if (!response.ok) throw new Error(`Problem API returned ${response.status}`);
         const records = await response.json();
         if (cancelled || !Array.isArray(records)) return;
+        setInstructorLoadError('');
 
         const mappedProblems = records.map((problem: any): Problem => ({
           id: problem.id,
@@ -113,12 +120,11 @@ export const ProblemsListView: React.FC = () => {
   }, [isInstructor]);
 
   useEffect(() => {
-    if (isInstructor) return;
     let cancelled = false;
 
     const loadInstructorProblems = async () => {
       try {
-        const response = await fetch('/api/instructor-problems', { cache: 'no-store' });
+        const response = await authFetch('/api/instructor-problems', { cache: 'no-store' });
         if (!response.ok) throw new Error(`Instructor problem API returned ${response.status}`);
         const records = await response.json();
         if (cancelled || !Array.isArray(records)) return;
@@ -129,19 +135,26 @@ export const ProblemsListView: React.FC = () => {
           difficulty: ['Easy', 'Medium', 'Hard'].includes(problem.difficulty) ? problem.difficulty : 'Medium',
           tags: [problem.category || 'Algorithms'],
           acceptanceRate: '—',
-          description: '',
-          examples: [],
-          constraints: [],
-          testCases: [],
-          starterCode: {},
+          description: problem.description || '',
+          examples: problem.examples || [],
+          constraints: problem.constraints || [],
+          testCases: (problem.test_cases || []).map((testCase: any, index: number) => ({
+            id: String(testCase.id || `${problem.id}-public-${index + 1}`),
+            input: String(testCase.input || ''),
+            expectedOutput: String(testCase.expected_output || ''),
+            isHidden: Boolean(testCase.is_hidden)
+          })),
+          starterCode: problem.starter_codes || {},
           solutionCode: {},
-          optimalComplexity: { time: '—', space: '—' },
+          optimalComplexity: { time: problem.target_time_complexity || '—', space: problem.target_space_complexity || '—' },
           isInstructorAssigned: true,
+          assignmentId: Number(problem.assignment_id),
           courseCode: problem.course_code || '',
           dueDate: problem.due_date || ''
         })));
       } catch (error) {
         console.error('Unable to load instructor assignments:', error);
+        if (!cancelled) setInstructorLoadError(error instanceof Error ? error.message : 'Unable to load course questions.');
       } finally {
         if (!cancelled) setIsInstructorLoading(false);
       }
@@ -149,35 +162,36 @@ export const ProblemsListView: React.FC = () => {
 
     void loadInstructorProblems();
     return () => { cancelled = true; };
-  }, [isInstructor]);
+  }, [isInstructor, authFetch]);
 
   // Question Creator / Customizer Modal State
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
+  const [deleteProblemTarget, setDeleteProblemTarget] = useState<Problem | null>(null);
+  const [removeCaseTarget, setRemoveCaseTarget] = useState<TestCaseItem | null>(null);
+  const [isDeletingProblem, setIsDeletingProblem] = useState(false);
   const [editingProblemId, setEditingProblemId] = useState<string | null>(null);
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
-  const [formCourseCode, setFormCourseCode] = useState('CS201');
-  const [formDueDate, setFormDueDate] = useState('15 May, 2026');
+  const [formCourseId, setFormCourseId] = useState('');
+  const [formDueDate, setFormDueDate] = useState('');
   const [formDifficulty, setFormDifficulty] = useState<Difficulty>('Medium');
-  const [formTags, setFormTags] = useState('Arrays, Two Pointers');
-  const [formTimeComp, setFormTimeComp] = useState('O(N)');
-  const [formSpaceComp, setFormSpaceComp] = useState('O(1)');
-  const [formTestCases, setFormTestCases] = useState<TestCaseItem[]>([
-    { id: 'tc-1', input: 'nums = [2,7,11,15], target = 9', output: '[0,1]', isHidden: false },
-    { id: 'tc-2', input: 'nums = [3,2,4], target = 6', output: '[1,2]', isHidden: false },
-    { id: 'tc-3', input: 'nums = [3,3], target = 6', output: '[0,1]', isHidden: true }
-  ]);
+  const [formTags, setFormTags] = useState('');
+  const [formTimeComp, setFormTimeComp] = useState('');
+  const [formSpaceComp, setFormSpaceComp] = useState('');
+  const [formTestCases, setFormTestCases] = useState<TestCaseItem[]>([]);
+  const [isSavingQuestion, setIsSavingQuestion] = useState(false);
+  const [questionError, setQuestionError] = useState('');
 
   // Question Specific Analytics Modal State
   const [selectedProblemForAnalytics, setSelectedProblemForAnalytics] = useState<Problem | null>(null);
 
-  const allTags = Array.from(new Set(problems.flatMap((p) => p.tags)));
+  const allTags = Array.from(new Set((isInstructor ? instructorProblems : problems).flatMap((p) => p.tags)));
   const solvedSlugs = new Set(submissions.map(s => s.problemSlug || s.problemId));
 
-  const instructorCount = problems.filter(p => p.isInstructorAssigned).length;
+  const instructorCount = isInstructor ? instructorProblems.length : problems.filter(p => p.isInstructorAssigned).length;
   const practiceCount = problems.filter(p => !p.isInstructorAssigned).length;
 
-  const filtered = problems.filter((p) => {
+  const filtered = (isInstructor ? instructorProblems : problems).filter((p) => {
     if (activeTab === 'instructor' && !p.isInstructorAssigned) return false;
     if (activeTab === 'practice' && p.isInstructorAssigned) return false;
 
@@ -196,7 +210,7 @@ export const ProblemsListView: React.FC = () => {
   const completionCount = filtered.filter(p => solvedSlugs.has(p.slug) || solvedSlugs.has(p.id)).length;
   const hiddenCaseCount = filtered.reduce((count, p) => count + p.testCases.filter(tc => tc.isHidden).length, 0);
   const focusLabel = activeTab === 'instructor'
-    ? 'Finish assigned work before the deadline, then inspect the AI report for revision gains.'
+    ? 'Questions saved here are linked to the selected course and its students.'
     : 'Use standard practice to reinforce topics the evaluator marks as weak.';
 
   const handleClearFilters = () => {
@@ -207,7 +221,11 @@ export const ProblemsListView: React.FC = () => {
 
   const handleSolve = (probId: string) => {
     openProblemWorkspace(probId);
-    navigate(activeTab === 'instructor' && !isInstructor ? `/problems/${probId}?view=instructor` : `/problems/${probId}`);
+    const problem = instructorProblems.find((item) => item.id === probId);
+    const params = new URLSearchParams();
+    if (activeTab === 'instructor' && !isInstructor) params.set('view', 'instructor');
+    if (problem?.assignmentId) params.set('assignmentId', String(problem.assignmentId));
+    navigate(`/problems/${probId}${params.size ? `?${params.toString()}` : ''}`);
   };
 
   // Open Create Question Modal
@@ -215,17 +233,14 @@ export const ProblemsListView: React.FC = () => {
     setEditingProblemId(null);
     setFormTitle('');
     setFormDescription('');
-    setFormCourseCode('CS201');
-    setFormDueDate('25 May, 2026');
+    setFormCourseId(courses[0]?.id || '');
+    setFormDueDate('');
     setFormDifficulty('Medium');
-    setFormTags('Arrays, Hash Map');
-    setFormTimeComp('O(N)');
-    setFormSpaceComp('O(1)');
-    setFormTestCases([
-      { id: `tc-${Date.now()}-1`, input: 'arr = [1,2,3,4,5], k = 3', output: '[3,4,5,1,2]', isHidden: false },
-      { id: `tc-${Date.now()}-2`, input: 'arr = [-1,-100,3,99], k = 2', output: '[3,99,-1,-100]', isHidden: false },
-      { id: `tc-${Date.now()}-3`, input: 'arr = [1], k = 0', output: '[1]', isHidden: true }
-    ]);
+    setFormTags('');
+    setFormTimeComp('');
+    setFormSpaceComp('');
+    setFormTestCases([{ id: `tc-${Date.now()}`, input: '', output: '', isHidden: false }]);
+    setQuestionError('');
     setIsQuestionModalOpen(true);
   };
 
@@ -234,20 +249,17 @@ export const ProblemsListView: React.FC = () => {
     setEditingProblemId(prob.id);
     setFormTitle(prob.title);
     setFormDescription(prob.description);
-    setFormCourseCode(prob.courseCode || 'CS201');
-    setFormDueDate('15 May, 2026');
+    setFormCourseId(courses.find((course) => course.code === prob.courseCode)?.id || courses[0]?.id || '');
+    setFormDueDate(prob.dueDate ? new Date(prob.dueDate).toISOString().slice(0, 16) : '');
     setFormDifficulty(prob.difficulty);
     setFormTags(prob.tags.join(', '));
     setFormTimeComp(prob.optimalComplexity.time);
     setFormSpaceComp(prob.optimalComplexity.space);
-    setFormTestCases(
-      prob.testCases.map((tc, idx) => ({
-        id: `tc-${idx + 1}`,
-        input: tc.input,
-        output: tc.expectedOutput,
-        isHidden: idx >= 2
-      }))
-    );
+    setFormTestCases(prob.testCases.map((tc, idx) => ({
+      id: `tc-${idx + 1}`, input: tc.input, output: tc.expectedOutput, isHidden: Boolean(tc.isHidden)
+    })));
+    if (!prob.testCases.length) setFormTestCases([{ id: `tc-${Date.now()}`, input: '', output: '', isHidden: false }]);
+    setQuestionError('');
     setIsQuestionModalOpen(true);
   };
 
@@ -267,83 +279,82 @@ export const ProblemsListView: React.FC = () => {
   // Handle Remove Test Case Row
   const handleRemoveTestCaseRow = (tcId: string) => {
     if (formTestCases.length <= 1) return;
-    setFormTestCases(formTestCases.filter(tc => tc.id !== tcId));
+    setRemoveCaseTarget(formTestCases.find((testCase) => testCase.id === tcId) || null);
+  };
+
+  const confirmRemoveTestCase = () => {
+    if (!removeCaseTarget || formTestCases.length <= 1) return;
+    setFormTestCases((current) => current.filter((testCase) => testCase.id !== removeCaseTarget.id));
+    setRemoveCaseTarget(null);
   };
 
   // Handle Save Question
-  const handleSaveQuestion = (e: React.FormEvent) => {
+  const handleSaveQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formTitle.trim()) return;
+    setQuestionError('');
+    if (!formTitle.trim() || !formDescription.trim() || !formCourseId || !formTimeComp.trim() || !formSpaceComp.trim()) {
+      setQuestionError('Complete the title, statement, course, and complexity targets.');
+      return;
+    }
+    if (!formTestCases.length || formTestCases.some((tc) => !tc.input.trim() || !tc.output.trim()) || !formTestCases.some((tc) => !tc.isHidden)) {
+      setQuestionError('Add complete test cases and at least one public test case.');
+      return;
+    }
 
     const parsedTags = formTags
       .split(',')
       .map(t => t.trim())
       .filter(Boolean);
 
-    const formattedTestCases = formTestCases.map((tc, idx) => ({
-      id: tc.id || `tc-${Date.now()}-${idx + 1}`,
-      input: tc.input || 'nums = [1, 2, 3]',
-      expectedOutput: tc.output || '[0, 1]',
-      isHidden: tc.isHidden
-    }));
-
-    if (editingProblemId) {
-      // Update existing problem
-      const existing = problems.find(p => p.id === editingProblemId);
-      if (existing) {
-        updateProblem({
-          ...existing,
-          title: formTitle.trim(),
-          description: formDescription.trim(),
-          difficulty: formDifficulty,
-          courseCode: formCourseCode,
-          dueDate: formDueDate,
-          tags: parsedTags.length > 0 ? parsedTags : ['Algorithms'],
-          optimalComplexity: {
-            time: formTimeComp.trim() || 'O(N)',
-            space: formSpaceComp.trim() || 'O(1)'
-          },
-          testCases: formattedTestCases
-        });
-      }
-    } else {
-      // Create new problem
-      const newProblem: Problem = {
-        id: `prob-${Date.now()}`,
-        title: formTitle.trim(),
-        slug: formTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-        difficulty: formDifficulty,
-        acceptanceRate: '0.0%',
-        description: formDescription.trim() || 'Solve this algorithmic challenge with optimal time and space complexity.',
-        examples: [],
-        constraints: [],
-        tags: parsedTags.length > 0 ? parsedTags : ['Algorithms'],
-        isInstructorAssigned: true,
-        courseCode: formCourseCode,
-        dueDate: formDueDate,
-        optimalComplexity: {
-          time: formTimeComp.trim() || 'O(N)',
-          space: formSpaceComp.trim() || 'O(1)'
-        },
-        starterCode: {
-          cpp: '// Starter code template\n#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    void solve() {\n        // Your code here\n    }\n};',
-          python: '# Starter code template\nclass Solution:\n    def solve(self):\n        pass',
-          java: '// Starter code template\nclass Solution {\n    public void solve() {\n        // Your code here\n    }\n}'
-        },
-        solutionCode: {},
-        testCases: formattedTestCases
+    setIsSavingQuestion(true);
+    try {
+      const body = {
+        title: formTitle.trim(), description: formDescription.trim(), difficulty: formDifficulty,
+        category: parsedTags[0] || 'Algorithms', target_time_complexity: formTimeComp.trim(),
+        target_space_complexity: formSpaceComp.trim(),
+        starter_codes: editingProblemId ? instructorProblems.find((problem) => problem.id === editingProblemId)?.starterCode || {} : {},
+        test_cases: formTestCases.map((tc) => ({ input: tc.input.trim(), expected_output: tc.output.trim(), is_hidden: tc.isHidden })),
+        course_id: Number(formCourseId), due_date: formDueDate ? new Date(formDueDate).toISOString() : null
       };
-
-      addProblem(newProblem);
+      const response = await authFetch(editingProblemId
+        ? `/api/instructor/problems/${encodeURIComponent(editingProblemId)}`
+        : '/api/instructor/problems', {
+        method: editingProblemId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'Unable to save question.');
+      setIsQuestionModalOpen(false);
+      window.location.reload();
+    } catch (error) {
+      setQuestionError(error instanceof Error ? error.message : 'Unable to save question.');
+    } finally {
+      setIsSavingQuestion(false);
     }
-
-    setIsQuestionModalOpen(false);
   };
 
   // Delete Problem
-  const handleDeleteProblem = (probId: string) => {
-    if (window.confirm('Are you sure you want to remove this problem from the problem bank?')) {
-      deleteProblem(probId);
+  const handleDeleteProblem = (problem: Problem) => {
+    setQuestionError('');
+    setDeleteProblemTarget(problem);
+  };
+
+  const confirmDeleteProblem = async () => {
+    if (!deleteProblemTarget) return;
+    setIsDeletingProblem(true);
+    try {
+      const response = await authFetch(`/api/instructor/problems/${encodeURIComponent(deleteProblemTarget.id)}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(typeof result.detail === 'string' ? result.detail : 'Unable to delete this question.');
+      }
+      window.location.reload();
+    } catch (error) {
+      setQuestionError(error instanceof Error ? error.message : 'Unable to delete this question.');
+      setDeleteProblemTarget(null);
+    } finally {
+      setIsDeletingProblem(false);
     }
   };
 
@@ -551,13 +562,13 @@ export const ProblemsListView: React.FC = () => {
           )}
 
           <span className="text-xs font-semibold text-slate-600 bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200 shadow-xs">
-            Total Problems: <strong className="text-indigo-600 font-mono text-sm ml-1">{problems.length}</strong>
+            {isInstructor ? 'Course Questions' : 'Total Problems'}: <strong className="text-indigo-600 font-mono text-sm ml-1">{isInstructor ? instructorProblems.length : problems.length}</strong>
           </span>
         </div>
       </div>
 
       {/* Binary Tabs (Strictly Instructor Assigned or Standard Practice) */}
-      <div className="flex bg-slate-200/60 p-1.5 rounded-2xl border border-slate-200/80 max-w-md w-full sm:w-auto">
+      {!isInstructor && <div className="flex bg-slate-200/60 p-1.5 rounded-2xl border border-slate-200/80 max-w-md w-full sm:w-auto">
         <button
           onClick={() => setActiveTab('instructor')}
           className={`flex-1 sm:flex-initial py-2.5 px-5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
@@ -587,7 +598,7 @@ export const ProblemsListView: React.FC = () => {
             {practiceCount}
           </span>
         </button>
-      </div>
+      </div>}
 
       {/* Queue Intelligence */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -605,17 +616,17 @@ export const ProblemsListView: React.FC = () => {
 
         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">Visible Progress</span>
+            <span className="text-xs font-bold text-slate-500">{isInstructor ? 'Your Courses' : 'Visible Progress'}</span>
             <Check className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-extrabold text-slate-900 font-mono">{completionCount}</span>
-            <span className="text-xs text-slate-500">matched as solved</span>
+            <span className="text-2xl font-extrabold text-slate-900 font-mono">{isInstructor ? courses.length : completionCount}</span>
+            <span className="text-xs text-slate-500">{isInstructor ? 'saved courses' : 'matched as solved'}</span>
           </div>
           <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
             <div
               className="h-full rounded-full bg-emerald-500"
-              style={{ width: `${filtered.length ? Math.round((completionCount / filtered.length) * 100) : 0}%` }}
+              style={{ width: `${isInstructor ? 0 : filtered.length ? Math.round((completionCount / filtered.length) * 100) : 0}%` }}
             />
           </div>
         </div>
@@ -706,9 +717,19 @@ export const ProblemsListView: React.FC = () => {
           <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
             <Search className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-slate-800">No matching problems found</h3>
+          <h3 className="text-base font-bold text-slate-800">
+            {isInstructor && isInstructorLoading ? 'Loading course questions' : isInstructor && instructorProblems.length === 0 ? 'No course questions yet' : 'No matching problems found'}
+          </h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            Try adjusting your search keyword or topic filter.
+            {isInstructor && isInstructorLoading
+              ? 'Loading saved course questions…'
+              : isInstructor && instructorLoadError
+                ? instructorLoadError
+                : isInstructor && courses.length === 0
+                  ? 'Create a course in Courses before publishing questions.'
+                  : isInstructor && instructorProblems.length === 0
+                    ? 'No questions have been published to your courses yet. Use Add Question to create one.'
+                    : 'Try adjusting your search keyword or topic filter.'}
           </p>
           <button
             onClick={handleClearFilters}
@@ -737,7 +758,7 @@ export const ProblemsListView: React.FC = () => {
                     {prob.isInstructorAssigned ? (
                       <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-amber-900 bg-amber-50 border border-amber-300 px-3 py-1 rounded-xl shadow-xs">
                         <Calendar className="w-3.5 h-3.5 text-amber-600" />
-                        <span>Due: {prob.dueDate || '15 May, 2026'}</span>
+                        <span>{prob.dueDate ? `Due: ${new Date(prob.dueDate).toLocaleString()}` : 'No due date'}</span>
                       </span>
                     ) : (
                       <DifficultyBadge difficulty={prob.difficulty} />
@@ -746,7 +767,7 @@ export const ProblemsListView: React.FC = () => {
                     {prob.isInstructorAssigned && (
                       <span className="inline-flex items-center gap-1 bg-emerald-600 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-xl shadow-xs tracking-wider uppercase">
                         <GraduationCap className="w-3 h-3" />
-                        {prob.courseCode || 'CS201'}
+                        {prob.courseCode || 'Course'}
                       </span>
                     )}
                   </div>
@@ -757,7 +778,7 @@ export const ProblemsListView: React.FC = () => {
                       {isInstructor ? (
                         <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200/80">
                           <FileCheck2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>45/48 Submissions</span>
+                          <span>{prob.testCases.length} public tests configured</span>
                         </span>
                       ) : isSolved ? (
                         <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2.5 py-1 rounded-xl shadow-xs">
@@ -772,7 +793,7 @@ export const ProblemsListView: React.FC = () => {
                     </div>
 
                     <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200/80 shadow-xs">
-                      Acc: <strong className="text-indigo-600">{prob.acceptanceRate}</strong>
+                      {isInstructor ? 'Course question' : <>Acc: <strong className="text-indigo-600">{prob.acceptanceRate}</strong></>}
                     </span>
                   </div>
 
@@ -827,7 +848,7 @@ export const ProblemsListView: React.FC = () => {
                 <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
                     <Clock className="w-3 h-3 text-slate-400" />
-                    <span>{prob.isInstructorAssigned ? `Due ${prob.dueDate || '15 May, 2026'}` : `Opt: ${prob.optimalComplexity.time}`}</span>
+                    <span>{prob.isInstructorAssigned ? (prob.dueDate ? `Due ${new Date(prob.dueDate).toLocaleString()}` : 'No due date') : `Opt: ${prob.optimalComplexity.time}`}</span>
                   </div>
 
                   {isInstructor ? (
@@ -840,7 +861,7 @@ export const ProblemsListView: React.FC = () => {
                         <Edit3 className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDeleteProblem(prob.id)}
+                        onClick={() => handleDeleteProblem(prob)}
                         title="Delete Question"
                         className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
                       >
@@ -879,7 +900,7 @@ export const ProblemsListView: React.FC = () => {
         isOpen={isQuestionModalOpen}
         onClose={() => setIsQuestionModalOpen(false)}
         title={editingProblemId ? 'Customize Question & Test Cases' : 'Add New Question to Problem Bank'}
-        subtitle="Configure problem statement, sandbox test cases, optimal complexity, and due date"
+        subtitle="Create a question and publish it to an assignment in one of your courses"
         maxWidth="2xl"
       >
         <form onSubmit={handleSaveQuestion} className="space-y-4 text-xs">
@@ -897,15 +918,17 @@ export const ProblemsListView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Course Cohort</label>
+              <label className="block font-bold text-slate-700 mb-1">Course</label>
               <select
-                value={formCourseCode}
-                onChange={(e) => setFormCourseCode(e.target.value)}
+                value={formCourseId}
+                onChange={(e) => setFormCourseId(e.target.value)}
+                required
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium cursor-pointer"
               >
-                {courses.map(c => (
-                  <option key={c.id} value={c.code}>
-                    {c.code}
+                <option value="">Select a course</option>
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.code} · {c.title}
                   </option>
                 ))}
               </select>
@@ -916,11 +939,9 @@ export const ProblemsListView: React.FC = () => {
             <div>
               <label className="block font-bold text-slate-700 mb-1">Due Date</label>
               <input
-                type="text"
+                type="datetime-local"
                 value={formDueDate}
                 onChange={(e) => setFormDueDate(e.target.value)}
-                placeholder="e.g. 20 May, 2026"
-                required
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium"
               />
             </div>
@@ -939,12 +960,12 @@ export const ProblemsListView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Tags (comma separated)</label>
+              <label className="block font-bold text-slate-700 mb-1">Topic</label>
               <input
                 type="text"
                 value={formTags}
                 onChange={(e) => setFormTags(e.target.value)}
-                placeholder="e.g. DP, String, Two Pointers"
+                placeholder="e.g. Arrays"
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium"
               />
             </div>
@@ -1029,6 +1050,7 @@ export const ProblemsListView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleRemoveTestCaseRow(tc.id)}
+                          disabled={formTestCases.length <= 1}
                           className="text-slate-400 hover:text-rose-600 p-0.5 transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -1074,6 +1096,8 @@ export const ProblemsListView: React.FC = () => {
             </div>
           </div>
 
+          {questionError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">{questionError}</p>}
+          {!courses.length && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Create a course first in Courses before publishing a question.</p>}
           <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
             <button
               type="button"
@@ -1084,142 +1108,53 @@ export const ProblemsListView: React.FC = () => {
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer"
+              disabled={isSavingQuestion || courses.length === 0}
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 text-white rounded-xl font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer"
             >
-              {editingProblemId ? 'Save Changes' : 'Publish Question'}
+              {isSavingQuestion ? 'Saving…' : editingProblemId ? 'Save Changes' : 'Publish Question'}
             </button>
           </div>
         </form>
       </Modal>
+      <DoubleConfirmDialog
+        isOpen={Boolean(deleteProblemTarget)}
+        title="Delete this question?"
+        description={`This permanently deletes ${deleteProblemTarget?.title} and its test cases. If it belongs to an assignment or has submissions, deletion may be blocked to protect course history.`}
+        actionLabel="delete question"
+        busy={isDeletingProblem}
+        onClose={() => setDeleteProblemTarget(null)}
+        onConfirm={confirmDeleteProblem}
+      />
+      <DoubleConfirmDialog
+        isOpen={Boolean(removeCaseTarget)}
+        title="Remove this test case?"
+        description="This test case will be removed from the question draft. The change takes effect only when you save the question."
+        actionLabel="remove test case"
+        onClose={() => setRemoveCaseTarget(null)}
+        onConfirm={confirmRemoveTestCase}
+      />
 
-      {/* QUESTION SPECIFIC ANALYTICS MODAL */}
       {selectedProblemForAnalytics && (
         <Modal
           isOpen={Boolean(selectedProblemForAnalytics)}
           onClose={() => setSelectedProblemForAnalytics(null)}
-          title={`Analytics: ${selectedProblemForAnalytics.title}`}
-          subtitle={`Detailed algorithmic cohort diagnostics for ${selectedProblemForAnalytics.courseCode || 'CS201'}`}
+          title={selectedProblemForAnalytics.title}
+          subtitle={`${selectedProblemForAnalytics.courseCode || 'Course'}${selectedProblemForAnalytics.dueDate ? ` · Due ${new Date(selectedProblemForAnalytics.dueDate).toLocaleString()}` : ''}`}
           maxWidth="2xl"
         >
-          <div className="space-y-6 text-xs">
-            {/* Top Stat Summary Grid */}
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Submissions</span>
-                <span className="text-xl font-extrabold text-slate-900 font-mono mt-0.5 block">
-                  45 / 48
-                </span>
-                <span className="text-[10px] text-emerald-600 font-semibold block">93.8% Turnout</span>
-              </div>
-
-              <div className="p-3.5 bg-emerald-50 border border-emerald-200/80 rounded-2xl">
-                <span className="text-[10px] uppercase font-bold text-emerald-700 block">Avg Cohort Score</span>
-                <span className="text-xl font-extrabold text-emerald-700 font-mono mt-0.5 block">
-                  76.4%
-                </span>
-                <span className="text-[10px] text-emerald-600 font-semibold block">Proficient</span>
-              </div>
-
-              <div className="p-3.5 bg-purple-50 border border-purple-200/80 rounded-2xl">
-                <span className="text-[10px] uppercase font-bold text-purple-700 block">Test Pass Rate</span>
-                <span className="text-xl font-extrabold text-purple-700 font-mono mt-0.5 block">
-                  88.9%
-                </span>
-                <span className="text-[10px] text-purple-600 font-semibold block">Automated</span>
-              </div>
+          <div className="space-y-5 text-sm">
+            <p className="whitespace-pre-wrap text-slate-700">{selectedProblemForAnalytics.description || 'No problem statement saved.'}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><span className="block text-xs font-bold uppercase text-slate-500">Difficulty</span><span className="mt-1 block font-semibold">{selectedProblemForAnalytics.difficulty}</span></div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><span className="block text-xs font-bold uppercase text-slate-500">Topic</span><span className="mt-1 block font-semibold">{selectedProblemForAnalytics.tags.join(', ') || '—'}</span></div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><span className="block text-xs font-bold uppercase text-slate-500">Time target</span><span className="mt-1 block font-mono font-semibold">{selectedProblemForAnalytics.optimalComplexity.time}</span></div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><span className="block text-xs font-bold uppercase text-slate-500">Space target</span><span className="mt-1 block font-mono font-semibold">{selectedProblemForAnalytics.optimalComplexity.space}</span></div>
             </div>
-
-            {/* 5D Rubric Diagnostic Breakdown */}
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
-              <h4 className="font-bold text-slate-900">5-Dimensional AI Rubric Breakdown</h4>
-              <div className="space-y-2">
-                <div>
-                  <div className="flex justify-between text-slate-600 mb-1 font-medium">
-                    <span>1. Correctness & Test Cases</span>
-                    <span className="font-mono font-bold text-slate-900">21.4 / 25 (85.6%)</span>
-                  </div>
-                  <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                    <div className="bg-emerald-500 h-full rounded-full" style={{ width: '85.6%' }} />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-slate-600 mb-1 font-medium">
-                    <span>2. Time Complexity Optimal Bounds</span>
-                    <span className="font-mono font-bold text-slate-900">17.2 / 25 (68.8%)</span>
-                  </div>
-                  <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                    <div className="bg-amber-500 h-full rounded-full" style={{ width: '68.8%' }} />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-slate-600 mb-1 font-medium">
-                    <span>3. Space Complexity & Allocation</span>
-                    <span className="font-mono font-bold text-slate-900">21.0 / 25 (84.0%)</span>
-                  </div>
-                  <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                    <div className="bg-blue-500 h-full rounded-full" style={{ width: '84%' }} />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-slate-600 mb-1 font-medium">
-                    <span>4. Code Quality & Modularity</span>
-                    <span className="font-mono font-bold text-slate-900">19.8 / 25 (79.2%)</span>
-                  </div>
-                  <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                    <div className="bg-purple-500 h-full rounded-full" style={{ width: '79.2%' }} />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-slate-600 mb-1 font-medium">
-                    <span>5. Similarity & AST Originality</span>
-                    <span className="font-mono font-bold text-slate-900">22.5 / 25 (90.0%)</span>
-                  </div>
-                  <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                    <div className="bg-teal-500 h-full rounded-full" style={{ width: '90%' }} />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Common Student Mistakes Identified by AI */}
-            <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 space-y-2">
-              <div className="flex items-center gap-2 text-amber-900 font-bold">
-                <AlertTriangle className="w-4 h-4 text-amber-600" />
-                <span>Common Mistakes & Complexity Bottlenecks Identified</span>
-              </div>
-              <ul className="list-disc list-inside space-y-1 text-amber-800 text-[11px] leading-relaxed">
-                <li>32% of students implemented an O(N²) nested loop instead of optimal O(N) single-pass lookup.</li>
-                <li>18% failed on hidden large integer edge test cases due to missing boundary checks.</li>
-                <li>8% encountered variable naming and code readability deductions.</li>
-              </ul>
-            </div>
-
-            <div className="pt-2 flex items-center justify-between border-t border-slate-100">
-              <button
-                onClick={() => setSelectedProblemForAnalytics(null)}
-                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-bold transition-colors cursor-pointer"
-              >
-                Close
-              </button>
-
-              <button
-                onClick={() => {
-                  setSelectedProblemForAnalytics(null);
-                  navigate('/instructor/analytics');
-                }}
-                className="px-5 py-2.5 bg-slate-900 hover:bg-emerald-600 text-white rounded-xl font-bold transition-all flex items-center gap-2 cursor-pointer shadow-md"
-              >
-                <span>View Full Class Analytics</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
+            <div className="rounded-xl border border-slate-200 p-4"><h3 className="font-bold">Public tests</h3><p className="mt-1 text-slate-600">{selectedProblemForAnalytics.testCases.filter(testCase => !testCase.isHidden).length} public test cases configured. Hidden cases stay private.</p></div>
+            <div className="flex justify-end border-t border-slate-100 pt-3"><button onClick={() => setSelectedProblemForAnalytics(null)} className="rounded-xl px-4 py-2 font-bold text-slate-600 hover:bg-slate-100">Close</button></div>
           </div>
         </Modal>
-      )}
-    </div>
+      )}    </div>
   );
 };
+

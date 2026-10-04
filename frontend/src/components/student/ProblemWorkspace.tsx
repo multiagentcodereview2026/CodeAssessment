@@ -22,6 +22,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/useAuth';
 import { DifficultyBadge } from '../common/Badge';
+import { DoubleConfirmDialog } from '../common/DoubleConfirmDialog';
 import { AssessmentResult, SubmissionItem, TestCaseResult } from '../../types';
 import {
   formatInputForDisplay,
@@ -73,6 +74,7 @@ export const ProblemWorkspace: React.FC = () => {
 
   const [remoteProblem, setRemoteProblem] = useState<any | null>(null);
   const [problemLoadError, setProblemLoadError] = useState<string | null>(null);
+  const [resetCodeConfirmOpen, setResetCodeConfirmOpen] = useState(false);
   const [isProblemLoading, setIsProblemLoading] = useState(true);
   const selectedProblem = remoteProblem || fallbackProblem;
   const requestedProblemId = routeProblemId || fallbackProblem.id;
@@ -84,7 +86,7 @@ export const ProblemWorkspace: React.FC = () => {
     setProblemLoadError(null);
     setIsProblemLoading(true);
 
-    fetch(`/api/problems/${encodeURIComponent(requestedProblemId)}`)
+    authFetch(`/api/problems/${encodeURIComponent(requestedProblemId)}`, { cache: 'no-store' })
       .then(async (response) => {
         if (!response.ok) throw new Error('Problem could not be loaded.');
         return response.json();
@@ -113,7 +115,10 @@ export const ProblemWorkspace: React.FC = () => {
           testCases: publicCases,
           starterCode: problem.starter_codes || {},
           solutionCode: {},
-          optimalComplexity: { time: '—', space: '—' },
+          optimalComplexity: {
+            time: problem.target_time_complexity || '—',
+            space: problem.target_space_complexity || '—'
+          },
           inputSchema
         });
         setProblemLoadError(null);
@@ -122,7 +127,7 @@ export const ProblemWorkspace: React.FC = () => {
       .finally(() => !cancelled && setIsProblemLoading(false));
 
     return () => { cancelled = true; };
-  }, [requestedProblemId]);
+  }, [requestedProblemId, authFetch]);
 
   const [language, setLanguage] = useState<string>('cpp');
   const [code, setCode] = useState<string>(
@@ -242,13 +247,12 @@ export const ProblemWorkspace: React.FC = () => {
   };
 
   const handleResetCode = () => {
-    if (window.confirm('Reset code to initial template?')) {
-      localStorage.removeItem(draftKey(workspaceProblemId, language));
-      localStorage.removeItem(legacyDraftKey(workspaceProblemId, language));
-      setCode(getStarterCode(language));
-      setRunOutput(null);
-      setVerifiedRunKey(null);
-    }
+    localStorage.removeItem(draftKey(workspaceProblemId, language));
+    localStorage.removeItem(legacyDraftKey(workspaceProblemId, language));
+    setCode(getStarterCode(language));
+    setRunOutput(null);
+    setVerifiedRunKey(null);
+    setResetCodeConfirmOpen(false);
   };
 
   const monacoLanguage: Record<string, string> = {
@@ -911,7 +915,7 @@ export const ProblemWorkspace: React.FC = () => {
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={handleResetCode}
+                  onClick={() => setResetCodeConfirmOpen(true)}
                   title="Reset to starter template"
                   className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors"
                 >
@@ -1114,6 +1118,14 @@ export const ProblemWorkspace: React.FC = () => {
           )}
         </div>
       </div>
+      <DoubleConfirmDialog
+        isOpen={resetCodeConfirmOpen}
+        title="Reset your code?"
+        description="This clears the saved draft for this problem and language, then restores the starter template. This cannot be undone."
+        actionLabel="reset code"
+        onClose={() => setResetCodeConfirmOpen(false)}
+        onConfirm={handleResetCode}
+      />
     </div>
   );
 };

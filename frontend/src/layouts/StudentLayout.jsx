@@ -12,24 +12,20 @@ import {
   Bell,
   LogOut,
   ChevronDown,
-  Sparkles,
-  Clock,
-  ShieldCheck,
   BellRing
 } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
-import { useApp } from '../context/AppContext';
+import { useNotifications } from '../hooks/useNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const StudentLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { announcements, dismissAnnouncement, openProblemWorkspace } = useApp();
+  const { notifications, unreadCount, notificationError, markRead, markAllRead } = useNotifications();
   
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [unreadNotifs, setUnreadNotifs] = useState(3);
 
   const profileRef = useRef(null);
   const notifRef = useRef(null);
@@ -67,8 +63,7 @@ const StudentLayout = () => {
   const displayName = user?.name || user?.username || 'Vignesh Reddy';
   const displayId = user?.username || user?.id || '24BD1A058Z';
   const displayEmail = user?.email || '24bd1a058z@geethanjali.edu.in';
-  const unreadAnnouncements = announcements.filter((item) => !item.read);
-  const notificationCount = unreadNotifs + unreadAnnouncements.length;
+  const notificationCount = unreadCount;
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -165,8 +160,7 @@ const StudentLayout = () => {
                       </div>
                       <button
                         onClick={() => {
-                          setUnreadNotifs(0);
-                          unreadAnnouncements.forEach((item) => dismissAnnouncement(item.id));
+                          void markAllRead();
                         }}
                         className="text-[11px] font-semibold text-indigo-600 hover:underline cursor-pointer"
                       >
@@ -174,82 +168,9 @@ const StudentLayout = () => {
                       </button>
                     </div>
 
-                    <div className="space-y-2 text-xs max-h-72 overflow-y-auto custom-scrollbar">
-                      {unreadAnnouncements.map((announcement) => (
-                        <div
-                          key={announcement.id}
-                          onClick={() => {
-                            dismissAnnouncement(announcement.id);
-                            setNotifOpen(false);
-                            if (announcement.problemId) {
-                              openProblemWorkspace(announcement.problemId);
-                            }
-                            navigate(announcement.problemId ? `/problems/${announcement.problemId}` : '/problems');
-                          }}
-                          className="p-3 bg-amber-50/80 hover:bg-amber-50 rounded-2xl border border-amber-200 cursor-pointer transition-colors space-y-1"
-                        >
-                          <div className="flex items-center gap-2 text-amber-800 font-bold text-xs">
-                            <BellRing className="w-3.5 h-3.5 text-amber-600" />
-                            <span>{announcement.title}</span>
-                          </div>
-                          <p className="text-amber-800 text-[11px] leading-tight">
-                            {announcement.message}
-                            {announcement.dueDate ? ` Due ${announcement.dueDate}.` : ''}
-                          </p>
-                          <span className="text-[10px] text-slate-400 font-mono">{announcement.createdAt}</span>
-                        </div>
-                      ))}
-
-                      <div 
-                        onClick={() => {
-                          setNotifOpen(false);
-                          navigate('/result');
-                        }}
-                        className="p-3 bg-indigo-50/50 hover:bg-indigo-50 rounded-2xl border border-indigo-100 cursor-pointer transition-colors space-y-1"
-                      >
-                        <div className="flex items-center gap-2 text-indigo-700 font-bold text-xs">
-                          <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                          <span>AI Evaluation Complete</span>
-                        </div>
-                        <p className="text-slate-600 text-[11px] leading-tight">
-                          "Two Sum" scored 85/100 with optimal O(n) hash map complexity.
-                        </p>
-                        <span className="text-[10px] text-slate-400 font-mono">10 mins ago</span>
-                      </div>
-
-                      <div 
-                        onClick={() => {
-                          setNotifOpen(false);
-                          navigate('/problems');
-                        }}
-                        className="p-3 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border border-slate-200/70 cursor-pointer transition-colors space-y-1"
-                      >
-                        <div className="flex items-center gap-2 text-slate-800 font-bold text-xs">
-                          <Clock className="w-3.5 h-3.5 text-amber-500" />
-                          <span>Assignment Deadline Approaching</span>
-                        </div>
-                        <p className="text-slate-600 text-[11px] leading-tight">
-                          "Binary Search & Tree Traversals" due in 3 days.
-                        </p>
-                        <span className="text-[10px] text-slate-400 font-mono">2 hours ago</span>
-                      </div>
-
-                      <div 
-                        onClick={() => {
-                          setNotifOpen(false);
-                          navigate('/feedback');
-                        }}
-                        className="p-3 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border border-slate-200/70 cursor-pointer transition-colors space-y-1"
-                      >
-                        <div className="flex items-center gap-2 text-slate-800 font-bold text-xs">
-                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Mentor Feedback Published</span>
-                        </div>
-                        <p className="text-slate-600 text-[11px] leading-tight">
-                          Instructor reviewed your Reverse Linked List submission.
-                        </p>
-                        <span className="text-[10px] text-slate-400 font-mono">Yesterday</span>
-                      </div>
+                    {notificationError && <p role="alert" className="rounded-lg bg-rose-50 p-2 text-xs text-rose-700">{notificationError}</p>}
+                    <div className="max-h-72 space-y-2 overflow-y-auto custom-scrollbar">
+                      {notifications.length === 0 ? <p className="py-8 text-center text-xs text-slate-500">No notifications yet.</p> : notifications.map((notification) => <button key={notification.id} onClick={async () => { await markRead(notification.id); setNotifOpen(false); if (notification.target_url) navigate(notification.target_url); }} className={`w-full rounded-2xl border p-3 text-left transition-colors ${notification.is_read ? 'border-slate-200 bg-white hover:bg-slate-50' : 'border-indigo-100 bg-indigo-50/60 hover:bg-indigo-50'}`}><span className="flex items-center gap-2 text-xs font-bold text-slate-800"><BellRing className="h-3.5 w-3.5 text-indigo-600" />{notification.title}</span><span className="mt-1 block text-[11px] leading-relaxed text-slate-600">{notification.message}</span><span className="mt-1 block text-[10px] font-mono text-slate-400">{new Date(notification.created_at).toLocaleString()}</span></button>)}
                     </div>
                   </motion.div>
                 )}

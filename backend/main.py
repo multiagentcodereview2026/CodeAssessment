@@ -1,5 +1,8 @@
 import asyncio
 import copy
+import re
+from itertools import combinations
+import hashlib
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -32,6 +35,8 @@ from schemas import (
     StudentCreateByInstructor,
     ProblemListItem,
     ProblemDetail,
+    InstructorProblemCreate,
+    InstructorProblemUpdate,
     SubmissionRequest,
     SubmissionResponse,
     SubmissionDetails,
@@ -48,6 +53,10 @@ from schemas import (
     StudentLookupItem,
     StudentCourseResponse,
     StudentAssignmentResponse,
+    CourseDiscoveryResponse,
+    CourseRequestCreate,
+    CourseRequestResponse,
+    NotificationResponse,
     AssignmentCreate,
     AssignmentUpdate,
     AssignmentResponse,
@@ -70,6 +79,25 @@ from instructor_repository import (
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("evaluator_backend")
+
+
+def create_notification(
+    db: Session,
+    recipient_user_id: Optional[int],
+    event_type: str,
+    title: str,
+    message: str,
+    target_url: Optional[str] = None,
+) -> None:
+    if recipient_user_id is None:
+        return
+    db.add(models.Notification(
+        recipient_user_id=recipient_user_id,
+        event_type=event_type,
+        title=title,
+        message=message,
+        target_url=target_url,
+    ))
 
 
 def get_current_instructor(
@@ -183,6 +211,50 @@ def score_distribution(submissions: List[models.Submission]) -> List[dict[str, A
     ]
 
 
+def topic_performance(db: Session, submissions: List[models.Submission]) -> List[dict[str, Any]]:
+    latest = latest_assessed_attempts(submissions)
+    categories = {
+        problem_id: category or "Uncategorized"
+        for problem_id, category in db.query(models.Problem.id, models.Problem.category).all()
+    }
+    scores_by_topic: dict[str, list[models.Submission]] = {}
+    for submission in latest:
+        if submission.overall_score is not None:
+            scores_by_topic.setdefault(categories.get(submission.problem_id, "Uncategorized"), []).append(submission)
+    results = []
+    for topic, records in scores_by_topic.items():
+        average = average_score(records)
+        results.append({
+            "topic": topic,
+            "average_score": average,
+            "deduction_rate": round(100 - average, 1) if average is not None else None,
+            "students_assessed": len({record.student_id for record in records}),
+            "students_below_60": len({record.student_id for record in records if record.overall_score < 60}),
+        })
+    return sorted(results, key=lambda row: (row["average_score"] if row["average_score"] is not None else 101, row["topic"]))
+
+
+def student_score_extremes(db: Session, submissions: List[models.Submission]) -> dict[str, Any]:
+    latest = latest_assessed_attempts(submissions)
+    scores: dict[str, list[float]] = {}
+    for submission in latest:
+        if submission.overall_score is not None:
+            scores.setdefault(submission.student_id, []).append(submission.overall_score)
+    if not scores:
+        return {"highest_student": None, "lowest_student": None}
+    averages = {student_id: round(sum(values) / len(values), 1) for student_id, values in scores.items()}
+    names = {
+        student.student_id: student.name
+        for student in db.query(models.Student).filter(models.Student.student_id.in_(list(averages))).all()
+    }
+    high_id = max(averages, key=averages.get)
+    low_id = min(averages, key=averages.get)
+    return {
+        "highest_student": {"id": high_id, "name": names.get(high_id, high_id), "average_score": averages[high_id]},
+        "lowest_student": {"id": low_id, "name": names.get(low_id, low_id), "average_score": averages[low_id]},
+    }
+
+
 def build_assignment_stats(db: Session, assignment: models.Assignment) -> AssignmentWithStats:
     links = db.query(models.AssignmentProblem).filter(
         models.AssignmentProblem.assignment_id == assignment.id
@@ -226,6 +298,9 @@ def build_assignment_stats(db: Session, assignment: models.Assignment) -> Assign
         avg_style=average_score(latest, "style_score"),
         avg_similarity=average_score(latest, "similarity_score"),
         problem_titles=problem_titles,
+        score_distribution=score_distribution(latest),
+        topic_performance=topic_performance(db, latest),
+        **student_score_extremes(db, latest),
     )
 
 
@@ -478,37 +553,282 @@ def list_problems(db: Session = Depends(get_db)):
 @app.get("/api/instructor-problems", response_model=List[ProblemListItem])
 def list_instructor_problems(
     db: Session = Depends(get_db),
-    instructor: models.Instructor = Depends(get_current_instructor),
+    current_user: models.User = Depends(get_current_user),
 ):
-    """Fetch course assignments without exposing their hidden cases."""
-    problems = (
-        db.query(models.Problem)
-        .filter(models.Problem.id.in_(INSTRUCTOR_PROBLEM_IDS))
-        .all()
-    )
-    by_id = {problem.id: problem for problem in problems}
-    return [{
+    """Fetch visible course questions for the current instructor or enrolled student."""
+    built_in_ids = set(INSTRUCTOR_PROBLEM_IDS)
+    query = db.query(models.Problem, models.Assignment).join(
+        models.AssignmentProblem, models.AssignmentProblem.problem_id == models.Problem.id
+    ).join(
+        models.Assignment, models.Assignment.id == models.AssignmentProblem.assignment_id
+    ).join(
+        models.Course, models.Course.id == models.Assignment.course_id
+    ).filter(models.Course.is_active == True, models.Assignment.status.in_(["ACTIVE", "UPCOMING"]))
+    if current_user.role == "instructor":
+        instructor = db.query(models.Instructor).filter(models.Instructor.user_id == current_user.id).first()
+        if instructor is None:
+            raise HTTPException(status_code=403, detail="Instructor profile is not configured")
+        query = query.filter(models.Course.instructor_id == instructor.id)
+    elif current_user.role == "student":
+        student = db.query(models.Student).filter(models.Student.user_id == current_user.id).first()
+        if student is None:
+            raise HTTPException(status_code=403, detail="Student profile is not configured")
+        query = query.join(models.Enrollment, models.Enrollment.course_id == models.Course.id).filter(
+            models.Enrollment.student_id == student.student_id,
+            models.Enrollment.is_active == True,
+        )
+    else:
+        raise HTTPException(status_code=403, detail="Role cannot access course questions")
+    linked = query.order_by(models.Assignment.due_date, models.Problem.title).all()
+    records = {problem.id: (problem, assignment) for problem, assignment in linked}
+    result = []
+    for problem_id in INSTRUCTOR_PROBLEM_IDS:
+        if problem_id in records:
+            problem, assignment = records[problem_id]
+            result.append({
+                "id": problem.id, "title": problem.title, "difficulty": problem.difficulty,
+                "category": problem.category, "is_instructor_assigned": True,
+                "assignment_id": assignment.id,
+                "course_code": assignment.course.course_code,
+                "due_date": utc_isoformat(assignment.due_date) if assignment.due_date else None,
+                "description": problem.description,
+                "examples": problem.examples or [],
+                "constraints": problem.constraints or [],
+                "starter_codes": problem.starter_codes or {},
+                "test_cases": load_problem_cases(db, problem, public_only=current_user.role != "instructor"),
+                "target_time_complexity": problem.target_time_complexity,
+                "target_space_complexity": problem.target_space_complexity,
+            })
+    for problem_id, (problem, assignment) in records.items():
+        if problem_id in built_in_ids:
+            continue
+        result.append({
+            "id": problem.id, "title": problem.title, "difficulty": problem.difficulty,
+            "category": problem.category, "is_instructor_assigned": True,
+            "assignment_id": assignment.id,
+            "course_code": assignment.course.course_code,
+            "due_date": utc_isoformat(assignment.due_date) if assignment.due_date else None,
+            "description": problem.description,
+            "examples": problem.examples or [],
+            "constraints": problem.constraints or [],
+            "starter_codes": problem.starter_codes or {},
+            "test_cases": load_problem_cases(db, problem, public_only=current_user.role != "instructor"),
+            "target_time_complexity": problem.target_time_complexity,
+            "target_space_complexity": problem.target_space_complexity,
+        })
+    return result
+
+
+def instructor_problem_payload(db: Session, problem: models.Problem, assignment: models.Assignment) -> dict:
+    """Build the saved question shape returned only to its owning instructor."""
+    return {
         "id": problem.id,
         "title": problem.title,
         "difficulty": problem.difficulty,
         "category": problem.category,
-        **assignment_metadata(problem.id),
-    } for problem_id in INSTRUCTOR_PROBLEM_IDS if (problem := by_id.get(problem_id))]
+        "description": problem.description,
+        "examples": problem.examples or [],
+        "constraints": problem.constraints or [],
+        "starter_codes": problem.starter_codes or {},
+        "test_cases": load_problem_cases(db, problem, public_only=False),
+        "is_instructor_assigned": True,
+        "assignment_id": assignment.id,
+        "course_code": assignment.course.course_code,
+        "due_date": utc_isoformat(assignment.due_date) if assignment.due_date else None,
+    }
+
+
+@app.post("/api/instructor/problems", response_model=ProblemDetail, status_code=status.HTTP_201_CREATED)
+def create_instructor_problem(
+    payload: InstructorProblemCreate,
+    db: Session = Depends(get_db),
+    instructor: models.Instructor = Depends(get_current_instructor),
+):
+    course = get_owned_course(db, instructor.id, payload.course_id)
+    problem_id = f"instructor-{uuid4().hex}"
+    cases = [case.model_dump() for case in payload.test_cases]
+    problem = models.Problem(
+        id=problem_id,
+        title=payload.title,
+        difficulty=payload.difficulty,
+        category=payload.category,
+        description=payload.description,
+        examples=[],
+        constraints=[],
+        starter_codes=payload.starter_codes,
+        test_cases=[{"input": c["input"], "expected_output": c["expected_output"], "is_hidden": c["is_hidden"]} for c in cases if not c["is_hidden"]][:3],
+        target_time_complexity=payload.target_time_complexity,
+        target_space_complexity=payload.target_space_complexity,
+        complexity_source="instructor-provided",
+    )
+    assignment = models.Assignment(
+        title=payload.title,
+        description=payload.description,
+        course_id=course.id,
+        due_date=payload.due_date,
+        status="ACTIVE",
+    )
+    try:
+        db.add(problem)
+        db.flush()
+        for position, case in enumerate(cases, start=1):
+            case_hash = hashlib.sha256(json.dumps(
+                [case["input"], case["expected_output"]], ensure_ascii=False
+            ).encode()).hexdigest()
+            db.add(models.ProblemTestCase(
+                id=f"{problem_id}-case-{position}", problem_id=problem_id,
+                position=position, visibility="HIDDEN" if case["is_hidden"] else "PUBLIC",
+                input_data=case["input"], expected_output=case["expected_output"],
+                content_hash=case_hash,
+            ))
+        db.add(assignment)
+        db.flush()
+        db.add(models.AssignmentProblem(assignment_id=assignment.id, problem_id=problem_id, position=1))
+        for enrolled_student in db.query(models.Student).join(models.Enrollment).filter(
+            models.Enrollment.course_id == course.id,
+            models.Enrollment.is_active == True,
+        ).all():
+            create_notification(
+                db,
+                enrolled_student.user_id,
+                "new_assignment",
+                "New question posted",
+                f"{problem.title} is available in {course.course_code} · {course.title}.",
+                "/courses",
+            )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(problem)
+    db.refresh(assignment)
+    return instructor_problem_payload(db, problem, assignment)
+
+
+@app.put("/api/instructor/problems/{problem_id}", response_model=ProblemDetail)
+def update_instructor_problem(
+    problem_id: str,
+    payload: InstructorProblemUpdate,
+    db: Session = Depends(get_db),
+    instructor: models.Instructor = Depends(get_current_instructor),
+):
+    problem = db.query(models.Problem).filter(models.Problem.id == problem_id).first()
+    assignment = db.query(models.Assignment).join(models.AssignmentProblem).join(models.Course).filter(
+        models.AssignmentProblem.problem_id == problem_id,
+        models.Course.instructor_id == instructor.id,
+    ).first()
+    if problem is None or assignment is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+    if db.query(models.Submission.id).filter(
+        (models.Submission.assignment_id == assignment.id) | (models.Submission.problem_id == problem_id)
+    ).first():
+        raise HTTPException(status_code=409, detail="Question cannot be edited after students have submitted")
+    course = get_owned_course(db, instructor.id, payload.course_id)
+    if course.id != assignment.course_id:
+        raise HTTPException(status_code=422, detail="A question cannot be moved to another course after it is created")
+    cases = [case.model_dump() for case in payload.test_cases]
+    try:
+        problem.title = payload.title
+        problem.difficulty = payload.difficulty
+        problem.category = payload.category
+        problem.description = payload.description
+        problem.starter_codes = payload.starter_codes
+        problem.target_time_complexity = payload.target_time_complexity
+        problem.target_space_complexity = payload.target_space_complexity
+        problem.test_cases = [{"input": c["input"], "expected_output": c["expected_output"], "is_hidden": c["is_hidden"]} for c in cases if not c["is_hidden"]][:3]
+        assignment.title = payload.title
+        assignment.description = payload.description
+        assignment.course_id = course.id
+        assignment.due_date = payload.due_date
+        db.query(models.ProblemTestCase).filter(models.ProblemTestCase.problem_id == problem_id).delete()
+        for position, case in enumerate(cases, start=1):
+            case_hash = hashlib.sha256(json.dumps(
+                [case["input"], case["expected_output"]], ensure_ascii=False
+            ).encode()).hexdigest()
+            db.add(models.ProblemTestCase(
+                id=f"{problem_id}-case-{position}", problem_id=problem_id,
+                position=position, visibility="HIDDEN" if case["is_hidden"] else "PUBLIC",
+                input_data=case["input"], expected_output=case["expected_output"], content_hash=case_hash,
+            ))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(problem)
+    db.refresh(assignment)
+    return instructor_problem_payload(db, problem, assignment)
+
+
+@app.delete("/api/instructor/problems/{problem_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_instructor_problem(
+    problem_id: str,
+    db: Session = Depends(get_db),
+    instructor: models.Instructor = Depends(get_current_instructor),
+):
+    problem = db.query(models.Problem).filter(models.Problem.id == problem_id).first()
+    assignment = db.query(models.Assignment).join(models.AssignmentProblem).join(models.Course).filter(
+        models.AssignmentProblem.problem_id == problem_id,
+        models.Course.instructor_id == instructor.id,
+    ).first()
+    if problem is None or assignment is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+    if db.query(models.Submission.id).filter(models.Submission.problem_id == problem_id).first():
+        raise HTTPException(status_code=409, detail="Question cannot be deleted after students have submitted")
+    try:
+        db.delete(assignment)
+        db.delete(problem)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
 @app.get("/api/problems/{problem_id}", response_model=ProblemDetail)
-def get_problem(problem_id: str, db: Session = Depends(get_db)):
+def get_problem(
+    problem_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
     """Fetch a specific problem with its description, examples, constraints, and starter codes."""
     problem_id = canonical_problem_id(problem_id)
     problem = db.query(models.Problem).filter(models.Problem.id == problem_id).first()
     if not problem:
         raise HTTPException(status_code=404, detail=f"Problem '{problem_id}' not found.")
+    assignment = db.query(models.Assignment).join(models.AssignmentProblem).join(models.Course).filter(
+        models.AssignmentProblem.problem_id == problem_id,
+        models.Assignment.status.in_(["ACTIVE", "UPCOMING"]),
+        models.Course.is_active == True,
+    ).first()
+    if problem_id in INSTRUCTOR_PROBLEM_IDS and assignment is None:
+        raise HTTPException(status_code=404, detail="Course question is not available")
+    if assignment is not None:
+        if current_user.role == "instructor":
+            instructor = db.query(models.Instructor).filter(models.Instructor.user_id == current_user.id).first()
+            allowed = instructor is not None and assignment.course.instructor_id == instructor.id
+        elif current_user.role == "student":
+            student = db.query(models.Student).filter(models.Student.user_id == current_user.id).first()
+            allowed = student is not None and db.query(models.Enrollment.id).filter(
+                models.Enrollment.student_id == student.student_id,
+                models.Enrollment.course_id == assignment.course_id,
+                models.Enrollment.is_active == True,
+            ).first() is not None
+        else:
+            allowed = False
+        if not allowed:
+            raise HTTPException(status_code=404, detail="Question not found")
     public_cases = load_problem_cases(db, problem, public_only=True)
     return {
         "id": problem.id, "title": problem.title, "difficulty": problem.difficulty,
         "category": problem.category, "description": problem.description,
         "examples": problem.examples, "constraints": problem.constraints,
         "starter_codes": problem.starter_codes, "test_cases": public_cases,
-        **assignment_metadata(problem.id),
+        **({
+            "is_instructor_assigned": True,
+            "course_code": assignment.course.course_code,
+            "due_date": utc_isoformat(assignment.due_date) if assignment.due_date else None,
+            "assignment_id": assignment.id,
+        } if assignment else assignment_metadata(problem.id)),
+        "target_time_complexity": problem.target_time_complexity,
+        "target_space_complexity": problem.target_space_complexity,
     }
 
 # ==========================================
@@ -704,6 +1024,15 @@ async def submit_and_evaluate_code(
     )
     
     db.add(new_submission)
+    if assignment is not None:
+        create_notification(
+            db,
+            assignment.course.instructor.user_id,
+            "new_submission",
+            "New evaluated submission",
+            f"{student.name} submitted {problem.title} for {assignment.course.course_code} · {assignment.course.title}.",
+            f"/instructor/analytics?assignmentId={assignment.id}&courseId={assignment.course_id}",
+        )
     db.commit()
     db.refresh(new_submission)
 
@@ -940,6 +1269,8 @@ def get_instructor_overview(
         "highest_score": max(scores) if scores else None,
         "lowest_score": min(scores) if scores else None,
         "score_distribution": score_distribution(latest),
+        "topic_performance": topic_performance(db, latest),
+        **student_score_extremes(db, latest),
         "courses": course_list,
         "students": student_list
     }
@@ -1079,7 +1410,10 @@ def search_students(
 
         students = (
             db.query(models.Student)
+            .join(models.User, models.Student.user_id == models.User.id)
             .filter(
+                models.User.role == "student",
+                models.User.is_active == True,
                 models.Student.student_id.ilike(f"%{needle}%")
                 | models.Student.name.ilike(f"%{needle}%")
             )
@@ -1095,6 +1429,100 @@ def search_students(
         )
         for student in students
     ]
+
+
+@app.get("/api/instructor/roster", response_model=List[StudentRosterItem])
+def get_instructor_roster(
+    db: Session = Depends(get_db),
+    instructor: models.Instructor = Depends(get_current_instructor),
+    course_id: Optional[int] = None,
+):
+    """Return one live performance row for every student in the instructor's active courses."""
+    courses = db.query(models.Course).filter(
+        models.Course.instructor_id == instructor.id,
+        models.Course.is_active == True,
+    ).all()
+    if course_id is not None:
+        course = get_owned_course(db, instructor.id, course_id)
+        courses = [course] if course.is_active else []
+    course_ids = [course.id for course in courses]
+    if not course_ids:
+        return []
+
+    enrollments = db.query(models.Enrollment).filter(
+        models.Enrollment.course_id.in_(course_ids),
+        models.Enrollment.is_active == True,
+    ).all()
+    enrolled_courses: dict[str, set[int]] = {}
+    for enrollment in enrollments:
+        enrolled_courses.setdefault(enrollment.student_id, set()).add(enrollment.course_id)
+
+    assignments = db.query(models.Assignment).filter(
+        models.Assignment.course_id.in_(course_ids)
+    ).all()
+    assignment_ids = [assignment.id for assignment in assignments]
+    courses_with_assignments = {assignment.course_id for assignment in assignments}
+    submissions = db.query(models.Submission).filter(
+        models.Submission.assignment_id.in_(assignment_ids)
+    ).all() if assignment_ids else []
+    submissions_by_student: dict[str, list[models.Submission]] = {}
+    for submission in submissions:
+        if submission.student_id in enrolled_courses:
+            submissions_by_student.setdefault(submission.student_id, []).append(submission)
+
+    categories = {
+        problem_id: category or "Uncategorized"
+        for problem_id, category in db.query(models.Problem.id, models.Problem.category).all()
+    }
+    students = db.query(models.Student).filter(
+        models.Student.student_id.in_(list(enrolled_courses))
+    ).all()
+
+    roster: list[StudentRosterItem] = []
+    for student in students:
+        student_submissions = submissions_by_student.get(student.student_id, [])
+        latest = latest_assessed_attempts(student_submissions)
+        avg_score = average_score(latest)
+        category_scores: dict[str, list[float]] = {}
+        for submission in latest:
+            category_scores.setdefault(categories.get(submission.problem_id, "Uncategorized"), []).append(submission.overall_score)
+        weak_topics = sorted(
+            category for category, scores in category_scores.items()
+            if scores and sum(scores) / len(scores) < 60
+        )
+
+        chronological = sorted(
+            (submission for submission in student_submissions if submission.status == "EVALUATED" and submission.overall_score is not None),
+            key=lambda submission: (submission.created_at or datetime.min, submission.id or 0),
+        )
+        trend = "neutral"
+        if len(chronological) >= 2:
+            change = chronological[-1].overall_score - chronological[-2].overall_score
+            trend = "up" if change >= 5 else "down" if change <= -5 else "neutral"
+
+        has_coursework = bool(enrolled_courses[student.student_id] & courses_with_assignments)
+        status_value = "On Track"
+        if avg_score is not None and avg_score < 50:
+            status_value = "At Risk"
+        elif avg_score is not None and (avg_score < 70 or weak_topics):
+            status_value = "Needs Attention"
+        elif not student_submissions and has_coursework:
+            status_value = "Needs Attention"
+
+        roster.append(StudentRosterItem(
+            id=student.student_id,
+            name=student.name,
+            rollNumber=student.student_id,
+            email=student.email,
+            department=student.department,
+            enrolled_course_count=len(enrolled_courses[student.student_id]),
+            submissions_count=len(student_submissions),
+            avg_score=avg_score,
+            trend=trend,
+            weak_topics=weak_topics,
+            status=status_value,
+        ))
+    return sorted(roster, key=lambda item: (item.name.lower(), item.rollNumber.lower()))
 
 @app.post("/api/instructor/students", response_model=EnrollmentResponse, status_code=status.HTTP_201_CREATED)
 def create_and_enroll_student(
@@ -1214,6 +1642,246 @@ def create_and_enroll_student(
 
 # ============ Instructor Enrollment APIs ============
 
+def course_request_response(request: models.EnrollmentRequest) -> CourseRequestResponse:
+    return CourseRequestResponse(
+        id=request.id,
+        student_id=request.student.student_id,
+        student_name=request.student.name,
+        course_id=request.course.id,
+        course_code=request.course.course_code,
+        course_title=request.course.title,
+        status=request.status,
+        requested_at=request.requested_at,
+    )
+
+
+@app.get("/api/instructor/course-requests", response_model=List[CourseRequestResponse])
+def get_instructor_course_requests(
+    db: Session = Depends(get_db),
+    instructor: models.Instructor = Depends(get_current_instructor),
+    course_id: Optional[int] = None,
+):
+    query = db.query(models.EnrollmentRequest).join(models.Course).filter(
+        models.Course.instructor_id == instructor.id,
+        models.Course.is_active == True,
+        models.EnrollmentRequest.status == "PENDING",
+    )
+    if course_id is not None:
+        get_owned_course(db, instructor.id, course_id)
+        query = query.filter(models.Course.id == course_id)
+    requests = query.order_by(models.EnrollmentRequest.requested_at.asc()).all()
+    return [course_request_response(item) for item in requests]
+
+
+@app.post("/api/instructor/course-requests/{request_id}/{decision}", response_model=CourseRequestResponse)
+def decide_course_request(
+    request_id: int,
+    decision: str,
+    db: Session = Depends(get_db),
+    instructor: models.Instructor = Depends(get_current_instructor),
+):
+    if decision not in {"approve", "reject"}:
+        raise HTTPException(status_code=400, detail="Decision must be approve or reject")
+    request = db.query(models.EnrollmentRequest).filter(models.EnrollmentRequest.id == request_id).first()
+    if request is None:
+        raise HTTPException(status_code=404, detail="Course request not found")
+    course = get_owned_course(db, instructor.id, request.course_id)
+    if request.status != "PENDING":
+        raise HTTPException(status_code=409, detail="This course request has already been handled")
+    student = request.student
+    if decision == "approve":
+        enrollment = db.query(models.Enrollment).filter(
+            models.Enrollment.student_id == student.student_id,
+            models.Enrollment.course_id == course.id,
+        ).first()
+        if enrollment is None:
+            db.add(models.Enrollment(student_id=student.student_id, course_id=course.id, is_active=True))
+        else:
+            enrollment.is_active = True
+        request.status = "APPROVED"
+        notice = ("Course request approved", f"Your request to join {course.course_code} · {course.title} was approved.", "/courses")
+    else:
+        request.status = "REJECTED"
+        notice = ("Course request update", f"Your request to join {course.course_code} · {course.title} was not approved. You may request again later.", "/courses")
+    request.responded_at = datetime.utcnow()
+    create_notification(db, student.user_id, "course_request_decision", notice[0], notice[1], notice[2])
+    db.commit()
+    db.refresh(request)
+    return course_request_response(request)
+
+
+@app.post("/api/student/course-requests", response_model=CourseRequestResponse, status_code=status.HTTP_201_CREATED)
+def request_course_enrollment(
+    payload: CourseRequestCreate,
+    response: Response,
+    db: Session = Depends(get_db),
+    student: models.Student = Depends(get_current_student),
+):
+    course = db.query(models.Course).filter(
+        models.Course.id == payload.course_id,
+        models.Course.is_active == True,
+    ).first()
+    if course is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+    enrollment = db.query(models.Enrollment).filter(
+        models.Enrollment.student_id == student.student_id,
+        models.Enrollment.course_id == course.id,
+        models.Enrollment.is_active == True,
+    ).first()
+    if enrollment is not None:
+        raise HTTPException(status_code=409, detail="You are already enrolled in this course")
+    pending = db.query(models.EnrollmentRequest).filter(
+        models.EnrollmentRequest.student_id == student.student_id,
+        models.EnrollmentRequest.course_id == course.id,
+        models.EnrollmentRequest.status == "PENDING",
+    ).first()
+    if pending is not None:
+        response.status_code = status.HTTP_200_OK
+        return course_request_response(pending)
+    request = models.EnrollmentRequest(student_id=student.student_id, course_id=course.id, status="PENDING")
+    db.add(request)
+    db.flush()
+    create_notification(
+        db,
+        course.instructor.user_id,
+        "course_join_request",
+        "New course join request",
+        f"{student.name} requested to join {course.course_code} · {course.title}.",
+        f"/instructor/courses/{course.id}?tab=requests",
+    )
+    db.commit()
+    db.refresh(request)
+    return course_request_response(request)
+
+
+@app.delete("/api/student/course-requests/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
+def cancel_student_course_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    student: models.Student = Depends(get_current_student),
+):
+    request = db.query(models.EnrollmentRequest).filter(
+        models.EnrollmentRequest.id == request_id,
+        models.EnrollmentRequest.student_id == student.student_id,
+        models.EnrollmentRequest.status == "PENDING",
+    ).first()
+    if request is None:
+        raise HTTPException(status_code=404, detail="Pending course request not found")
+    request.status = "CANCELLED"
+    request.responded_at = datetime.utcnow()
+    course = request.course
+    create_notification(
+        db,
+        course.instructor.user_id,
+        "course_request_cancelled",
+        "Course join request withdrawn",
+        f"{student.name} withdrew their request to join {course.course_code} · {course.title}.",
+        f"/instructor/courses/{course.id}?tab=requests",
+    )
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.delete("/api/student/courses/{course_id}/enrollment", status_code=status.HTTP_204_NO_CONTENT)
+def leave_student_course(
+    course_id: int,
+    db: Session = Depends(get_db),
+    student: models.Student = Depends(get_current_student),
+):
+    enrollment = db.query(models.Enrollment).filter(
+        models.Enrollment.student_id == student.student_id,
+        models.Enrollment.course_id == course_id,
+        models.Enrollment.is_active == True,
+    ).first()
+    if enrollment is None:
+        raise HTTPException(status_code=404, detail="Active enrollment not found")
+    course = enrollment.course
+    enrollment.is_active = False
+    create_notification(
+        db,
+        course.instructor.user_id,
+        "student_left_course",
+        "Student left course",
+        f"{student.name} left {course.course_code} · {course.title}.",
+        f"/instructor/courses/{course.id}?tab=students",
+    )
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get("/api/notifications", response_model=List[NotificationResponse])
+def get_notifications(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    return db.query(models.Notification).filter(
+        models.Notification.recipient_user_id == current_user.id,
+    ).order_by(models.Notification.created_at.desc(), models.Notification.id.desc()).limit(100).all()
+
+
+@app.patch("/api/notifications/{notification_id}/read", response_model=NotificationResponse)
+def mark_notification_read(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    notification = db.query(models.Notification).filter(
+        models.Notification.id == notification_id,
+        models.Notification.recipient_user_id == current_user.id,
+    ).first()
+    if notification is None:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    notification.is_read = True
+    db.commit()
+    db.refresh(notification)
+    return notification
+
+
+@app.post("/api/notifications/read-all", status_code=status.HTTP_204_NO_CONTENT)
+def mark_all_notifications_read(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    db.query(models.Notification).filter(
+        models.Notification.recipient_user_id == current_user.id,
+        models.Notification.is_read == False,
+    ).update({models.Notification.is_read: True}, synchronize_session=False)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get("/api/student/available-courses", response_model=List[CourseDiscoveryResponse])
+def get_available_student_courses(
+    db: Session = Depends(get_db),
+    student: models.Student = Depends(get_current_student),
+):
+    courses = db.query(models.Course).join(models.Instructor).filter(
+        models.Course.is_active == True,
+    ).order_by(models.Course.course_code, models.Course.title).all()
+    result = []
+    for course in courses:
+        enrollment = db.query(models.Enrollment).filter(
+            models.Enrollment.student_id == student.student_id,
+            models.Enrollment.course_id == course.id,
+            models.Enrollment.is_active == True,
+        ).first()
+        pending = db.query(models.EnrollmentRequest).filter(
+            models.EnrollmentRequest.student_id == student.student_id,
+            models.EnrollmentRequest.course_id == course.id,
+            models.EnrollmentRequest.status == "PENDING",
+        ).first()
+        result.append(CourseDiscoveryResponse(
+            id=course.id,
+            course_code=course.course_code,
+            title=course.title,
+            term=course.term,
+            description=course.description,
+            instructor_name=course.instructor.user.full_name,
+            enrollment_status="ENROLLED" if enrollment else "PENDING" if pending else "AVAILABLE",
+            request_id=pending.id if pending else None,
+        ))
+    return result
+
 @app.post("/api/instructor/enrollments", response_model=EnrollmentResponse)
 def enroll_student(
     enrollment: EnrollmentCreate,
@@ -1229,6 +1897,19 @@ def enroll_student(
     
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
+
+    # An enrollment must point to an authenticated student account.  A legacy
+    # profile without a linked user cannot sign in to see the course.
+    student_account = db.query(models.User).filter(
+        models.User.id == student.user_id,
+        models.User.role == "student",
+        models.User.is_active == True,
+    ).first()
+    if student_account is None:
+        raise HTTPException(
+            status_code=422,
+            detail="This student profile has no active student account. Ask the student to register before enrolling them.",
+        )
     
     # Check if course exists
     course = db.query(models.Course).filter(models.Course.id == enrollment.course_id).first()
@@ -1243,7 +1924,10 @@ def enroll_student(
     
     if existing:
         # Reactivate if inactive
+        was_active = existing.is_active
         existing.is_active = True
+        if not was_active:
+            create_notification(db, student_account.id, "course_enrollment", "Added to a course", f"Your instructor added you to {course.course_code} · {course.title}.", "/courses")
         db.commit()
         db.refresh(existing)
         return EnrollmentResponse(
@@ -1262,6 +1946,7 @@ def enroll_student(
         course_id=enrollment.course_id
     )
     db.add(new_enrollment)
+    create_notification(db, student_account.id, "course_enrollment", "Added to a course", f"Your instructor added you to {course.course_code} · {course.title}.", "/courses")
     db.commit()
     db.refresh(new_enrollment)
     
@@ -1319,6 +2004,14 @@ def deactivate_enrollment(
         raise HTTPException(status_code=404, detail="Enrollment not found")
     get_owned_course(db, instructor.id, enrollment.course_id)
     enrollment.is_active = False
+    create_notification(
+        db,
+        enrollment.student.user_id,
+        "enrollment_removed",
+        "Course access ended",
+        f"Your enrollment in {enrollment.course.course_code} · {enrollment.course.title} was removed by the instructor.",
+        "/courses",
+    )
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -1445,6 +2138,19 @@ def create_assignment(
                 problem_id=problem_id,
                 position=position,
             ))
+        enrolled_students = db.query(models.Student).join(models.Enrollment).filter(
+            models.Enrollment.course_id == assignment.course_id,
+            models.Enrollment.is_active == True,
+        ).all()
+        for enrolled_student in enrolled_students:
+            create_notification(
+                db,
+                enrolled_student.user_id,
+                "new_assignment",
+                "New assignment posted",
+                f"{new_assignment.title} is available in {new_assignment.course.course_code} · {new_assignment.course.title}.",
+                "/courses",
+            )
         db.commit()
         db.refresh(new_assignment)
     except Exception:
@@ -1560,6 +2266,110 @@ def get_assignment(
 
 # ============ Instructor Analytics APIs ============
 
+def similarity_tokens(code: str) -> set[tuple[str, ...]]:
+    """Create identifier-normalized token shingles for a conservative overlap screen."""
+    raw_tokens = re.findall(r"[A-Za-z_][A-Za-z_0-9]*|\d+(?:\.\d+)?|==|!=|<=|>=|\S", code or "")
+    keywords = {"if", "else", "for", "while", "return", "def", "class", "function", "int", "float", "double", "string", "const", "let", "var", "void", "public", "private", "new", "true", "false", "null", "None", "import", "from", "include", "using", "namespace", "try", "catch", "break", "continue"}
+    tokens = [token if token in keywords or not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", token) else "IDENT" for token in raw_tokens]
+    return {tuple(tokens[index:index + 5]) for index in range(max(0, len(tokens) - 4))}
+
+
+def instructor_similarity_cases(db: Session, instructor_id: int, course_id: Optional[int] = None) -> list[dict[str, Any]]:
+    rows = db.query(models.Submission, models.Assignment, models.Course, models.Student, models.Problem).join(
+        models.Assignment, models.Assignment.id == models.Submission.assignment_id
+    ).join(models.Course, models.Course.id == models.Assignment.course_id).join(
+        models.Student, models.Student.student_id == models.Submission.student_id
+    ).join(models.Problem, models.Problem.id == models.Submission.problem_id).filter(
+        models.Course.instructor_id == instructor_id,
+        models.Course.is_active == True,
+        models.Submission.status == "EVALUATED",
+        *([models.Course.id == course_id] if course_id is not None else []),
+    ).order_by(models.Submission.created_at.desc(), models.Submission.id.desc()).all()
+    latest: dict[tuple[int, str, str], tuple[Any, ...]] = {}
+    for row in rows:
+        submission, assignment, course, _student, _problem = row
+        latest.setdefault((course.id, submission.student_id, submission.problem_id), row)
+    grouped: dict[tuple[int, str], list[tuple[Any, ...]]] = {}
+    for row in latest.values():
+        submission, _assignment, course, _student, _problem = row
+        grouped.setdefault((course.id, submission.problem_id), []).append(row)
+
+    alerts = []
+    for submissions in grouped.values():
+        for left, right in combinations(submissions, 2):
+            sub_a, _assign_a, course_a, student_a, problem_a = left
+            sub_b, _assign_b, _course_b, student_b, _problem_b = right
+            if student_a.student_id == student_b.student_id:
+                continue
+            tokens_a, tokens_b = similarity_tokens(sub_a.code), similarity_tokens(sub_b.code)
+            if not tokens_a or not tokens_b:
+                continue
+            overlap = len(tokens_a & tokens_b) / len(tokens_a | tokens_b)
+            percentage = round(overlap * 100)
+            if percentage < 72:
+                continue
+            pair_id = ":".join(sorted((sub_a.submission_id, sub_b.submission_id)))
+            review_status = (sub_a.assessment_flags or {}).get("similarity_reviews", {}).get(pair_id, "open")
+            if review_status == "dismissed":
+                continue
+            created_at = sub_b.created_at or sub_a.created_at
+            alerts.append({
+                "id": pair_id,
+                "problemId": problem_a.id,
+                "problemTitle": problem_a.title,
+                "courseId": course_a.id,
+                "courseTitle": course_a.title,
+                "studentA": {"id": student_a.student_id, "name": student_a.name, "rollNumber": student_a.student_id, "submissionId": sub_a.submission_id},
+                "studentB": {"id": student_b.student_id, "name": student_b.name, "rollNumber": student_b.student_id, "submissionId": sub_b.submission_id},
+                "similarityPercentage": percentage,
+                "riskLevel": "High" if percentage >= 85 else "Medium",
+                "matchedLinesCount": len(tokens_a & tokens_b),
+                "timestamp": utc_isoformat(created_at) if created_at else "Unknown",
+                "studentACodeSnippet": sub_a.code[:12000],
+                "studentBCodeSnippet": sub_b.code[:12000],
+                "aiAuditNotes": "Automated normalized token-shingle overlap screening. Shared boilerplate and common solution patterns can produce matches; this is a review lead, not a finding of misconduct.",
+                "reviewStatus": review_status,
+            })
+    return sorted(alerts, key=lambda alert: (alert["similarityPercentage"], alert["timestamp"]), reverse=True)[:100]
+
+
+@app.get("/api/instructor/similarity")
+def list_instructor_similarity_cases(
+    db: Session = Depends(get_db),
+    instructor: models.Instructor = Depends(get_current_instructor),
+    course_id: Optional[int] = None,
+):
+    if course_id is not None:
+        get_owned_course(db, instructor.id, course_id)
+    cases = instructor_similarity_cases(db, instructor.id, course_id)
+    return {"cases": cases, "total_cases": len(cases)}
+
+
+@app.post("/api/instructor/similarity/{case_id}/{action}")
+def update_instructor_similarity_case(
+    case_id: str,
+    action: str,
+    db: Session = Depends(get_db),
+    instructor: models.Instructor = Depends(get_current_instructor),
+):
+    if action not in {"dismiss", "request-review"}:
+        raise HTTPException(status_code=400, detail="Unsupported similarity review action")
+    case = next((item for item in instructor_similarity_cases(db, instructor.id) if item["id"] == case_id), None)
+    if case is None:
+        raise HTTPException(status_code=404, detail="Similarity case not found")
+    status_value = "dismissed" if action == "dismiss" else "review_requested"
+    pair_key = case_id
+    submission_ids = {case["studentA"]["submissionId"], case["studentB"]["submissionId"]}
+    records = db.query(models.Submission).filter(models.Submission.submission_id.in_(submission_ids)).all()
+    for submission in records:
+        flags = dict(submission.assessment_flags or {})
+        reviews = dict(flags.get("similarity_reviews") or {})
+        reviews[pair_key] = status_value
+        flags["similarity_reviews"] = reviews
+        submission.assessment_flags = flags
+    db.commit()
+    return {"case_id": case_id, "status": status_value}
+
 @app.get("/api/instructor/courses/{course_id}/analytics")
 def get_course_analytics(
     course_id: int,
@@ -1593,18 +2403,6 @@ def get_course_analytics(
     }
     completion_rate = round(len(completed_pairs) / expected_completions * 100, 1) if expected_completions else None
 
-    category_by_problem = {
-        problem.id: problem.category or "Uncategorized"
-        for problem in db.query(models.Problem.id, models.Problem.category).all()
-    }
-    scores_by_category: dict[str, list[float]] = {}
-    for submission in latest:
-        category = category_by_problem.get(submission.problem_id, "Uncategorized")
-        scores_by_category.setdefault(category, []).append(submission.overall_score)
-    topic_performance = [
-        {"topic": topic, "avg_score": round(sum(scores) / len(scores), 1), "assessed_problems": len(scores)}
-        for topic, scores in sorted(scores_by_category.items())
-    ]
     unique_submitters = {submission.student_id for submission in submissions}
     return {
         "course_id": course_id,
@@ -1615,10 +2413,13 @@ def get_course_analytics(
         "unique_submitters": len(unique_submitters),
         "unsubmitted_students": max(0, total_students - len(unique_submitters)),
         "avg_score": average_score(latest),
+        "highest_score": max((submission.overall_score for submission in latest if submission.overall_score is not None), default=None),
+        "lowest_score": min((submission.overall_score for submission in latest if submission.overall_score is not None), default=None),
         "score_distribution": score_distribution(latest),
         "completion_rate": completion_rate,
         "assignment_stats": [build_assignment_stats(db, assignment).model_dump() for assignment in assignments],
-        "topic_performance": topic_performance,
+        "topic_performance": topic_performance(db, latest),
+        **student_score_extremes(db, latest),
     }
 @app.get("/api/instructor/courses/{course_id}/students/{student_id}/progress", response_model=InstructorStudentProgressResponse)
 def get_instructor_student_progress(

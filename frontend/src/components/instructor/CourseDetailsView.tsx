@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
 import { Modal } from '../common/Modal';
+import { DoubleConfirmDialog } from '../common/DoubleConfirmDialog';
 
 type Course = {
   id: number;
@@ -42,7 +43,9 @@ type StudentHit = {
   name: string;
 };
 
-type Tab = 'students' | 'assignments';
+type CourseJoinRequest = { id: number; student_id: string; student_name: string; course_id: number; course_code: string; course_title: string; status: string; requested_at: string };
+
+type Tab = 'students' | 'assignments' | 'requests';
 
 export const CourseDetailsView: React.FC = () => {
   const { courseId } = useParams();
@@ -53,6 +56,9 @@ export const CourseDetailsView: React.FC = () => {
   const [course, setCourse] = useState<Course | null>(null);
   const [students, setStudents] = useState<Enrollment[]>([]);
   const [assignments, setAssignments] = useState<CourseAssignment[]>([]);
+  const [joinRequests, setJoinRequests] = useState<CourseJoinRequest[]>([]);
+  const [enrollmentRemoveTarget, setEnrollmentRemoveTarget] = useState<Enrollment | null>(null);
+  const [requestRejectTarget, setRequestRejectTarget] = useState<CourseJoinRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -64,8 +70,8 @@ export const CourseDetailsView: React.FC = () => {
   // General loading state
   const [busy, setBusy] = useState(false);
 
-  const activeTab: Tab =
-    searchParams.get('tab') === 'assignments' ? 'assignments' : 'students';
+  const tabParam = searchParams.get('tab');
+  const activeTab: Tab = tabParam === 'assignments' || tabParam === 'requests' ? tabParam : 'students';
 
   // Edit course modal
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -74,16 +80,12 @@ export const CourseDetailsView: React.FC = () => {
   const [editTerm, setEditTerm] = useState('');
   const [editDescription, setEditDescription] = useState('');
 
-  // Add student modal
+  // Enroll an existing student account by its login/student ID.
   const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
   const [newStudentId, setNewStudentId] = useState('');
-  const [newStudentName, setNewStudentName] = useState('');
-  const [newStudentEmail, setNewStudentEmail] = useState('');
 
   const resetAddStudentForm = () => {
     setNewStudentId('');
-    setNewStudentName('');
-    setNewStudentEmail('');
   };
 
   const openAddStudentModal = () => {
@@ -105,7 +107,7 @@ export const CourseDetailsView: React.FC = () => {
     setError('');
 
     try {
-      const [courseResponse, rosterResponse, assignmentResponse] =
+      const [courseResponse, rosterResponse, assignmentResponse, requestResponse] =
         await Promise.all([
           authFetch(`/api/instructor/courses/${courseId}`, {
             cache: 'no-store',
@@ -116,25 +118,28 @@ export const CourseDetailsView: React.FC = () => {
           authFetch(`/api/instructor/courses/${courseId}/assignments`, {
             cache: 'no-store',
           }),
+          authFetch(`/api/instructor/course-requests?course_id=${courseId}`, { cache: 'no-store' }),
         ]);
 
       if (!courseResponse.ok) {
         throw new Error('Course could not be loaded.');
       }
 
-      if (!rosterResponse.ok || !assignmentResponse.ok) {
+      if (!rosterResponse.ok || !assignmentResponse.ok || !requestResponse.ok) {
         throw new Error('Course details could not be loaded.');
       }
 
-      const [courseData, rosterData, assignmentData] = await Promise.all([
+      const [courseData, rosterData, assignmentData, requestData] = await Promise.all([
         courseResponse.json(),
         rosterResponse.json(),
         assignmentResponse.json(),
+        requestResponse.json(),
       ]);
 
       setCourse(courseData);
       setStudents(Array.isArray(rosterData) ? rosterData : []);
       setAssignments(Array.isArray(assignmentData) ? assignmentData : []);
+      setJoinRequests(Array.isArray(requestData) ? requestData : []);
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -280,10 +285,10 @@ export const CourseDetailsView: React.FC = () => {
   };
 
   // ---------------------------------------------------------
-  // CREATE NEW STUDENT + AUTOMATICALLY ENROLL
+  // ENROLL AN EXISTING STUDENT ACCOUNT
   // ---------------------------------------------------------
 
-  const createAndEnrollStudent = async (event: React.FormEvent) => {
+  const enrollStudentById = async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!courseId) return;
@@ -297,18 +302,13 @@ export const CourseDetailsView: React.FC = () => {
     setError('');
 
     try {
-      const params = new URLSearchParams({
-        course_id: courseId,
-      });
-
       const response = await authFetch(
-        `/api/instructor/students?${params.toString()}`,
+        '/api/instructor/enrollments',
         {
           method: 'POST',
           body: JSON.stringify({
+            course_id: Number(courseId),
             student_id: newStudentId.trim(),
-            name: newStudentName.trim(),
-            email: newStudentEmail.trim() || null,
           }),
         },
       );
@@ -317,7 +317,7 @@ export const CourseDetailsView: React.FC = () => {
 
       if (!response.ok) {
         throw new Error(
-          body.detail || 'Student could not be created.',
+          body.detail || 'Student could not be enrolled.',
         );
       }
 
@@ -336,7 +336,7 @@ export const CourseDetailsView: React.FC = () => {
       setError(
         createError instanceof Error
           ? createError.message
-          : 'Student could not be created.',
+          : 'Student could not be enrolled.',
       );
     } finally {
       setBusy(false);
@@ -347,7 +347,7 @@ export const CourseDetailsView: React.FC = () => {
   // Deactivate enrollment
   // ---------------------------------------------------------
 
-  const deactivateEnrollment = async (enrollmentId: number) => {
+  const deactivateEnrollment = async (enrollmentId: number): Promise<boolean> => {
     setBusy(true);
     setError('');
 
@@ -368,15 +368,29 @@ export const CourseDetailsView: React.FC = () => {
       }
 
       await loadCourseData();
+      return true;
     } catch (removeError) {
       setError(
         removeError instanceof Error
           ? removeError.message
           : 'Enrollment could not be deactivated.',
       );
+      return false;
     } finally {
       setBusy(false);
     }
+  };
+
+  const decideJoinRequest = async (joinRequest: CourseJoinRequest, decision: 'approve' | 'reject') => {
+    setBusy(true); setError('');
+    try {
+      const response = await authFetch(`/api/instructor/course-requests/${joinRequest.id}/${decision}`, { method: 'POST' });
+      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || 'Course request could not be updated.');
+      setRequestRejectTarget(null);
+      await loadCourseData();
+    } catch (decisionError) {
+      setError(decisionError instanceof Error ? decisionError.message : 'Course request could not be updated.');
+    } finally { setBusy(false); }
   };
 
   const changeTab = (tab: Tab) => {
@@ -494,6 +508,13 @@ export const CourseDetailsView: React.FC = () => {
         </button>
 
         <button
+          onClick={() => changeTab('requests')}
+          className={`border-b-2 px-1 pb-3 text-sm font-semibold ${activeTab === 'requests' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500'}`}
+        >
+          Join Requests ({joinRequests.length})
+        </button>
+
+        <button
           onClick={() =>
             navigate(
               `/instructor/analytics?courseId=${course.id}`,
@@ -529,7 +550,7 @@ export const CourseDetailsView: React.FC = () => {
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                Add a new student or enroll an existing student.
+                Enroll a registered student account in this course.
               </p>
             </div>
 
@@ -625,9 +646,7 @@ export const CourseDetailsView: React.FC = () => {
             !busy &&
             matches.length === 0 && (
               <p className="max-w-2xl rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                No existing student found. You can use{' '}
-                <strong>Add Student</strong> to create a new
-                student profile.
+                No registered student account found. Ask the student to create an account first, then search by their Student ID or name.
               </p>
             )}
 
@@ -675,9 +694,7 @@ export const CourseDetailsView: React.FC = () => {
                   <button
                     title="Deactivate enrollment"
                     disabled={busy}
-                    onClick={() =>
-                      void deactivateEnrollment(student.id)
-                    }
+                    onClick={() => setEnrollmentRemoveTarget(student)}
                     className="rounded-md p-2 text-slate-500 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"
                   >
                     <UserRoundMinus className="h-4 w-4" />
@@ -686,6 +703,11 @@ export const CourseDetailsView: React.FC = () => {
               ))
             )}
           </div>
+        </section>
+      ) : activeTab === 'requests' ? (
+        <section className="space-y-4">
+          <div><h2 className="text-lg font-semibold text-slate-900">Student join requests</h2><p className="mt-1 text-sm text-slate-500">Approve a request to create the student’s active course enrollment, or reject it. Students can request again after a rejection.</p></div>
+          {joinRequests.length === 0 ? <p className="rounded-lg border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">No pending requests for this course.</p> : <div className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">{joinRequests.map((joinRequest) => <article key={joinRequest.id} className="flex flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center"><div><p className="font-semibold text-slate-900">{joinRequest.student_name}</p><p className="font-mono text-xs text-slate-500">Student ID: {joinRequest.student_id}</p><p className="mt-1 text-xs text-slate-400">Requested {new Date(joinRequest.requested_at).toLocaleString()}</p></div><div className="flex gap-2"><button disabled={busy} onClick={() => setRequestRejectTarget(joinRequest)} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Reject</button><button disabled={busy} onClick={() => void decideJoinRequest(joinRequest, 'approve')} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-50">Approve and enroll</button></div></article>)}</div>}
         </section>
       ) : (
         /* =====================================================
@@ -830,6 +852,24 @@ export const CourseDetailsView: React.FC = () => {
           </div>
         </form>
       </Modal>
+      <DoubleConfirmDialog
+        isOpen={Boolean(enrollmentRemoveTarget)}
+        title="Remove this student from the course?"
+        description={`This deactivates ${enrollmentRemoveTarget?.student_name || enrollmentRemoveTarget?.student_id}'s enrollment. Their saved submissions remain in the system.`}
+        actionLabel="remove student"
+        busy={busy}
+        onClose={() => setEnrollmentRemoveTarget(null)}
+        onConfirm={async () => { if (!enrollmentRemoveTarget) return; if (await deactivateEnrollment(enrollmentRemoveTarget.id)) setEnrollmentRemoveTarget(null); }}
+      />
+      <DoubleConfirmDialog
+        isOpen={Boolean(requestRejectTarget)}
+        title="Reject this join request?"
+        description={`The student will be notified that their request for ${requestRejectTarget?.course_code} · ${requestRejectTarget?.course_title} was rejected. They may request again later.`}
+        actionLabel="reject request"
+        busy={busy}
+        onClose={() => setRequestRejectTarget(null)}
+        onConfirm={async () => { if (requestRejectTarget) await decideJoinRequest(requestRejectTarget, 'reject'); }}
+      />
 
       {/* =====================================================
           ADD STUDENT MODAL
@@ -840,12 +880,12 @@ export const CourseDetailsView: React.FC = () => {
         title="Add Student"
         subtitle={
           course
-            ? `Add a new student or reuse an existing profile in ${course.course_code}`
-            : 'Add a new student or reuse an existing profile'
+            ? `Enroll a registered student account in ${course.course_code}`
+            : 'Enroll a registered student account'
         }
       >
         <form
-          onSubmit={createAndEnrollStudent}
+          onSubmit={enrollStudentById}
           className="space-y-4"
         >
           {/* Student ID */}
@@ -871,61 +911,14 @@ export const CourseDetailsView: React.FC = () => {
             />
 
             <p className="mt-1 text-xs text-slate-400">
-              If this ID already exists, the saved student profile will be enrolled.
+              Enter the Student ID used to sign in. Only active, registered student accounts can be enrolled.
             </p>
-          </div>
-
-          {/* Name */}
-          <div>
-            <label
-              htmlFor="new-student-name"
-              className="mb-1.5 block text-xs font-bold text-slate-700"
-            >
-              Student Name <span className="font-normal text-slate-400">(required for new students)</span>
-            </label>
-
-            <input
-              id="new-student-name"
-              type="text"
-              value={newStudentName}
-              onChange={(e) =>
-                setNewStudentName(e.target.value)
-              }
-              placeholder="Enter student's full name"
-              disabled={busy}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-emerald-500 focus:bg-white"
-            />
-          </div>
-
-          {/* Email */}
-          <div>
-            <label
-              htmlFor="new-student-email"
-              className="mb-1.5 block text-xs font-bold text-slate-700"
-            >
-              Email
-              <span className="ml-1 font-normal text-slate-400">
-                (optional)
-              </span>
-            </label>
-
-            <input
-              id="new-student-email"
-              type="email"
-              value={newStudentEmail}
-              onChange={(e) =>
-                setNewStudentEmail(e.target.value)
-              }
-              placeholder="student@example.com"
-              disabled={busy}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-emerald-500 focus:bg-white"
-            />
           </div>
 
           {/* Information */}
           <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
             <p className="text-xs leading-5 text-emerald-800">
-              Enter a name for a new student. An existing Student ID reuses its saved profile; name and email changes are not applied here. The same email cannot be saved under a different Student ID.
+              The student must register first. Once enrolled, this course appears in their My Courses section the next time they sign in or refresh it.
             </p>
           </div>
 
@@ -950,7 +943,7 @@ export const CourseDetailsView: React.FC = () => {
             >
               <UserPlus className="h-4 w-4" />
 
-              {busy ? 'Saving...' : 'Add & Enroll'}
+              {busy ? 'Enrolling...' : 'Enroll Student'}
             </button>
           </div>
         </form>
