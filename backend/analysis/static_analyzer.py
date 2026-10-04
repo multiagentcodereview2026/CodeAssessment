@@ -898,7 +898,7 @@ def analyze_source(
             ir = ast_analyzer.analyze()
             if ir:
                 ast_result = infer_complexity_from_ir(ir)
-                if ast_result and ast_result.time_complexity and ast_result.time_complexity != "O(1)":
+                if ast_result and ast_result.time_complexity:
                     return ast_result
         except Exception:
             pass

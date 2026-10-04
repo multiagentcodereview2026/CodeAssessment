@@ -174,8 +174,10 @@ def normalize_complexity(value: str | None) -> str | None:
     if text in {"o(v^2)", "o(v*v)", "o(v²)", "o(v2)"}:
         return "O(V^2)"
 
-    if text in {"o(mn)", "o(m*n)", "o(n*m)", "o(nm)"}:
-        return "O(mn)"
+    if text in {"o(mn)", "o(m*n)"}:
+        return "O(m*n)"
+    if text in {"o(nm)", "o(n*m)"}:
+        return "O(n*m)"
 
     if text in {"o(n^2)", "o(n*n)", "o(n²)", "o(n2)"}:
         return "O(n^2)"

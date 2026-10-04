@@ -16,6 +16,7 @@ class LoopIR:
     distinct_params: List[str] = field(default_factory=list)
     has_heap_operations: bool = False
     has_matrix_bounds: bool = False
+    loop_complexity: str = ""
 
 @dataclass
 class RecursionIR:
@@ -27,6 +28,9 @@ class RecursionIR:
     has_linear_combine: bool = False
     has_auxiliary_array: bool = False
     calls_inside_loop: bool = False
+    reduction_type: str = "linear"  # "linear" (n-1), "divide" (n/2), "logarithmic"
+    work_per_level: str = "O(1)"     # "O(1)", "O(n)", "O(n^2)"
+    stack_depth: str = "O(1)"
 
 @dataclass
 class GraphIR:
@@ -46,3 +50,6 @@ class ComplexityIR:
     has_merged_both: bool = False
     is_constant_lookup: bool = False
     multiple_input_bounds: bool = False
+    space_complexity: str = ""
+    time_complexity: str = ""
+

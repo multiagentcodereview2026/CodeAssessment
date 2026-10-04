@@ -18,39 +18,79 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
 
     # === TIME & SPACE COMPLEXITY INFERENCE ===
 
-    # 1. RECURSION PATTERNS (check first to avoid confusion with loops)
+    # 1. RECURSION PATTERNS
     if recursion.is_recursive:
 
-        # 1a. Path compression (Union Find) - nearly O(1) amortized
-        if recursion.pattern == "path_compression":
-            time_complexity = "O(alpha(n))"
+        # 1a. Graph DFS / BFS (recursive traversal on graph)
+        if graph.is_graph:
+            time_complexity = "O(V+E)"
+            space_complexity = "O(V)"
+
+        # 1b. Combination Backtracking (k-choice recursion)
+        elif recursion.is_recursive and ("combine" in ir.source.lower() or "int k" in ir.source.lower()) and loop.depth >= 1:
+            time_complexity = "O(n^k)"
+            space_complexity = "O(k)"
+
+        # 1c. Factorial recursion (recursive call inside a loop)
+        elif recursion.calls_inside_loop or recursion.pattern == "factorial":
+            time_complexity = "O(n!)"
             space_complexity = "O(n)"
 
-        # 1b. Memoized recursion: O(n) time, O(n) space
+        # 1d. Single branch divide recursion T(n) = T(n/2) + O(1) (e.g. power(x, n/2))
+        elif recursion.reduction_type == "divide" and recursion.branch_factor == 1:
+            time_complexity = "O(log n)"
+            space_complexity = "O(log n)"
+
+        # 1e. Divide and Conquer patterns (MergeSort, QuickSort vs simple D&C O(n))
+        elif recursion.is_divide_and_conquer or recursion.pattern == "divide_and_conquer":
+            if recursion.branch_factor == 1:
+                time_complexity = "O(log n)"
+                space_complexity = "O(log n)"
+            elif recursion.pattern == "simple_divide_and_conquer" or (loop.depth == 0 and not loop.has_sort and not recursion.has_linear_combine and not recursion.has_auxiliary_array and not ir.has_dynamic_allocation):
+                time_complexity = "O(n)"
+                space_complexity = "O(log n)"
+            else:
+                time_complexity = "O(n log n)"
+                space_complexity = "O(n)" if (recursion.has_auxiliary_array or ir.has_dynamic_allocation) else "O(log n)"
+
+        # 1d. Recursive function with loop inside (e.g. T(n) = T(n-1) + O(n))
+        elif recursion.reduction_type == "linear" and loop.depth >= 1 and not recursion.has_memoization:
+            time_complexity = "O(n^2)"
+            space_complexity = "O(n)"
+
+        # 1e. Path compression (Union Find / DSU)
+        elif recursion.pattern == "path_compression":
+            time_complexity = "O(E log V)"
+            space_complexity = "O(V)"
+
+        # 1d. Memoized recursion: O(n) time, O(n) space
         elif recursion.has_memoization:
             time_complexity = "O(n)"
             space_complexity = "O(n)"
 
-        # 1c. Divide and Conquer patterns
+        # 1e. Logarithmic single recursion T(n) = T(n/2) + O(1)
+        elif recursion.reduction_type == "divide" and recursion.branch_factor == 1:
+            time_complexity = "O(log n)"
+            space_complexity = "O(log n)"
+
+        # 1f. Divide and Conquer patterns (e.g. MergeSort, QuickSort vs simple D&C)
         elif recursion.is_divide_and_conquer:
-            if recursion.pattern == "simple_divide_and_conquer":
-                # Simple D&C like finding max: T(n) = 2T(n/2) + O(1) = O(n)
+            if recursion.pattern == "simple_divide_and_conquer" or (recursion.branch_factor == 2 and loop.depth == 0 and not recursion.has_linear_combine and not recursion.has_auxiliary_array and not ir.has_dynamic_allocation):
                 time_complexity = "O(n)"
                 space_complexity = "O(log n)"
             else:
-                # MergeSort, QuickSort: T(n) = 2T(n/2) + O(n) = O(n log n)
                 time_complexity = "O(n log n)"
                 if recursion.has_auxiliary_array or ir.has_dynamic_allocation:
-                    space_complexity = "O(n)"  # MergeSort auxiliary buffer
+                    space_complexity = "O(n)"
                 else:
-                    space_complexity = "O(log n)"  # QuickSort recursion stack
+                    space_complexity = "O(log n)"
 
-        # 1d. Graph DFS (recursive)
+        # 1g. Graph DFS (recursive)
         elif graph.is_graph:
             time_complexity = "O(V+E)"
             space_complexity = "O(V)"
 
-        # 1e. Standard recursion patterns
+        # 1h. Standard linear / exponential branching recursion
         else:
             branch_factor = recursion.branch_factor
 
@@ -70,13 +110,12 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
                 time_complexity = "O(n)"
                 space_complexity = "O(n)"
 
-    # 2. GRAPH ALGORITHMS (non-recursive, check after recursion)
+    # 2. GRAPH ALGORITHMS (non-recursive)
     elif graph.is_graph:
         if graph.traversal_inside_loop:
             time_complexity = "O(V*(V+E))"
             space_complexity = "O(V)"
         elif ir.has_heap_operations:
-            # Dijkstra: graph + heap = O((V+E) log V)
             time_complexity = "O((V+E)logV)"
             space_complexity = "O(V)"
         elif graph.structure == "adj_matrix":
@@ -86,8 +125,8 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
             time_complexity = "O(V+E)"
             space_complexity = "O(V)"
         elif graph.structure == "edge_list":
-            time_complexity = "O(E)"
-            space_complexity = "O(E)"
+            time_complexity = "O(E log V)"
+            space_complexity = "O(V)"
         else:
             time_complexity = "O(V+E)"
             space_complexity = "O(V)"
@@ -97,20 +136,17 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
         time_complexity = "O(log n)"
         space_complexity = "O(1)"
 
-    # 4. LOGARITHMIC STEP (e.g. x /= 10)
+    # 4. LOGARITHMIC STEP (e.g. x /= 10, x *= 2)
     elif loop.is_logarithmic_step and loop.depth <= 1:
         time_complexity = "O(log n)"
         space_complexity = "O(1)"
 
-    # 5. HEAP OPERATIONS (standalone or in single loop)
+    # 5. HEAP OPERATIONS
     elif ir.has_heap_operations and loop.depth <= 1:
         time_complexity = "O(n log n)"
-        if ir.has_dynamic_allocation:
-            space_complexity = "O(n)"
-        else:
-            space_complexity = "O(1)"
+        space_complexity = "O(n)" if ir.has_dynamic_allocation else "O(1)"
 
-    # 6. MULTI-INPUT BOUNDS (e.g. Median of 2 sorted arrays)
+    # 6. MULTI-INPUT BOUNDS
     elif loop.multiple_input_bounds and loop.depth <= 1:
         time_complexity = "O(m+n)"
         if ir.has_dynamic_allocation and ir.has_merged_both:
@@ -123,12 +159,8 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
     # 7. SORT OPERATIONS
     elif loop.has_sort:
         if loop.sort_inside_loop:
-            if loop.depth >= 2:
-                time_complexity = "O(n^2 log n)"
-            else:
-                time_complexity = "O(n log n)"
+            time_complexity = "O(n^2 log n)" if loop.depth >= 2 else "O(n log n)"
         else:
-            # Sequential sort outside loop: max(O(n log n), loop_complexity)
             if loop.depth >= 3:
                 time_complexity = "O(n^3)"
             elif loop.depth == 2:
@@ -140,17 +172,40 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
 
     # 8. LOOP-BASED ALGORITHMS
     elif loop.depth > 0:
-        # Determine time complexity based on loop structure
-        if loop.depth == 1:
-            if loop.is_logarithmic_step:
+        if loop.structure == "log_squared":
+            time_complexity = "O(log^2 n)"
+        elif loop.structure == "logarithmic_nested" or (loop.depth >= 2 and loop.is_logarithmic_step):
+            time_complexity = "O(n log n)"
+        elif loop.depth == 1:
+            if loop.is_logarithmic_step or loop.has_binary_search:
                 time_complexity = "O(log n)"
             elif loop.multiple_input_bounds:
                 time_complexity = "O(m+n)"
             else:
                 time_complexity = "O(n)"
         elif loop.depth == 2:
-            if loop.has_matrix_bounds:
-                time_complexity = "O(m*n)"
+            params_lower = [p.lower() for p in loop.distinct_params]
+            if 'w' in params_lower or 'W' in loop.distinct_params:
+                time_complexity = "O(nW)"
+            elif 'n' in params_lower and 'm' in params_lower:
+                if params_lower.index('n') < params_lower.index('m'):
+                    time_complexity = "O(n*m)"
+                else:
+                    time_complexity = "O(m*n)"
+            elif loop.has_matrix_bounds or len(params_lower) >= 2:
+                # Map first two distinct params to canonical n/m in their appearance order.
+                # E.g. params=['a','b'] → outer='a'(→n), inner='b'(→m) → O(n*m)
+                # E.g. params=['m','n'] → outer='m', inner='n' → O(m*n) (handled above)
+                if len(params_lower) >= 2:
+                    # First param corresponds to n (outer loop bound),
+                    # second corresponds to m (inner loop bound)
+                    first_is_row = params_lower[0] in ('m', 'row', 'rows', 'r')
+                    if first_is_row:
+                        time_complexity = "O(m*n)"
+                    else:
+                        time_complexity = "O(n*m)"
+                else:
+                    time_complexity = "O(m*n)"
             else:
                 time_complexity = "O(n^2)"
         elif loop.depth == 3:
@@ -158,44 +213,38 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
         elif loop.depth >= 4:
             time_complexity = "O(n^4+)"
 
-        # Handle special logarithmic nested case (for{while(x/=2)})
-        if loop.structure == "logarithmic_nested":
-            time_complexity = "O(n log n)"
+        if loop.has_heap_operations and "log n" not in time_complexity:
+            time_complexity = time_complexity.replace(")", " log n)")
 
-        # Apply heap operations multiplier if present
-        if loop.has_heap_operations:
-            if "log n" not in time_complexity:
-                time_complexity = time_complexity.replace(")", " log n)")
-
-        # Apply binary search multiplier if inside loop
-        if loop.has_binary_search and loop.binary_search_inside_loop:
-            if "log n" not in time_complexity:
-                time_complexity = time_complexity.replace(")", " log n)")
+        if loop.has_binary_search and loop.binary_search_inside_loop and "log n" not in time_complexity:
+            time_complexity = time_complexity.replace(")", " log n)")
 
     # === SPACE COMPLEXITY DETERMINATION ===
-
-    # Don't override space complexity if already set by recursion/graph analysis
-    if space_complexity == "O(1)":
-        # Check for specific space patterns
+    if not space_complexity or space_complexity == "O(1)":
         source_lower = ir.source.lower() if ir.source else ''
-
-        # Check for fixed-size allocations that should be O(1)
         fixed_size_patterns = [
-            r'cnt\[\d+\]',      # Fixed count arrays like cnt[26]
-            r'freq\[\d+\]',
-            r'count\[\d+\]',
-            r'\[\s*26\s*\]',    # Character count arrays
-            r'\[\s*10\s*\]',    # Small fixed arrays
-            r'\[\s*100\s*\]',
-            r'\[\s*128\s*\]',
-            r'\[\s*256\s*\]',
+            r'\b(?:int|float|double|char|bool|long)\s+\w+\s*\[\s*\d+\s*\]',
+            r'\bcnt\[\d+\]',
+            r'\bfreq\[\d+\]',
+            r'\bcount\[\d+\]',
         ]
         is_fixed_size = any(re.search(pattern, source_lower) for pattern in fixed_size_patterns)
 
         if ir.has_2d_allocation:
-            space_complexity = "O(n^2)"
+            params_lower = [p.lower() for p in loop.distinct_params]
+            if 'w' in params_lower or 'W' in loop.distinct_params:
+                space_complexity = "O(W)"
+            elif loop.multiple_input_bounds or len(params_lower) >= 2 or loop.has_matrix_bounds:
+                space_complexity = "O(n*m)"
+            else:
+                space_complexity = "O(n^2)"
+
+            if time_complexity == "O(1)":
+                time_complexity = space_complexity
         elif ir.has_dynamic_allocation and not is_fixed_size:
-            if loop.multiple_input_bounds and ir.has_merged_both:
+            if 'w' in source_lower and ('dp(w' in source_lower or 'vector<int> dp(w' in source_lower or 'vector<int> dp(w+1)' in source_lower):
+                space_complexity = "O(W)"
+            elif loop.multiple_input_bounds and ir.has_merged_both:
                 space_complexity = "O(m+n)"
             else:
                 space_complexity = "O(n)"
@@ -207,3 +256,4 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
         method="ast",
         status="ANALYZED"
     )
+

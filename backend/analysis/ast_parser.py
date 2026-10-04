@@ -5,14 +5,16 @@ from .complexity_ir import ComplexityIR, LoopIR, RecursionIR, GraphIR
 # Tree-sitter imports - handle gracefully if not available
 AST_AVAILABLE = False
 try:
-    from tree_sitter import Node, Parser, Tree
-    from tree_sitter_languages import get_parser
+    from tree_sitter import Language, Node, Parser, Tree
     AST_AVAILABLE = True
-except ImportError:
+except Exception:
     # Tree-sitter not available - use regex fallback
     Node = type('Node', (), {})
     Parser = type('Parser', (), {})
     Tree = type('Tree', (), {})
+    Language = type('Language', (), {})
+
+
 
 
 def parse_cpp_ast(source: str):
@@ -44,28 +46,47 @@ class ASTComplexityAnalyzer:
         if not AST_AVAILABLE:
             return
 
+        lang_map = {
+            'cpp': ('tree_sitter_cpp', 'language'),
+            'c++': ('tree_sitter_cpp', 'language'),
+            'c': ('tree_sitter_c', 'language'),
+            'python': ('tree_sitter_python', 'language'),
+            'py': ('tree_sitter_python', 'language'),
+            'java': ('tree_sitter_java', 'language'),
+        }
+
+        lang_key = self.language.lower().strip()
+
         try:
-            language_map = {
-                'cpp': 'cpp',
-                'c++': 'cpp',
-                'c': 'c',
-                'java': 'java',
-                'python': 'python',
-                'py': 'python',
-            }
+            if lang_key in lang_map:
+                mod_name, fn_name = lang_map[lang_key]
+                mod = __import__(mod_name)
+                lang_fn = getattr(mod, fn_name)
+                ts_lang = Language(lang_fn())
+                try:
+                    self.parser = Parser(ts_lang)
+                except Exception:
+                    self.parser = Parser()
+                    self.parser.set_language(ts_lang)
 
-            mapped_lang = language_map.get(self.language, self.language)
+                self.tree = self.parser.parse(bytes(self.source, 'utf-8'))
+                self.use_ast = True
+                return
+        except Exception:
+            pass
 
-            # Try to get parser
+        try:
+            from tree_sitter_languages import get_parser
+            mapped_lang = 'cpp' if lang_key in {'cpp', 'c++'} else lang_key
             self.parser = get_parser(mapped_lang)
             if self.parser:
                 self.tree = self.parser.parse(bytes(self.source, 'utf-8'))
-
+                self.use_ast = True
         except Exception:
-            # Fall back to regex analysis
             self.use_ast = False
             self.parser = None
             self.tree = None
+
 
     def analyze(self) -> ComplexityIR:
         """
@@ -299,7 +320,6 @@ class ASTComplexityAnalyzer:
 
         # Graph-specific indicators
         graph_indicators = [
-            r'\bqueue\s*<.*>\s*\w+',  # BFS queue
             r'\bdfs\s*\(',
             r'\bbfs\s*\(',
             r'\bvis\b.*\bvis\b',  # visited array used multiple times
@@ -366,7 +386,8 @@ class ASTComplexityAnalyzer:
         has_matrix_access = bool(re.search(r"a\[\s*i\s*\]\.\s*size\s*\(\)", src)) or \
                            bool(re.search(r"matrix\[\s*i\s*\]\.\s*size\s*\(\)", src)) or \
                            bool(re.search(r"grid\[\s*i\s*\]\.\s*size\s*\(\)", src)) or \
-                           bool(re.search(r"a\[0\]\.size\(\)", src))  # matrix[0].size()
+                           bool(re.search(r"a\[0\]\.size\(\)", src)) or \
+                           bool(re.search(r"vector\s*<\s*vector\s*<", src))
 
         # Look for explicit m*n parameters or bounds
         has_mn_params = bool(re.search(r"\bm\b.*\bn\b", src)) or \
@@ -473,32 +494,20 @@ class ASTComplexityAnalyzer:
         """Detect 2D dynamic allocation."""
         src = self.source.lower()
 
-        # Only detect 2D allocation for actual 2D data structures created in the function body
         brace_pos = src.find('{')
         if brace_pos < 0:
             return False
 
         function_body = src[brace_pos:]
-        patterns = [
-            r"vector\s*<\s*vector\s*<",
-            r"new\s+.*\[\s*\]\[\s*\]",
-            r"malloc\s*\(\s*.*\*\s*sizeof\s*\(\s*.*\s*\*\s*\)",
-        ]
 
-        # Only count if vector<vector> is declared locally, not as a parameter
-        for p in patterns:
-            if re.search(p, function_body):
-                # Check it's not just a parameter reference
-                # If vector<vector> appears before the first '{', it's a parameter
-                if p == r"vector\s*<\s*vector\s*<":
-                    # Check if it's a local declaration (has a variable name after >)
-                    local_decl = re.search(r"vector\s*<\s*vector\s*<[^>]+>\s*>\s+\w+\s*[\(;]", function_body)
-                    if local_decl:
-                        return True
-                else:
-                    return True
+        # Look for local 2D vector declarations: vector<vector<T>> name(...) or name = ...
+        vec_decl = bool(re.search(r'vector\s*<\s*vector\s*<[^>]+\s*>\s*>\s*\w+', function_body))
 
-        return False
+        # Look for 2D dynamic arrays: new T[n][m] or type arr[n][m] declaration
+        arr_decl = bool(re.search(r'\bnew\s+\w+\s*\[[^\]]+\]\s*\[[^\]]+\]', function_body)) or \
+                   bool(re.search(r'\b(?:int|float|double|char|bool)\s+\w+\s*\[[^\]]+\]\s*\[[^\]]+\]', function_body))
+
+        return vec_decl or arr_decl
 
     def _detect_constant_lookup(self) -> bool:
         """Detect constant-time lookup operations."""
@@ -533,14 +542,261 @@ class ASTComplexityAnalyzer:
 
     # === AST-SPECIFIC METHODS (only used when tree-sitter is available) ===
 
+    # === AST-SPECIFIC METHODS ===
+
     def _extract_loop_features(self, root) -> LoopIR:
-        """Extract loop features from AST (placeholder - uses regex fallback)."""
-        return self._regex_analysis().loop
+        """Extract loop features by traversing tree-sitter AST nodes."""
+        loop = LoopIR()
+        loop_types = {'for_statement', 'while_statement', 'do_statement', 'for_range_loop', 'enhanced_for_statement'}
+
+        loop_nodes = []
+
+        def find_loops(node):
+            if node.type in loop_types:
+                loop_nodes.append(node)
+            for child in node.children:
+                find_loops(child)
+
+        find_loops(root)
+
+        if not loop_nodes:
+            return loop
+
+        # 1. Determine nesting depth and parent-child hierarchy
+        max_depth = 0
+        loop_ancestor_counts = []
+        for node in loop_nodes:
+            ancestors = 0
+            curr = node.parent
+            while curr:
+                if curr.type in loop_types:
+                    ancestors += 1
+                curr = curr.parent
+            loop_ancestor_counts.append(ancestors)
+            max_depth = max(max_depth, ancestors + 1)
+
+        loop.depth = max_depth
+
+        # Check if loops are sequential vs nested
+        top_level_loops = [loop_nodes[i] for i, anc in enumerate(loop_ancestor_counts) if anc == 0]
+        if max_depth == 1 and len(top_level_loops) > 1:
+            loop.structure = "sequential"
+        elif max_depth == 2:
+            loop.structure = "nested"
+        elif max_depth >= 3:
+            loop.structure = "triple_nested"
+        else:
+            loop.structure = "single"
+
+        # 2. Check logarithmic step patterns across loops (% b, &=, /= 2, *= 2, >>= 1)
+        log_loop_count = 0
+        for node in loop_nodes:
+            # Always define full_text first so while/do branches never hit NameError
+            full_text = node.text.decode('utf-8', errors='ignore').lower() if isinstance(node.text, bytes) else str(node.text).lower()
+            body = node.child_by_field_name('body')
+            if body:
+                body_text = body.text.decode('utf-8', errors='ignore').lower() if isinstance(body.text, bytes) else str(body.text).lower()
+                header_text = full_text[:full_text.find(body_text)] if body_text in full_text else full_text
+            else:
+                header_text = full_text
+                body_text = full_text
+
+            if node.type in ['while_statement', 'do_statement']:
+                check_text = full_text
+            else:
+                check_text = header_text
+
+            if any(op in check_text for op in ['*=', '/=', '>>=', '<<=', '/ 2', '/10', '* 2', '* 10', '%', '&=']):
+                log_loop_count += 1
+
+        if log_loop_count >= 2:
+            loop.is_logarithmic_step = True
+            loop.structure = "log_squared"
+        elif log_loop_count == 1:
+            loop.is_logarithmic_step = True
+            if max_depth >= 2:
+                loop.structure = "logarithmic_nested"
+
+        # 3. Check algorithm operations (sort, binary search, heap) inside/outside loops
+        src_lower = self.source.lower()
+        loop.has_sort = any(s in src_lower for s in ['sort(', 'std::sort'])
+        loop.has_binary_search = any(b in src_lower for b in [
+            'lower_bound', 'upper_bound', 'binary_search',
+            'mid =', 'mid=', 'm =', 'm=', '(l+r)/2', '(l + r) / 2', '(l+r)/2',
+            'l<=r', 'l <= r', 'left<=right', 'left <= right'
+        ])
+        loop.has_heap_operations = self._detect_heap_operations()
+        loop.has_matrix_bounds = self._detect_matrix_bounds()
+
+        # Check for multiple input bounds (e.g. m and n or w/W or size calls)
+        loop_counter_vars = set(re.findall(r'\bfor\s*\(\s*(?:[a-zA-Z_]\w*\s+)?([a-zA-Z_]\w*)\s*=', src_lower))
+        loop_counter_vars.update({'i', 'j', 'k', 'x', 'y', 'z', 'idx', 'index', 'row', 'col', 'r', 'c', 'it'})
+
+        bounds_vars = list(dict.fromkeys(re.findall(r'\b([a-zA-Z_]\w*)\s*\.\s*size\s*\(\)', src_lower)))
+        for match in re.finditer(r'\bfor\s*\([^)]*<\s*=?\s*(\w+)[^)]*\)', src_lower):
+            v = match.group(1)
+            if v not in ['0', '1', '2'] and v not in bounds_vars and v not in loop_counter_vars:
+                bounds_vars.append(v)
+        loop.distinct_params = bounds_vars
+        loop.multiple_input_bounds = len(bounds_vars) >= 2
+
+        # Check for amortized linear patterns (sliding window, monotonic stack, two pointers, counting sort array decrement)
+        is_amortized = any(p in src_lower for p in ['.pop()', 'left++', 'l++', 'start++', 'pop_back()']) or \
+                       bool(re.search(r'\w+\[\w+\]--', src_lower)) or \
+                       bool(re.search(r'--\w+\[\w+\]', src_lower))
+        if is_amortized and max_depth == 2:
+            loop.depth = 1
+            loop.structure = "sequential"
+
+        return loop
 
     def _extract_recursion_features(self, root) -> RecursionIR:
-        """Extract recursion features from AST (placeholder - uses regex fallback)."""
+        """Extract recursion features from AST."""
+        rec = RecursionIR()
+        loop_types = {'for_statement', 'while_statement', 'do_statement', 'for_range_loop', 'enhanced_for_statement'}
+
+        func_nodes = []
+        def find_funcs(node):
+            if node.type in ['function_definition', 'method_declaration']:
+                func_nodes.append(node)
+            for child in node.children:
+                find_funcs(child)
+        find_funcs(root)
+
+        if not func_nodes:
+            return self._regex_analysis().recursion
+
+        for fn_node in func_nodes:
+            fn_name = ""
+            declarator = fn_node.child_by_field_name('declarator')
+            if declarator:
+                for c in declarator.children:
+                    if c.type in ['identifier', 'field_identifier']:
+                        fn_name = c.text.decode('utf-8', errors='ignore') if isinstance(c.text, bytes) else str(c.text)
+                        break
+                if not fn_name and declarator.type in ['identifier', 'field_identifier']:
+                    fn_name = declarator.text.decode('utf-8', errors='ignore') if isinstance(declarator.text, bytes) else str(declarator.text)
+
+            if not fn_name or fn_name in {'main', 'if', 'for', 'while'}:
+                continue
+
+            fn_text = fn_node.text.decode('utf-8', errors='ignore') if isinstance(fn_node.text, bytes) else str(fn_node.text)
+
+            self_calls = []
+            calls_inside_loop = False
+
+            def find_calls(node):
+                nonlocal calls_inside_loop
+                if node.type == 'call_expression':
+                    func_expr = node.child_by_field_name('function') or (node.children[0] if node.children else None)
+                    if func_expr:
+                        call_name = func_expr.text.decode('utf-8', errors='ignore') if isinstance(func_expr.text, bytes) else str(func_expr.text)
+                        if call_name == fn_name:
+                            self_calls.append(node)
+                            curr = node.parent
+                            while curr:
+                                if curr.type in loop_types:
+                                    calls_inside_loop = True
+                                    break
+                                curr = curr.parent
+                for child in node.children:
+                    find_calls(child)
+
+            find_calls(fn_node)
+
+            if self_calls:
+                rec.is_recursive = True
+
+                # Determine mutual exclusivity vs simultaneous branching
+                is_exclusive = False
+                if len(self_calls) >= 2:
+                    call1, call2 = self_calls[0], self_calls[1]
+
+                    def get_if_ancestor(node):
+                        curr = node.parent
+                        prev = node
+                        while curr:
+                            if curr.type == 'if_statement':
+                                return curr, prev
+                            prev = curr
+                            curr = curr.parent
+                        return None, None
+
+                    if1, child1 = get_if_ancestor(call1)
+                    if2, child2 = get_if_ancestor(call2)
+
+                    if if1 and if2 and if1.start_byte == if2.start_byte:
+                        if child1.type != child2.type or (hasattr(child1, 'start_byte') and hasattr(child2, 'start_byte') and child1.start_byte != child2.start_byte):
+                            is_exclusive = True
+                    elif if1 and not if2:
+                        if 'return' in (if1.text.decode('utf-8', errors='ignore') if isinstance(if1.text, bytes) else str(if1.text)):
+                            is_exclusive = True
+                    elif if2 and not if1:
+                        if 'return' in (if2.text.decode('utf-8', errors='ignore') if isinstance(if2.text, bytes) else str(if2.text)):
+                            is_exclusive = True
+
+                rec.branch_factor = 1 if is_exclusive else len(self_calls)
+
+                # Check graph context (Graph DFS with recursive call inside loop over edges/adj)
+                # Only suppress calls_inside_loop for true graph DFS — NOT for permutation/backtracking
+                # Permutation patterns use swap + recursion inside a loop => must keep calls_inside_loop
+                has_swap = 'swap(' in fn_text or 'swap (' in fn_text
+                is_graph_func = (
+                    any(g in fn_text for g in ['vector<vector', 'adj', 'graph', 'vis', 'visited'])
+                    and not has_swap
+                )
+                if is_graph_func:
+                    calls_inside_loop = False
+
+                rec.calls_inside_loop = calls_inside_loop
+
+                div_count = 0
+                sub_count = 0
+                for call_node in self_calls:
+                    args_text = call_node.text.decode('utf-8', errors='ignore') if isinstance(call_node.text, bytes) else str(call_node.text)
+                    if '/ 2' in args_text or '/2' in args_text or '>> 1' in args_text:
+                        div_count += 1
+                    if '- 1' in args_text or '-1' in args_text or '- 2' in args_text:
+                        sub_count += 1
+
+                has_pivot_split = rec.branch_factor == 2 and ('-1' in fn_text or '- 1' in fn_text) and ('+1' in fn_text or '+ 1' in fn_text)
+                has_dc_split = any(pattern in fn_text for pattern in ['(l + r) / 2', '(l+r)/2', 'mid =', 'm = (l', 'm=(l', 'pivot', 'partition']) or has_pivot_split
+                if has_dc_split or div_count > 0:
+                    rec.reduction_type = "divide"
+                    rec.is_divide_and_conquer = True
+                    rec.stack_depth = "O(log n)"
+                else:
+                    rec.reduction_type = "linear"
+                    rec.stack_depth = "O(n)"
+
+                is_path_compression = bool(re.search(rf'\bparent\[\w+\]\s*=\s*{fn_name}', fn_text)) or \
+                                       bool(re.search(rf'\bpar\[\w+\]\s*=\s*{fn_name}', fn_text)) or \
+                                       bool(re.search(rf'\bp\[\w+\]\s*=\s*{fn_name}', fn_text))
+
+                if is_path_compression:
+                    rec.pattern = "path_compression"
+                elif any(m in fn_text for m in ['memo[', 'dp[', 'cache[']):
+                    rec.has_memoization = True
+                    rec.pattern = "memoized"
+                elif calls_inside_loop:
+                    rec.pattern = "factorial"
+                elif rec.branch_factor >= 2:
+                    rec.pattern = "branching"
+                elif rec.reduction_type == "divide":
+                    rec.pattern = "divide_and_conquer"
+                else:
+                    rec.pattern = "linear"
+
+                return rec
+
         return self._regex_analysis().recursion
 
     def _extract_graph_features(self, root) -> GraphIR:
-        """Extract graph features from AST (placeholder - uses regex fallback)."""
-        return self._regex_analysis().graph
+        """Extract graph features from AST."""
+        graph = self._regex_analysis().graph
+        src_lower = self.source.lower()
+        if ('p[' in src_lower or 'parent[' in src_lower) and ('p[a]' in src_lower or 'p[b]' in src_lower or 'sz[' in src_lower or 'size[' in src_lower):
+            graph.is_graph = True
+            graph.structure = "edge_list"
+        return graph
+
