@@ -314,8 +314,15 @@ def analyze_cpp_enhanced(source: str) -> ComplexityAnalysis:
             time_complexity = "O(4^n)"
             space_complexity = "O(n)"
         elif branch_factor >= 5:
-            # Permutations/backtracking: O(n!)
-            time_complexity = "O(n!)"
+            # A recursive call inside a candidate loop is usually subset/
+            # combination backtracking (2^n).  Reserve factorial growth for
+            # explicit permutation signals such as swapping positions or a
+            # recursion level that advances a permutation index.
+            permutation_like = bool(re.search(
+                r'\bswap\s*\(|\bpermute\b|\bpermutation\b|\bi\s*=\s*l\b|\bl\s*\+\+|\bleft\s*\+\+',
+                src,
+            ))
+            time_complexity = "O(n!)" if permutation_like else "O(2^n)"
             space_complexity = "O(n)"
 
     # GRAPH ALGORITHMS
@@ -391,6 +398,12 @@ def analyze_cpp_enhanced(source: str) -> ComplexityAnalysis:
                         has_dynamic_alloc = True
                 else:
                     has_dynamic_alloc = True
+        # Output vectors are result storage, not auxiliary working space.
+        # Fixed-size arrays (e.g. last[26]) are also constant.
+        for name in re.findall(r'\bvector\s*<[^>]+>\s+(\w+)\s*;', src):
+            if re.search(r'\breturn\s+' + re.escape(name) + r'\b', src):
+                src = re.sub(r'\b' + re.escape(name) + r'\s*\.push_back\s*\(', '/* output */(', src)
+                has_dynamic_alloc = False
         if has_dynamic_alloc:
             space_complexity = "O(n)"
 

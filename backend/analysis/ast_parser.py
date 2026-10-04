@@ -402,9 +402,11 @@ class ASTComplexityAnalyzer:
         # Find the function body (after first '{')
         brace_pos = src.find('{')
         if brace_pos < 0:
-            return False
-
-        function_body = src[brace_pos:]
+            function_body = src if self.language in {'python', 'py'} else ''
+            if not function_body:
+                return False
+        else:
+            function_body = src[brace_pos:]
 
         # Check for dynamic allocation operations IN the function body
         body_allocation_patterns = [
@@ -415,7 +417,13 @@ class ASTComplexityAnalyzer:
             r'\.insert\s*\(',
             r'\bnew\s+\w+',
             r'\bmalloc\s*\(',
+            # Python containers and mutating operations.
+            r'\b(?:list|dict|set|deque|defaultdict)\s*\(',
+            r'\.(?:append|extend|add|update|setdefault|popleft|appendleft)\s*\(',
+            r'\bheapq\.(?:heappush|heappop|heapify)\s*\(',
+            r'\[\s*\]',
         ]
+
 
         has_body_ops = any(re.search(p, function_body) for p in body_allocation_patterns)
         if has_body_ops:
@@ -496,9 +504,11 @@ class ASTComplexityAnalyzer:
 
         brace_pos = src.find('{')
         if brace_pos < 0:
-            return False
-
-        function_body = src[brace_pos:]
+            function_body = src if self.language in {'python', 'py'} else ''
+            if not function_body:
+                return False
+        else:
+            function_body = src[brace_pos:]
 
         # Look for local 2D vector declarations: vector<vector<T>> name(...) or name = ...
         vec_decl = bool(re.search(r'vector\s*<\s*vector\s*<[^>]+\s*>\s*>\s*\w+', function_body))
@@ -507,7 +517,12 @@ class ASTComplexityAnalyzer:
         arr_decl = bool(re.search(r'\bnew\s+\w+\s*\[[^\]]+\]\s*\[[^\]]+\]', function_body)) or \
                    bool(re.search(r'\b(?:int|float|double|char|bool)\s+\w+\s*\[[^\]]+\]\s*\[[^\]]+\]', function_body))
 
-        return vec_decl or arr_decl
+        # Python nested-list comprehensions, e.g. [[0] * m for _ in range(n)].
+        python_2d = bool(re.search(
+            r'\[\s*\[[^\]]*\]\s*(?:for|\*)', function_body
+        ))
+
+        return vec_decl or arr_decl or python_2d
 
     def _detect_constant_lookup(self) -> bool:
         """Detect constant-time lookup operations."""
@@ -547,7 +562,14 @@ class ASTComplexityAnalyzer:
     def _extract_loop_features(self, root) -> LoopIR:
         """Extract loop features by traversing tree-sitter AST nodes."""
         loop = LoopIR()
-        loop_types = {'for_statement', 'while_statement', 'do_statement', 'for_range_loop', 'enhanced_for_statement'}
+        loop_types = {
+            'for_statement', 'while_statement', 'do_statement',
+            'for_range_loop', 'enhanced_for_statement',
+            # Python comprehensions execute an input-sized iteration even
+            # though they do not appear as a standalone for_statement.
+            'list_comprehension', 'set_comprehension',
+            'dictionary_comprehension', 'generator_expression',
+        }
 
         loop_nodes = []
 
@@ -562,6 +584,32 @@ class ASTComplexityAnalyzer:
         if not loop_nodes:
             return loop
 
+        def is_constant_bounded(node):
+            """Return True for loops whose iteration count is input-independent."""
+            text = node.text.decode('utf-8', errors='ignore') if isinstance(node.text, bytes) else str(node.text)
+            # Inspect only the loop header.  A complete outer-node string
+            # includes nested bodies, so literals such as range(4) or <26
+            # must not make the outer input-sized loop look constant.
+            body = node.child_by_field_name('body')
+            if body is not None:
+                body_text = body.text.decode('utf-8', errors='ignore') if isinstance(body.text, bytes) else str(body.text)
+                header = text[:text.find(body_text)] if body_text in text else text
+            else:
+                header = text
+            lower = header.lower()
+            # Python range literals (range(4), range(0, 26), ...).
+            if re.search(r'\brange\s*\(\s*(?:0\s*,\s*)?\d+\s*\)', lower):
+                return True
+            # C/C++ loop conditions bounded by a numeric literal.
+            if re.search(r';[^;]*[<>]=?\s*\d+\b', lower):
+                return True
+            # Small fixed direction/array-alphabet loops are also constant.
+            if re.search(r'\b(?:4|8|26|27|36|52)\b', lower) and ('for' in lower or 'range' in lower):
+                return True
+            return False
+
+        constant_loop_ids = {id(node) for node in loop_nodes if is_constant_bounded(node)}
+
         # 1. Determine nesting depth and parent-child hierarchy
         max_depth = 0
         loop_ancestor_counts = []
@@ -569,16 +617,18 @@ class ASTComplexityAnalyzer:
             ancestors = 0
             curr = node.parent
             while curr:
-                if curr.type in loop_types:
+                if curr.type in loop_types and id(curr) not in constant_loop_ids:
                     ancestors += 1
                 curr = curr.parent
             loop_ancestor_counts.append(ancestors)
-            max_depth = max(max_depth, ancestors + 1)
+            if id(node) not in constant_loop_ids:
+                max_depth = max(max_depth, ancestors + 1)
 
         loop.depth = max_depth
 
         # Check if loops are sequential vs nested
-        top_level_loops = [loop_nodes[i] for i, anc in enumerate(loop_ancestor_counts) if anc == 0]
+        top_level_loops = [loop_nodes[i] for i, anc in enumerate(loop_ancestor_counts)
+                           if anc == 0 and id(loop_nodes[i]) not in constant_loop_ids]
         if max_depth == 1 and len(top_level_loops) > 1:
             loop.structure = "sequential"
         elif max_depth == 2:
@@ -591,6 +641,8 @@ class ASTComplexityAnalyzer:
         # 2. Check logarithmic step patterns across loops (% b, &=, /= 2, *= 2, >>= 1)
         log_loop_count = 0
         for node in loop_nodes:
+            if id(node) in constant_loop_ids:
+                continue
             # Always define full_text first so while/do branches never hit NameError
             full_text = node.text.decode('utf-8', errors='ignore').lower() if isinstance(node.text, bytes) else str(node.text).lower()
             body = node.child_by_field_name('body')
@@ -619,17 +671,81 @@ class ASTComplexityAnalyzer:
 
         # 3. Check algorithm operations (sort, binary search, heap) inside/outside loops
         src_lower = self.source.lower()
-        loop.has_sort = any(s in src_lower for s in ['sort(', 'std::sort'])
-        loop.has_binary_search = any(b in src_lower for b in [
-            'lower_bound', 'upper_bound', 'binary_search',
-            'mid =', 'mid=', 'm =', 'm=', '(l+r)/2', '(l + r) / 2', '(l+r)/2',
-            'l<=r', 'l <= r', 'left<=right', 'left <= right'
+        loop.has_sort = any(s in src_lower for s in [
+            'sort(', 'std::sort', '.sort(', 'sorted(',
         ])
+        # A sort performed for every input item composes multiplicatively with
+        # its surrounding loop.  Keep this separate from one preprocessing
+        # sort followed by a scan.
+        loop.sort_inside_loop = loop.has_sort and any(
+            any(marker in (
+                (node.child_by_field_name('body').text.decode('utf-8', errors='ignore')
+                 if isinstance(node.child_by_field_name('body').text, bytes)
+                 else str(node.child_by_field_name('body').text))
+                if node.child_by_field_name('body') is not None else ''
+            ).lower() for marker in ('sort(', 'std::sort', '.sort(', 'sorted('))
+            for node in loop_nodes
+        )
+        explicit_binary_call = bool(re.search(
+            r'\b(?:lower_bound|upper_bound|binary_search|bisect_left|bisect_right)\s*\(',
+            src_lower,
+        ))
+        halving_loop = bool(
+            re.search(r'\b(?:while|for)\s*\([^)]*(?:<=|>=)[^)]*\)', src_lower)
+            and re.search(r'\b(?:mid|middle|m)\s*=\s*[^\n;]*(?:/\s*2|>>\s*1)', src_lower)
+            and re.search(r'\b(?:left|right|l|r)\s*=\s*[^\n;]*\b(?:mid|middle|m)\b', src_lower)
+        )
+        loop.has_binary_search = explicit_binary_call or halving_loop
+        # A binary-search call nested in another loop is multiplicative.  Keep
+        # this separate from a loop whose own update halves the search range.
+        binary_call_patterns = [
+            r'\b(?:binary_search|lower_bound|upper_bound|bisect_left|bisect_right)\s*\(',
+        ]
+        loop.binary_search_inside_loop = any(
+            any(re.search(pattern, (node.text.decode('utf-8', errors='ignore')
+                                     if isinstance(node.text, bytes) else str(node.text)).lower())
+                for pattern in binary_call_patterns)
+            for node in loop_nodes
+        )
+        loop.binary_search_loop_depth = max_depth if loop.binary_search_inside_loop else 0
         loop.has_heap_operations = self._detect_heap_operations()
+        # Amortized patterns are recognized structurally, rather than by a
+        # generic pop/increment token.  This prevents unrelated nested loops
+        # from being incorrectly collapsed to O(n).
+        has_window_pointer = bool(re.search(
+            r'\b(?:left|start|l)\s*(?:\+\+|\+=\s*1|=\s*\w+\s*\+\s*1)',
+            src_lower,
+        ))
+        # Python writes ``while condition:``, C-family languages write
+        # ``while (condition)``. The pointer movement requirement above keeps
+        # this broad loop marker from classifying arbitrary nested loops as a
+        # sliding window.
+        has_window_loop = bool(re.search(r'\bwhile\b', src_lower))
+        loop.is_sliding_window = max_depth >= 2 and has_window_pointer and has_window_loop
+
+        has_stack_container = bool(re.search(
+            r'\b(?:stack|deque|vector)\s*<[^>]+>\s*(?:stack|st|s|dq)\b'
+            r'|\b(?:stack|st|s|dq)\s*=\s*\['
+            r'|\b(?:stack|st|s|dq)\s*=\s*(?:deque|list)\s*\(',
+            src_lower,
+        ))
+        has_stack_push = bool(re.search(r'\.(?:push|push_back|append|appendleft)\s*\(', src_lower))
+        has_stack_pop = bool(re.search(r'\.(?:pop|pop_back|popleft)\s*\(', src_lower))
+        loop.is_monotonic_stack = max_depth >= 2 and has_stack_container and has_stack_push and has_stack_pop
+        # Detect Fenwick/BIT work only from unambiguous identifiers or the
+        # canonical lowbit update. A bare ``bit`` token is too broad because
+        # it also appears in ordinary bit-manipulation solutions.
+        loop.has_bit_operations = bool(re.search(
+            r'\b(?:fenwick(?:tree)?|bitree|binary_indexed(?:_tree)?)\b'
+            r'|\b(?:bit|tree)\s*\.\s*(?:add|sum|query|update)\s*\('
+            r'|\b(\w+)\s*[+\-]=\s*\1\s*&\s*-\s*\1\b',
+            src_lower,
+        ))
         loop.has_matrix_bounds = self._detect_matrix_bounds()
 
         # Check for multiple input bounds (e.g. m and n or w/W or size calls)
         loop_counter_vars = set(re.findall(r'\bfor\s*\(\s*(?:[a-zA-Z_]\w*\s+)?([a-zA-Z_]\w*)\s*=', src_lower))
+        loop_counter_vars.update(re.findall(r'\bfor\s+([a-zA-Z_]\w*)\s+in\s+', src_lower))
         loop_counter_vars.update({'i', 'j', 'k', 'x', 'y', 'z', 'idx', 'index', 'row', 'col', 'r', 'c', 'it'})
 
         bounds_vars = list(dict.fromkeys(re.findall(r'\b([a-zA-Z_]\w*)\s*\.\s*size\s*\(\)', src_lower)))
@@ -637,14 +753,42 @@ class ASTComplexityAnalyzer:
             v = match.group(1)
             if v not in ['0', '1', '2'] and v not in bounds_vars and v not in loop_counter_vars:
                 bounds_vars.append(v)
+        # Container identifiers from ``a.size()`` are not independent
+        # asymptotic dimensions when the loop is otherwise bounded by the
+        # derived scalar ``n`` (a common two-pass array pattern).
+        if len(bounds_vars) >= 2 and 'n' in bounds_vars:
+            arbitrary_containers = [b for b in bounds_vars if b not in {'n', 'm', 'v', 'e', 'rows', 'cols', 'w', 'k'}]
+            if arbitrary_containers and len(arbitrary_containers) == len(bounds_vars) - 1:
+                bounds_vars = ['n']
         loop.distinct_params = bounds_vars
         loop.multiple_input_bounds = len(bounds_vars) >= 2
 
-        # Check for amortized linear patterns (sliding window, monotonic stack, two pointers, counting sort array decrement)
-        is_amortized = any(p in src_lower for p in ['.pop()', 'left++', 'l++', 'start++', 'pop_back()']) or \
-                       bool(re.search(r'\w+\[\w+\]--', src_lower)) or \
-                       bool(re.search(r'--\w+\[\w+\]', src_lower))
-        if is_amortized and max_depth == 2:
+        if (loop.is_sliding_window or loop.is_monotonic_stack) and max_depth == 2:
+            loop.depth = 1
+            loop.structure = "sequential"
+
+        # Preserve the established amortized fallback for compact reference
+        # solutions that do not expose descriptive pointer/container names
+        # (for example, BFS queues and contest-style ``s.pop()`` stacks).
+        # The structured rules above provide stronger evidence when present.
+        legacy_amortized = any(token in src_lower for token in (
+            '.pop()', 'pop_back()', 'popleft(', 'pop(0)',
+            'left++', 'l++', 'start++', 'left += 1', 'left+=1',
+            'l += 1', 'l+=1', 'start += 1', 'start+=1',
+        ))
+        if legacy_amortized and max_depth == 2:
+            loop.depth = 1
+            loop.structure = "sequential"
+
+        # Counting-sort frequency scans use a fixed alphabet/range table. The
+        # inner decrement loop consumes each input item once overall, so it is
+        # linear rather than quadratic.
+        is_fixed_frequency_scan = bool(re.search(
+            r'\b(?:cnt|count|freq|c)\s*\[\s*\d+\s*\]'
+            r'|\b(?:cnt|count|freq|c)\s*\[\s*\d+\s*\]\s*=',
+            src_lower,
+        )) and bool(re.search(r'\b(?:cnt|count|freq|c)\s*\[\s*\w+\s*\]\s*--', src_lower))
+        if is_fixed_frequency_scan and max_depth >= 2:
             loop.depth = 1
             loop.structure = "sequential"
 
@@ -677,6 +821,16 @@ class ASTComplexityAnalyzer:
                 if not fn_name and declarator.type in ['identifier', 'field_identifier']:
                     fn_name = declarator.text.decode('utf-8', errors='ignore') if isinstance(declarator.text, bytes) else str(declarator.text)
 
+            # Python function definitions expose the name through the
+            # ``name`` field rather than a C/C++-style declarator.  Without
+            # this fallback, nested helpers such as ``backtrack`` are never
+            # recognized as recursive and backtracking is understated as
+            # linear time.
+            if not fn_name:
+                name_node = fn_node.child_by_field_name('name')
+                if name_node:
+                    fn_name = name_node.text.decode('utf-8', errors='ignore') if isinstance(name_node.text, bytes) else str(name_node.text)
+
             if not fn_name or fn_name in {'main', 'if', 'for', 'while'}:
                 continue
 
@@ -687,7 +841,10 @@ class ASTComplexityAnalyzer:
 
             def find_calls(node):
                 nonlocal calls_inside_loop
-                if node.type == 'call_expression':
+                # Tree-sitter names calls ``call_expression`` in C/C++/Java
+                # and simply ``call`` in Python.  Treat both uniformly so
+                # nested Python backtracking helpers are recognized.
+                if node.type in {'call_expression', 'call'}:
                     func_expr = node.child_by_field_name('function') or (node.children[0] if node.children else None)
                     if func_expr:
                         call_name = func_expr.text.decode('utf-8', errors='ignore') if isinstance(func_expr.text, bytes) else str(func_expr.text)

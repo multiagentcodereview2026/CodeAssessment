@@ -24,6 +24,7 @@ from auth import (
 )
 from database import (
     SessionLocal,
+    ensure_submission_assignment_column,
     get_db,
 )
 from schemas import (
@@ -58,7 +59,7 @@ from schemas import (
     utc_isoformat,
 )
 from docker_runner.executor import execute_code_sandboxed
-from agents.complexity import unavailable_analysis
+from agents.complexity import analyze_student_complexity, unavailable_analysis
 from workflow.graph import evaluation_graph
 from workflow.state import EvaluationState
 from instructor_repository import (
@@ -335,6 +336,10 @@ app.add_middleware(
 @app.on_event("startup")
 def seed_instructor_assignments():
     """Ensure instructor assignments and their private judge data exist."""
+    # Older database dumps may predate the nullable assignment link on
+    # submissions.  Apply the idempotent schema migration before any request
+    # can persist a submission.
+    ensure_submission_assignment_column()
     db = SessionLocal()
     try:
         created = provision_instructor_problems(db)

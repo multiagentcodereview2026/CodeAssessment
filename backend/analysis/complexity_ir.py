@@ -15,7 +15,10 @@ class LoopIR:
     multiple_input_bounds: bool = False
     distinct_params: List[str] = field(default_factory=list)
     has_heap_operations: bool = False
+    has_bit_operations: bool = False
     has_matrix_bounds: bool = False
+    is_sliding_window: bool = False
+    is_monotonic_stack: bool = False
     loop_complexity: str = ""
 
 @dataclass

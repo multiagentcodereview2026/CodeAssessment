@@ -435,6 +435,15 @@ def test_submit_persists_authenticated_student_and_assignment_context(db_session
     problem = models.Problem(id="p-1", title="Problem", description="Statement", examples=[], constraints=[], starter_codes={}, test_cases=[])
     db_session.add_all([course, problem])
     db_session.flush()
+    db_session.add(models.ProblemTestCase(
+        id="p-1-public",
+        problem_id=problem.id,
+        input_data="1",
+        expected_output="1",
+        visibility="PUBLIC",
+        position=1,
+        content_hash="test-public-case",
+    ))
     assignment = models.Assignment(title="Assignment", course_id=course.id, status="ACTIVE")
     db_session.add(assignment)
     db_session.flush()
