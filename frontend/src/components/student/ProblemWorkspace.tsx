@@ -325,7 +325,7 @@ export const ProblemWorkspace: React.FC = () => {
         status: 'error',
         time: '—',
         memory: '—',
-        reason: problemLoadError || 'Wait for the problem and its public tests to finish loading.',
+        reason: problemLoadError || 'Wait for the problem and its test cases to finish loading.',
         results: []
       });
       return;
@@ -416,7 +416,7 @@ export const ProblemWorkspace: React.FC = () => {
           ? 'Compilation failed. No test cases were executed.'
           : !allPublicCasesPassed
             ? results.find((result) => !result.passed)?.error
-              || (results.length !== publicCases.length ? 'Not all public test cases were executed.' : 'Every public test case must pass before submission.')
+              || (results.length !== publicCases.length ? 'Not all test cases were executed.' : 'Every test case must pass before submission.')
             : undefined,
         compileError: compilationFailed ? (data.compile_error || data.stderr || 'Compilation failed.') : undefined,
         results
@@ -454,7 +454,7 @@ export const ProblemWorkspace: React.FC = () => {
         status: 'error',
         time: '—',
         memory: '—',
-        reason: 'Run your code and pass every public test case to enable submission.',
+        reason: 'Run your code and pass every test case to enable submission.',
         results: []
       });
       return;
@@ -565,7 +565,7 @@ export const ProblemWorkspace: React.FC = () => {
             score: Math.round(((data.correctness_score ?? 0) / 100) * 25),
             max: 25,
             notes: accepted
-              ? `Accepted: ${passedCases}/${totalCases} public and hidden tests passed.`
+              ? `Accepted: ${passedCases}/${totalCases} test cases passed.`
               : `Judge result: ${passedCases}/${totalCases} tests passed. Review the last failed test below.`
           },
           timeComplexity: {
@@ -705,7 +705,7 @@ export const ProblemWorkspace: React.FC = () => {
           {isProblemLoading ? (
             <div className="space-y-3 text-slate-500">
               <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
-              <p className="text-sm font-semibold">Loading problem and public tests…</p>
+              <p className="text-sm font-semibold">Loading problem and test cases…</p>
             </div>
           ) : (
             <div className="max-w-md space-y-2">
@@ -777,7 +777,7 @@ export const ProblemWorkspace: React.FC = () => {
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
-              Public Test Cases ({selectedProblem.testCases.length})
+              Test Cases ({selectedProblem.testCases.length})
             </button>
           </div>
 
@@ -853,16 +853,16 @@ export const ProblemWorkspace: React.FC = () => {
               /* Test Cases Tab */
               <div className="space-y-4">
                 <p className="text-xs text-slate-500">
-                  Run Code uses these public examples only. Submission runs the full private suite securely on the backend.
+                  Run Code checks these examples. Submit evaluates the full test suite securely on the backend.
                 </p>
                 {selectedProblem.testCases.slice(0, 3).map((tc, idx) => (
                   <div key={tc.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-slate-800">
-                        Public case {idx + 1}
+                        Case {idx + 1}
                       </span>
                       <span className="text-[10px] font-mono text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        Public Verification
+                        Verification
                       </span>
                     </div>
                     <div className="space-y-1 font-mono text-xs">
@@ -936,14 +936,14 @@ export const ProblemWorkspace: React.FC = () => {
                 <button
                   onClick={handleSubmitCode}
                   disabled={isRunning || isSubmitting || isProblemLoading || !remoteProblem || !canSubmit}
-                  title={canSubmit ? 'All public test cases passed. You can submit.' : 'Run the current code and pass every public test case to enable submission.'}
+                  title={canSubmit ? 'All test cases passed. You can submit.' : 'Run the current code and pass every test case to enable submission.'}
                   className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold shadow-md shadow-indigo-600/30 flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>Submit Code</span>
                 </button>
                 <span className={`text-[10px] ${canSubmit ? 'text-emerald-400' : 'text-slate-400'}`}>
-                  {canSubmit ? 'Public tests passed' : 'Pass public tests to submit'}
+                  {canSubmit ? 'Tests passed' : 'Pass all tests to submit'}
                 </span>
               </div>
             </div>
@@ -1001,7 +1001,7 @@ export const ProblemWorkspace: React.FC = () => {
                 <div className="w-full max-w-md bg-slate-900 rounded-2xl p-4 border border-slate-800 text-left space-y-2.5 text-xs">
                   <div className={`flex items-center gap-2.5 ${submissionStep >= 1 ? 'text-emerald-400' : 'text-slate-500'}`}>
                     {submissionStep > 1 ? <Check className="w-4 h-4 text-emerald-400" /> : <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />}
-                    <span className="font-semibold">1. Compiling & running all public + hidden tests securely</span>
+                    <span className="font-semibold">1. Compiling & running all test cases securely</span>
                   </div>
 
                   <div className={`flex items-center gap-2.5 ${submissionStep >= 2 ? 'text-emerald-400' : 'text-slate-500'}`}>
@@ -1036,8 +1036,8 @@ export const ProblemWorkspace: React.FC = () => {
                   {runOutput.status === 'success' ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-rose-500" />}
                   <span className="text-xs font-bold text-slate-800">
                     {runOutput.compileError
-                      ? `Compilation Error · 0 of ${runOutput.results.length} public cases executed`
-                      : `Public Test Output: ${runOutput.results.filter((result) => result.passed).length} of ${runOutput.results.length} public cases passed`}
+                      ? `Compilation Error · 0 of ${runOutput.results.length} test cases executed`
+                      : `Test Output: ${runOutput.results.filter((result) => result.passed).length} of ${runOutput.results.length} test cases passed`}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs font-mono text-slate-500">

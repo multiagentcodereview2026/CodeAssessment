@@ -2,7 +2,8 @@ import asyncio
 import copy
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from uuid import uuid4
 from typing import Any, List, Optional
 from fastapi import FastAPI, Depends, HTTPException, Query, Response, status
@@ -755,6 +756,34 @@ def list_submissions(
 # Student & Instructor Analytics Endpoints
 # ==========================================
 
+# Submission timestamps are stored in UTC. Use the app's local calendar when
+# determining consecutive activity days so late-night submissions count for
+# the day students see in the UI.
+STUDENT_ACTIVITY_TIMEZONE = ZoneInfo("Asia/Kolkata")
+
+
+def calculate_submission_streak(submissions: list[models.Submission]) -> int:
+    activity_days = set()
+    for submission in submissions:
+        created_at = submission.created_at
+        if created_at is None:
+            continue
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        activity_days.add(created_at.astimezone(STUDENT_ACTIVITY_TIMEZONE).date())
+
+    today = datetime.now(STUDENT_ACTIVITY_TIMEZONE).date()
+    # A streak remains current through the day after the last activity day.
+    current_day = today if today in activity_days else today - timedelta(days=1)
+    if current_day not in activity_days:
+        return 0
+
+    streak = 0
+    while current_day in activity_days:
+        streak += 1
+        current_day -= timedelta(days=1)
+    return streak
+
 @app.get("/api/analytics/student/{student_id}", response_model=StudentAnalyticsResponse)
 def get_student_analytics(
     student_id: str,
@@ -805,7 +834,7 @@ def get_student_analytics(
 
     return StudentAnalyticsResponse(
         overall_score=avg_overall,
-        streak_days=student.streak_days,
+        streak_days=calculate_submission_streak(submissions),
         xp=student.xp,
         problems_solved=unique_solved,
         total_problems=total_problems,
