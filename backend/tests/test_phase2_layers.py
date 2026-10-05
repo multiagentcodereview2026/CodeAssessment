@@ -100,3 +100,17 @@ def test_python_dfs_helper_without_adjacency_is_not_graph():
         "python",
     )
     assert result.time_complexity != "O(V+E)"
+
+
+def test_python_cyclic_index_placement_is_amortized_linear():
+    result = analyze_source(
+        "def f(nums):\n"
+        "    n = len(nums)\n"
+        "    for i in range(n):\n"
+        "        while 1 <= nums[i] <= n and nums[nums[i] - 1] != nums[i]:\n"
+        "            j = nums[i] - 1\n"
+        "            nums[i], nums[j] = nums[j], nums[i]\n"
+        "    return nums\n",
+        "python",
+    )
+    assert result.time_complexity == "O(n)"

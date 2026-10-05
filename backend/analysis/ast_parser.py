@@ -813,6 +813,16 @@ class ASTComplexityAnalyzer:
             and bool(re.search(r'\b(?:dict|map|set|count|used|name_count)', src_lower))
         )
 
+        # In-place cyclic placement (e.g. First Missing Positive) may have a
+        # nested ``while`` inside a scan, but every swap puts an item into its
+        # final slot.  The total number of swaps is amortized O(n), not O(n²).
+        loop.is_amortized_index_placement = (
+            self.language in {'python', 'py'}
+            and max_depth >= 2
+            and bool(re.search(r'while\s+[^\n:]*\w+\s*\[\s*\w+\s*\]\s*[-+]?\s*1\s*\]', src_lower))
+            and bool(re.search(r'\b(?:swap|correct_index|nums\s*\[)', src_lower))
+        )
+
         # Check for multiple input bounds (e.g. m and n or w/W or size calls)
         loop_counter_vars = set(re.findall(r'\bfor\s*\(\s*(?:[a-zA-Z_]\w*\s+)?([a-zA-Z_]\w*)\s*=', src_lower))
         loop_counter_vars.update(re.findall(r'\bfor\s+([a-zA-Z_]\w*)\s+in\s+', src_lower))

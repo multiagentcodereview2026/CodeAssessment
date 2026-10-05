@@ -23,6 +23,7 @@ class LoopIR:
     has_constant_inner_loop: bool = False
     is_grouped_partition: bool = False
     is_amortized_membership: bool = False
+    is_amortized_index_placement: bool = False
 
 @dataclass
 class RecursionIR:
