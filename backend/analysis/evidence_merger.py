@@ -42,11 +42,11 @@ def merge_complexity_evidence(
             confidence=0.0,
             method="static+dynamic",
             status="REVIEW_REQUIRED",
-            signals=static_result.signals + dynamic_result.signals,
+            signals=static_result.signals + dynamic_result.signals + ["llm-handoff-required"],
             dynamic_measurements=dynamic_result.dynamic_measurements,
             explanation=(
                 "Static and dynamic analysis produced different "
-                "complexity estimates."
+                "complexity estimates. Review is required before scoring."
             ),
         )
 
