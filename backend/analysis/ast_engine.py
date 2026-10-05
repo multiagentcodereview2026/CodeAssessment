@@ -27,6 +27,20 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
             time_complexity = "O(V+E)"
             space_complexity = "O(V)"
 
+        # Phase-L: recursion can be distributed over multiple functions.  A
+        # mutual cycle with one recursive call per level is linear; multiple
+        # cycle calls represent branching recursion.  Keep this before the
+        # single-function factorial heuristics so helper names do not get
+        # mistaken for a recursive loop in one body.
+        elif recursion.has_mutual_recursion:
+            if recursion.pattern == "factorial":
+                time_complexity = "O(n!)"
+            elif recursion.branch_factor >= 2 or recursion.calls_inside_loop:
+                time_complexity = "O(2^n)"
+            else:
+                time_complexity = "O(n)"
+            space_complexity = "O(n)"
+
         # 1b. Combination Backtracking (k-choice recursion)
         elif recursion.is_recursive and ("combine" in ir.source.lower() or "int k" in ir.source.lower()) and loop.depth >= 1:
             time_complexity = "O(n^k)"
@@ -333,4 +347,3 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
             "No scalable structural evidence found; constant work inferred from the valid AST."
         ),
     )
-

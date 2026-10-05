@@ -34,6 +34,13 @@ class RecursionIR:
     reduction_type: str = "linear"  # "linear" (n-1), "divide" (n/2), "logarithmic"
     work_per_level: str = "O(1)"     # "O(1)", "O(n)", "O(n^2)"
     stack_depth: str = "O(1)"
+    # Phase-L call-graph evidence.  These fields distinguish recursion that is
+    # spread across helper functions (mutual/cross-function recursion) from a
+    # self-call found in one function body.
+    has_mutual_recursion: bool = False
+    call_graph_nodes: int = 0
+    call_graph_edges: int = 0
+    recursive_cycle_size: int = 0
 
 @dataclass
 class GraphIR:

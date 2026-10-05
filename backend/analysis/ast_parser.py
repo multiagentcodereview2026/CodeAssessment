@@ -810,6 +810,93 @@ class ASTComplexityAnalyzer:
         if not func_nodes:
             return self._regex_analysis().recursion
 
+        # Build a small, language-neutral call graph before inspecting the
+        # individual functions.  The old extractor only looked for a function
+        # calling itself, so patterns such as even() -> odd() -> even() and
+        # backtracking split between solve()/choose() were reported as linear.
+        # Tree-sitter exposes calls as ``call_expression`` for C-like
+        # languages and ``call`` for Python; both are handled here.
+        def function_name(fn_node):
+            name = ""
+            declarator = fn_node.child_by_field_name('declarator')
+            if declarator:
+                for c in declarator.children:
+                    if c.type in ['identifier', 'field_identifier']:
+                        name = c.text.decode('utf-8', errors='ignore') if isinstance(c.text, bytes) else str(c.text)
+                        break
+                if not name and declarator.type in ['identifier', 'field_identifier']:
+                    name = declarator.text.decode('utf-8', errors='ignore') if isinstance(declarator.text, bytes) else str(declarator.text)
+            if not name:
+                name_node = fn_node.child_by_field_name('name')
+                if name_node:
+                    name = name_node.text.decode('utf-8', errors='ignore') if isinstance(name_node.text, bytes) else str(name_node.text)
+            return name
+
+        graph_records = []
+        known_names = set()
+        for node in func_nodes:
+            name = function_name(node)
+            if name and name not in {'main', 'if', 'for', 'while'}:
+                text = node.text.decode('utf-8', errors='ignore') if isinstance(node.text, bytes) else str(node.text)
+                graph_records.append((name, node, text))
+                known_names.add(name)
+
+        adjacency = {name: set() for name in known_names}
+        graph_calls = {name: [] for name in known_names}
+        for name, fn_node, _ in graph_records:
+            def collect_graph_calls(node):
+                if node.type in {'call_expression', 'call'}:
+                    func_expr = node.child_by_field_name('function') or (node.children[0] if node.children else None)
+                    if func_expr:
+                        raw = func_expr.text.decode('utf-8', errors='ignore') if isinstance(func_expr.text, bytes) else str(func_expr.text)
+                        call_name = raw.split('::')[-1].split('.')[-1].split('->')[-1]
+                        if call_name in known_names:
+                            in_loop = False
+                            parent = node.parent
+                            while parent:
+                                if parent.type in loop_types:
+                                    in_loop = True
+                                    break
+                                parent = parent.parent
+                            adjacency[name].add(call_name)
+                            graph_calls[name].append((call_name, in_loop))
+                for child in node.children:
+                    collect_graph_calls(child)
+            collect_graph_calls(fn_node)
+
+        # Find a directed cycle containing more than one function.  A bounded
+        # DFS is sufficient here and avoids imposing a graph dependency on the
+        # parser; function counts in a submission are small.
+        mutual_cycle = []
+        for start in known_names:
+            stack = [(start, [start])]
+            while stack and not mutual_cycle:
+                current, path = stack.pop()
+                for nxt in adjacency.get(current, ()):
+                    if nxt == start and len(path) > 1:
+                        mutual_cycle = path[:]
+                        break
+                    if nxt not in path and len(path) <= len(known_names):
+                        stack.append((nxt, path + [nxt]))
+        if mutual_cycle:
+            cycle_set = set(mutual_cycle)
+            cycle_edges = []
+            for name in cycle_set:
+                cycle_edges.extend((target, inside) for target, inside in graph_calls.get(name, []) if target in cycle_set)
+            rec.is_recursive = True
+            rec.has_mutual_recursion = True
+            rec.call_graph_nodes = len(known_names)
+            rec.call_graph_edges = sum(len(v) for v in adjacency.values())
+            rec.recursive_cycle_size = len(cycle_set)
+            rec.branch_factor = max(1, max((sum(1 for target, _ in graph_calls.get(name, []) if target in cycle_set) for name in cycle_set), default=1))
+            rec.calls_inside_loop = any(inside for _, inside in cycle_edges)
+            cycle_text = ' '.join(text for name, _, text in graph_records if name in cycle_set).lower()
+            permutation_like = bool(re.search(r'\bswap\s*\(|\bpermute\b|\bpermutation\b|\bqueen|\bcolumn', cycle_text))
+            rec.pattern = 'factorial' if permutation_like and rec.branch_factor >= 2 else 'mutual_recursive'
+            rec.reduction_type = 'linear'
+            rec.stack_depth = 'O(n)'
+            return rec
+
         for fn_node in func_nodes:
             fn_name = ""
             declarator = fn_node.child_by_field_name('declarator')
@@ -956,4 +1043,3 @@ class ASTComplexityAnalyzer:
             graph.is_graph = True
             graph.structure = "edge_list"
         return graph
-
