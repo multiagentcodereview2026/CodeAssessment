@@ -774,6 +774,24 @@ class ASTComplexityAnalyzer:
             loop.depth = max(1, loop.depth - 1)
             loop.structure = "sequential"
 
+        # Nested scans over disjoint groups are linear in the total number of
+        # elements, e.g. ``for group in buckets.values(): for item in group``.
+        loop.is_grouped_partition = bool(re.search(
+            r'for\s+\w+\s+in\s+[^\n:]+\.(?:values|items)\s*\(\s*\)',
+            src_lower,
+        )) and max_depth >= 2
+
+        # Collision-name allocation advances a stored counter monotonically;
+        # each generated key is consumed once, so the inner membership loop
+        # is amortized rather than a full independent n-loop.
+        loop.is_amortized_membership = (
+            self.language in {'python', 'py'}
+            and max_depth >= 2
+            and bool(re.search(r'while\s+[^\n:]+\s+in\s+\w+', src_lower))
+            and bool(re.search(r'\b(?:k|count|index)\s*\+=\s*1', src_lower))
+            and bool(re.search(r'\b(?:dict|map|set|count|used|name_count)', src_lower))
+        )
+
         # Check for multiple input bounds (e.g. m and n or w/W or size calls)
         loop_counter_vars = set(re.findall(r'\bfor\s*\(\s*(?:[a-zA-Z_]\w*\s+)?([a-zA-Z_]\w*)\s*=', src_lower))
         loop_counter_vars.update(re.findall(r'\bfor\s+([a-zA-Z_]\w*)\s+in\s+', src_lower))

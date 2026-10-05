@@ -21,6 +21,8 @@ class LoopIR:
     is_monotonic_stack: bool = False
     loop_complexity: str = ""
     has_constant_inner_loop: bool = False
+    is_grouped_partition: bool = False
+    is_amortized_membership: bool = False
 
 @dataclass
 class RecursionIR:

@@ -58,3 +58,31 @@ def test_layer4_python_graph_traversal_is_graph_linear():
     )
     assert result.time_complexity == "O(V+E)"
     assert result.space_complexity == "O(V)"
+
+
+def test_layer2_grouped_partition_is_linear_total_work():
+    result = analyze_source(
+        "def f(groups):\n"
+        "    total = 0\n"
+        "    for group in groups.values():\n"
+        "        for item in group:\n"
+        "            total += item\n"
+        "    return total\n",
+        "python",
+    )
+    assert result.time_complexity == "O(n)"
+
+
+def test_layer1_monotonic_name_membership_is_amortized():
+    result = analyze_source(
+        "def f(names):\n"
+        "    used = {}\n"
+        "    for name in names:\n"
+        "        k = 1\n"
+        "        while name + str(k) in used:\n"
+        "            k += 1\n"
+        "        used[name + str(k)] = 1\n"
+        "    return used\n",
+        "python",
+    )
+    assert result.time_complexity == "O(n)"

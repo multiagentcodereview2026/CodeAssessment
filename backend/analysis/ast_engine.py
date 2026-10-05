@@ -219,6 +219,10 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
         time_complexity = "O(n log n)" if loop.has_sort else "O(n)"
         space_complexity = "O(n)" if ir.has_dynamic_allocation else "O(1)"
 
+    elif loop.is_grouped_partition or loop.is_amortized_membership:
+        time_complexity = "O(n)"
+        space_complexity = "O(n)" if ir.has_dynamic_allocation else "O(1)"
+
     # 8. SORT OPERATIONS
     elif loop.has_sort:
         if loop.sort_inside_loop:
