@@ -322,9 +322,11 @@ class ASTComplexityAnalyzer:
         # Only detect as graph if it has graph-specific patterns, not just vector<vector>
 
         # Graph-specific indicators
+        # A helper named ``dfs``/``bfs`` is not sufficient evidence of a
+        # graph: dynamic programming and backtracking solutions commonly use
+        # those names for ordinary recursion.  Require an adjacency/visited
+        # representation (or an explicit graph container) as well.
         graph_indicators = [
-            r'\bdfs\s*\(',
-            r'\bbfs\s*\(',
             r'\bvis\b.*\bvis\b',  # visited array used multiple times
             r'adjacency',
             r'\bNode\b',
@@ -337,6 +339,15 @@ class ASTComplexityAnalyzer:
         # vector<vector> is only a graph if combined with graph indicators
         has_vector_vector = bool(re.search(r'vector\s*<\s*vector\s*<', src))
         has_graph_indicator = any(re.search(p, src) for p in graph_indicators)
+
+        # Python helper functions named ``dfs``/``bfs`` are frequent in DP and
+        # backtracking.  Without an explicit adjacency representation, do not
+        # classify them as graph traversal; the Python-specific extractor below
+        # handles genuine ``graph[node]``/visited traversals.
+        if self.language in {'python', 'py'} and not re.search(
+            r'\b(?:graph|adj|adjacency|neighbor|visited|seen)\b', src,
+        ):
+            has_graph_indicator = False
 
         # Parameter name hints for graph (g, graph, adj)
         has_graph_param = bool(re.search(r'\b(g|graph|adj)\b', src))
@@ -353,6 +364,16 @@ class ASTComplexityAnalyzer:
         if ir.recursion.is_recursive and has_graph_param and has_vector_vector:
             ir.graph.is_graph = True
             ir.graph.structure = "adj_list"
+
+        # The regex fallback can inherit a graph flag from generic recursion
+        # text.  For Python, retain it only when the source names an explicit
+        # adjacency/visited representation; genuine Python graph traversal is
+        # detected more precisely by ``_extract_graph_features``.
+        if self.language in {'python', 'py'} and not re.search(
+            r'\b(?:graph|adj|adjacency|neighbor|visited)\b', src,
+        ):
+            ir.graph.is_graph = False
+            ir.graph.structure = ""
 
         # === SPACE COMPLEXITY PATTERNS ===
 

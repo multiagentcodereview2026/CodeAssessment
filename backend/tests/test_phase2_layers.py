@@ -86,3 +86,17 @@ def test_layer1_monotonic_name_membership_is_amortized():
         "python",
     )
     assert result.time_complexity == "O(n)"
+
+
+def test_python_dfs_helper_without_adjacency_is_not_graph():
+    result = analyze_source(
+        "def f(balls):\n"
+        "    def dfs(i, remaining, diff):\n"
+        "        if i == len(balls): return diff == 0\n"
+        "        for x in range(balls[i] + 1):\n"
+        "            dfs(i + 1, remaining - x, diff)\n"
+        "        return False\n"
+        "    return dfs(0, 0, 0)\n",
+        "python",
+    )
+    assert result.time_complexity != "O(V+E)"
