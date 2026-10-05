@@ -22,6 +22,26 @@ def test_layer2_python_frequency_dict_is_linear_space():
     assert result.space_complexity == "O(n)"
 
 
+def test_layer3_python_sorted_without_explicit_loop_is_n_log_n():
+    result = analyze_source(
+        "def f(left, right):\n"
+        "    return sorted(left) == sorted(right)\n",
+        "python",
+    )
+    assert result.time_complexity == "O(n log n)"
+
+
+def test_layer3_python_counter_without_explicit_loop_is_linear():
+    result = analyze_source(
+        "from collections import Counter\n"
+        "def f(values):\n"
+        "    counts = Counter(values)\n"
+        "    return max(counts.values())\n",
+        "python",
+    )
+    assert result.time_complexity == "O(n)"
+
+
 def test_layer4_python_graph_traversal_is_graph_linear():
     result = analyze_source(
         "from collections import deque\n"

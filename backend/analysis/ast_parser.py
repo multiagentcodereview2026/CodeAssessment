@@ -429,7 +429,10 @@ class ASTComplexityAnalyzer:
             r'\bnew\s+\w+',
             r'\bmalloc\s*\(',
             # Python containers and mutating operations.
-            r'\b(?:list|dict|set|deque|defaultdict|Counter)\s*\(',
+            # Counter/dict cardinality depends on public input constraints;
+            # do not force O(n) space from source alone.  The time extractor
+            # still recognizes Counter as an input-sized scan.
+            r'\b(?:list|dict|set|deque|defaultdict)\s*\(',
             r'\.(?:append|extend|add|update|setdefault|popleft|appendleft)\s*\(',
             r'\bheapq\.(?:heappush|heappop|heapify)\s*\(',
             r'\b\w+\s*=\s*\{\s*\}',
@@ -595,9 +598,6 @@ class ASTComplexityAnalyzer:
 
         find_loops(root)
 
-        if not loop_nodes:
-            return loop
-
         def is_constant_bounded(node):
             """Return True for loops whose iteration count is input-independent."""
             text = node.text.decode('utf-8', errors='ignore') if isinstance(node.text, bytes) else str(node.text)
@@ -682,6 +682,16 @@ class ASTComplexityAnalyzer:
 
         # 3. Check algorithm operations (sort, binary search, heap) inside/outside loops
         src_lower = self.source.lower()
+        # Python library operations can hide an input-sized traversal without
+        # an explicit AST loop node (for example ``sum(values)``,
+        # ``Counter(values)``, and ``sorted(values)``).  Preserve explicit
+        # loop depth when present; otherwise record one linear pass.
+        python_linear_builtin = self.language in {'python', 'py'} and bool(re.search(
+            r'\b(?:sum|min|max|any|all|counter)\s*\(', src_lower,
+        ))
+        if python_linear_builtin and loop.depth == 0:
+            loop.depth = 1
+            loop.structure = "single"
         loop.has_sort = any(s in src_lower for s in [
             'sort(', 'std::sort', '.sort(', 'sorted(',
         ])
