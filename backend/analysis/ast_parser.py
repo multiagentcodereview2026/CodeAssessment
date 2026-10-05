@@ -135,11 +135,12 @@ class ASTComplexityAnalyzer:
 
         # === LOOP DETECTION ===
 
-        for_loops = len(re.findall(r'\bfor\s*\(', src))
-        while_loops = len(re.findall(r'\bwhile\s*\(', src))
+        for_loops = len(re.findall(r'\bfor\s*\(', src)) + len(re.findall(r'\bfor\s+\w+\s+in\s+', src))
+        while_loops = len(re.findall(r'\bwhile\s*\(', src)) + len(re.findall(r'\bwhile\s+\w+', src))
         do_loops = len(re.findall(r'\bdo\s*\{', src))
+        builtin_loops = len(re.findall(r'\b(?:sum|max|min|any|all)\s*\([^)]+(?:for|\[)', src))
 
-        total_loops = for_loops + while_loops + do_loops
+        total_loops = for_loops + while_loops + do_loops + builtin_loops
 
         if total_loops > 0:
             # Detect TRUE nesting vs sequential patterns
@@ -328,6 +329,9 @@ class ASTComplexityAnalyzer:
             r'adjacency',
             r'\bNode\b',
             r'\badj\b',
+            r'\bvisited\b',
+            r'\bgraph\s*\[',
+            r'\bneighbors\b',
         ]
 
         # vector<vector> is only a graph if combined with graph indicators
@@ -371,6 +375,7 @@ class ASTComplexityAnalyzer:
             r"pop_heap\s*\(",
             r"heappush\s*\(",
             r"heappop\s*\(",
+            r"heapify\s*\(",
         ]
 
         # Also detect priority_queue usage via pq.push/pq.pop/pq.top
@@ -403,12 +408,15 @@ class ASTComplexityAnalyzer:
         src = self.source.lower()
 
         # Find the function body (after first '{')
-        brace_pos = src.find('{')
-        if brace_pos < 0:
-            function_body = src if self.language in {'python', 'py'} else ''
-            if not function_body:
-                return False
+        # Python uses braces for dictionary/set literals, not function
+        # delimiters. Keep the complete source so ``counts = {}`` and similar
+        # containers are not truncated at the first literal.
+        if self.language in {'python', 'py'}:
+            function_body = src
         else:
+            brace_pos = src.find('{')
+            if brace_pos < 0:
+                return False
             function_body = src[brace_pos:]
 
         # Check for dynamic allocation operations IN the function body
@@ -421,10 +429,13 @@ class ASTComplexityAnalyzer:
             r'\bnew\s+\w+',
             r'\bmalloc\s*\(',
             # Python containers and mutating operations.
-            r'\b(?:list|dict|set|deque|defaultdict)\s*\(',
+            r'\b(?:list|dict|set|deque|defaultdict|Counter)\s*\(',
             r'\.(?:append|extend|add|update|setdefault|popleft|appendleft)\s*\(',
             r'\bheapq\.(?:heappush|heappop|heapify)\s*\(',
+            r'\b\w+\s*=\s*\{\s*\}',
             r'\[\s*\]',
+            r'\[[^\]]+\]\s*\*\s*(?:\w+|\([^)]+\))', # Python list multiplication e.g. [0] * n
+            r'\[[^\]]+for\s+\w+\s+in', # Python list comprehension
         ]
 
 
@@ -590,9 +601,6 @@ class ASTComplexityAnalyzer:
         def is_constant_bounded(node):
             """Return True for loops whose iteration count is input-independent."""
             text = node.text.decode('utf-8', errors='ignore') if isinstance(node.text, bytes) else str(node.text)
-            # Inspect only the loop header.  A complete outer-node string
-            # includes nested bodies, so literals such as range(4) or <26
-            # must not make the outer input-sized loop look constant.
             body = node.child_by_field_name('body')
             if body is not None:
                 body_text = body.text.decode('utf-8', errors='ignore') if isinstance(body.text, bytes) else str(body.text)
@@ -601,13 +609,13 @@ class ASTComplexityAnalyzer:
                 header = text
             lower = header.lower()
             # Python range literals (range(4), range(0, 26), ...).
-            if re.search(r'\brange\s*\(\s*(?:0\s*,\s*)?\d+\s*\)', lower):
+            if re.search(r'\brange\s*\(\s*(?:0\s*,\s*)?(?:[1-9]|[1-9]\d|100)\s*\)', lower):
                 return True
             # C/C++ loop conditions bounded by a numeric literal.
-            if re.search(r';[^;]*[<>]=?\s*\d+\b', lower):
+            if re.search(r';[^;]*[<>]=?\s*(?:[1-9]|[1-9]\d|100)\b', lower):
                 return True
             # Small fixed direction/array-alphabet loops are also constant.
-            if re.search(r'\b(?:4|8|26|27|36|52)\b', lower) and ('for' in lower or 'range' in lower):
+            if re.search(r'\b(?:2|3|4|8|10|26|27|36|52)\b', lower) and ('for' in lower or 'range' in lower):
                 return True
             return False
 
@@ -745,6 +753,16 @@ class ASTComplexityAnalyzer:
             src_lower,
         ))
         loop.has_matrix_bounds = self._detect_matrix_bounds()
+
+        # Fixed alphabets/ranges add constant work per input item.
+        loop.has_constant_inner_loop = bool(re.search(
+            r'(?:for\s*\([^)]*[<]=?\s*(?:10|16|26|52|64|100)\b|'
+            r'for\s+\w+\s+in\s+range\(\s*(?:10|16|26|52|64|100)\s*\))',
+            src_lower,
+        )) and max_depth >= 2
+        if loop.has_constant_inner_loop:
+            loop.depth = max(1, loop.depth - 1)
+            loop.structure = "sequential"
 
         # Check for multiple input bounds (e.g. m and n or w/W or size calls)
         loop_counter_vars = set(re.findall(r'\bfor\s*\(\s*(?:[a-zA-Z_]\w*\s+)?([a-zA-Z_]\w*)\s*=', src_lower))
@@ -1042,6 +1060,17 @@ class ASTComplexityAnalyzer:
         """Extract graph features from AST."""
         graph = self._regex_analysis().graph
         src_lower = self.source.lower()
+        python_neighbor_loop = bool(re.search(
+            r'for\s+\w+\s+in\s+(?:self\.)?(?:graph|adj|adjacency)\s*\[',
+            src_lower,
+        ))
+        python_visited = bool(re.search(
+            r'\b(?:visited|seen)\b\s*(?:\.|\[)|\.(?:add|discard)\s*\(',
+            src_lower,
+        ))
+        if python_neighbor_loop and python_visited:
+            graph.is_graph = True
+            graph.structure = "adj_list"
         if ('p[' in src_lower or 'parent[' in src_lower) and ('p[a]' in src_lower or 'p[b]' in src_lower or 'sz[' in src_lower or 'size[' in src_lower):
             graph.is_graph = True
             graph.structure = "edge_list"

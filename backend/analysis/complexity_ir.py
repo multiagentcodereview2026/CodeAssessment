@@ -20,6 +20,7 @@ class LoopIR:
     is_sliding_window: bool = False
     is_monotonic_stack: bool = False
     loop_complexity: str = ""
+    has_constant_inner_loop: bool = False
 
 @dataclass
 class RecursionIR:

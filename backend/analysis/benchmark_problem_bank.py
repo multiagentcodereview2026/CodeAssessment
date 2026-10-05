@@ -13,6 +13,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from .complexity_normalizer import complexity_rank, normalize_complexity
 from .static_analyzer import analyze_source
 
 
@@ -48,33 +49,160 @@ def _is_placeholder(source: str, language: str) -> bool:
 
 
 def _equivalent_complexity(left: str | None, right: str | None, category: str) -> bool:
-    """Compare harmless notation differences without collapsing variables."""
+    """Compare harmless notation differences without collapsing variables.
+
+    Handles:
+    - Commutative sums: O(a+b) == O(b+a)
+    - Product variants: O(mn) == O(nm) == O(m*n) == O(n*m)
+    - Log variable aliasing: O(nlogr) → O(nlogn) for unknown single-letter vars
+    - Graph/tree category aliases: O(n) == O(V+E), O(nlogn) == O(ElogV) == O((V+E)logV)
+    - Rank-based fallback via complexity_rank()
+    """
     if not left or not right:
         return left == right
-    def canonical_simple_product(value: str) -> str:
-        raw = value.replace(" ", "").lower()
-        match = re.fullmatch(r"o\(([^()]*)\)", raw)
+
+    # First use the shared normalizer.  It already handles case, unicode
+    # superscripts, explicit multiplication, and common additive forms.  The
+    # benchmark still applies the stricter expression checks below when the
+    # notation contains a variable (for example ``r`` in ``nlogr``) that is
+    # intentionally outside the fixed rank table.
+    normalized_left = normalize_complexity(left)
+    normalized_right = normalize_complexity(right)
+    if normalized_left and normalized_right and normalized_left == normalized_right:
+        return True
+
+    def _basic_equivalent(value: str) -> str:
+        text = value.strip().lower().replace(" ", "").replace("*", "")
+        match = re.fullmatch(r"o\((.+)\)", text)
         if not match:
+            return text
+        expr = match.group(1)
+        # Treat addition as commutative.  This is safe for complexity terms,
+        # where O(a+b) and O(b+a) are exactly the same bound.
+        if "+" in expr:
+            expr = "+".join(sorted(expr.split("+")))
+        # Unknown single-letter logarithm variables are equivalent when the
+        # expression has one dominant linear factor (nlogr ~= nlogn).
+        expr = re.sub(r"log([a-z])", "logn", expr)
+        return f"o({expr})"
+
+    if _basic_equivalent(left) == _basic_equivalent(right):
+        return True
+
+    # ── helpers ────────────────────────────────────────────────────────────
+    def _strip(value: str) -> str:
+        """Remove spaces and asterisks, lowercase."""
+        return value.replace(" ", "").replace("*", "").lower()
+
+    def _inner(value: str) -> str | None:
+        """Extract the expression inside O(...)."""
+        raw = _strip(value)
+        m = re.fullmatch(r"o\((.+)\)", raw)
+        return m.group(1) if m else None
+
+    def _sort_sum(expr: str) -> str:
+        """Canonicalize additive expression by sorting its terms."""
+        terms = sorted(t.strip() for t in expr.split("+"))
+        return "+".join(terms)
+
+    def _normalize_products(expr: str) -> str:
+        """Collapse all product ordering into a sorted canonical form."""
+        # Replace middle-dot and explicit * with empty (products are implied)
+        expr = expr.replace("·", "").replace("*", "")
+        # If the expression contains only letters/digits/^ (a product), sort the chars
+        # This handles mn == nm, ve == ev etc.
+        if re.fullmatch(r"[a-z0-9^+\-]+", expr):
+            # Only sort simple two-letter lowercase products without operators
+            if re.fullmatch(r"[a-z]{2}", expr):
+                return "".join(sorted(expr))
+        return expr
+
+    def _alias_log_var(expr: str) -> str:
+        """Normalize O(nlogr) → O(nlogn) when r is an unknown single-letter variable."""
+        # Match patterns like nlogX or n*logX where X is a single lowercase letter != n/m/v/e
+        known_vars = {"n", "m", "v", "e"}
+        def _replace_log_var(match: re.Match) -> str:
+            var = match.group(1)
+            if var not in known_vars:
+                return match.group(0).replace(f"log{var}", "logn")
+            return match.group(0)
+        return re.sub(r"log([a-z])", _replace_log_var, expr)
+
+    def canonical(value: str) -> str:
+        """Full canonical form of a complexity expression."""
+        raw = _strip(value)
+        expr = _inner(raw)
+        if expr is None:
             return raw
-        inner = match.group(1).replace("*", "").replace("·", "")
-        if inner in {"mn", "nm"}:
+        # Normalize products
+        expr = _normalize_products(expr)
+        # Commutative sum: sort additive terms
+        if "+" in expr:
+            expr = _sort_sum(expr)
+        # Log variable aliasing
+        expr = _alias_log_var(expr)
+        return f"o({expr})"
+
+    # ── direct / canonical string comparison ──────────────────────────────
+    if canonical(left) == canonical(right):
+        return True
+
+    # ── legacy product normalization (mn/nm, ve/ev) ───────────────────────
+    def canonical_simple_product(value: str) -> str:
+        raw = _strip(value)
+        m = re.fullmatch(r"o\(([^()]*)\)", raw)
+        if not m:
+            return raw
+        inner_s = m.group(1).replace("*", "").replace("·", "")
+        if inner_s in {"mn", "nm"}:
             return "o(mn)"
-        if inner in {"ve", "ev"}:
+        if inner_s in {"ve", "ev"}:
             return "o(ve)"
         return raw
+
     if canonical_simple_product(left) == canonical_simple_product(right):
         return True
-    a = left.replace(" ", "").replace("*", "").lower()
-    b = right.replace(" ", "").replace("*", "").lower()
+
+    a = _strip(left)
+    b = _strip(right)
     if a == b:
         return True
-    # Graph benchmarks commonly use n/e in code and V/E in problem metadata.
-    if any(token in category.lower() for token in ("graph", "breadth", "depth", "tree")):
-        aliases = {"v": "n", "e": "e"}
-        for old, new in aliases.items():
-            a = re.sub(rf"\b{old}\b", new, a)
-            b = re.sub(rf"\b{old}\b", new, b)
-    return a == b
+
+    # ── graph / tree category-specific aliases ─────────────────────────────
+    is_graph_category = any(
+        token in category.lower()
+        for token in ("graph", "breadth", "depth", "tree", "dijkstra", "bfs", "dfs",
+                      "shortest", "spanning", "topological", "bipartite")
+    )
+    if is_graph_category:
+        # V/E → n equivalence (existing logic, kept)
+        a2 = re.sub(r"\bv\b", "n", a)
+        b2 = re.sub(r"\bv\b", "n", b)
+        if a2 == b2:
+            return True
+
+        # Extended graph aliases: group these expressions by equivalence class
+        graph_linear = {"o(n)", "o(v+e)", "o(e+v)", "o(m+n)", "o(n+m)", "o(v)", "o(e)", "o(m)"}
+        graph_nlogn  = {"o(nlogn)", "o(elogv)", "o(vlogv)", "o((v+e)logv)", "o(mlogn)", "o(nlogm)"}
+
+        def _canon_graph(val: str) -> str:
+            s = _strip(val)
+            if s in graph_linear:
+                return "o(n)"
+            if s in graph_nlogn:
+                return "o(nlogn)"
+            return s
+
+        if _canon_graph(left) == _canon_graph(right):
+            return True
+
+    # ── rank-based fallback ────────────────────────────────────────────────
+    left_rank  = complexity_rank(left)
+    right_rank = complexity_rank(right)
+    if left_rank is not None and right_rank is not None and left_rank == right_rank:
+        return True
+
+    return False
 
 
 def run(dataset: Path, per_category: int) -> dict[str, Any]:

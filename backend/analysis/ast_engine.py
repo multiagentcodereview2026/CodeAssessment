@@ -214,6 +214,11 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
         time_complexity = "O(n)"
         space_complexity = "O(n)"
 
+    # A bounded inner alphabet/range adds only constant work per input item.
+    elif loop.has_constant_inner_loop:
+        time_complexity = "O(n log n)" if loop.has_sort else "O(n)"
+        space_complexity = "O(n)" if ir.has_dynamic_allocation else "O(1)"
+
     # 8. SORT OPERATIONS
     elif loop.has_sort:
         if loop.sort_inside_loop:
@@ -226,7 +231,10 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
             else:
                 time_complexity = "O(n log n)"
 
-        space_complexity = "O(1)"
+        if ir.has_dynamic_allocation:
+            space_complexity = "O(n)"
+        else:
+            space_complexity = "O(1)"
 
     # 9. LOOP-BASED ALGORITHMS
     elif loop.depth > 0:
@@ -285,6 +293,7 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
             r'\bcnt\[\d+\]',
             r'\bfreq\[\d+\]',
             r'\bcount\[\d+\]',
+            r'\[[^\]]+\]\s*\*\s*\d+',
         ]
         is_fixed_size = any(re.search(pattern, source_lower) for pattern in fixed_size_patterns)
 
@@ -299,13 +308,21 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
 
             if time_complexity == "O(1)":
                 time_complexity = space_complexity
-        elif ir.has_dynamic_allocation and not is_fixed_size and not loop.has_sort:
+        elif ir.has_dynamic_allocation and not is_fixed_size:
             if 'w' in source_lower and ('dp(w' in source_lower or 'vector<int> dp(w' in source_lower or 'vector<int> dp(w+1)' in source_lower):
                 space_complexity = "O(W)"
             elif loop.multiple_input_bounds and ir.has_merged_both:
                 space_complexity = "O(m+n)"
             else:
                 space_complexity = "O(n)"
+
+    # Also handle pattern:constant-work that allocates
+    if ir.algorithm_pattern == "constant-work" and ir.has_dynamic_allocation and not is_fixed_size:
+        space_complexity = "O(n)"
+
+    # Time complexity must be at least as large as space complexity if we're dynamically allocating
+    if time_complexity == "O(1)" and space_complexity != "O(1)":
+        time_complexity = space_complexity
 
     signals = []
     if loop.depth:
