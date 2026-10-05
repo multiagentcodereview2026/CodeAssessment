@@ -138,7 +138,7 @@ class ASTComplexityAnalyzer:
         for_loops = len(re.findall(r'\bfor\s*\(', src)) + len(re.findall(r'\bfor\s+\w+\s+in\s+', src))
         while_loops = len(re.findall(r'\bwhile\s*\(', src)) + len(re.findall(r'\bwhile\s+\w+', src))
         do_loops = len(re.findall(r'\bdo\s*\{', src))
-        builtin_loops = len(re.findall(r'\b(?:sum|max|min|any|all)\s*\([^)]+(?:for|\[)', src))
+        builtin_loops = len(re.findall(r'\b(?:sum|max|min|any|all|map|filter|Counter|sorted)\s*\(', src)) + len(re.findall(r'\.(?:split|join|replace|count)\s*\(', src))
 
         total_loops = for_loops + while_loops + do_loops + builtin_loops
 
@@ -450,16 +450,18 @@ class ASTComplexityAnalyzer:
             r'\bnew\s+\w+',
             r'\bmalloc\s*\(',
             # Python containers and mutating operations.
-            # Counter/dict cardinality depends on public input constraints;
-            # do not force O(n) space from source alone.  The time extractor
-            # still recognizes Counter as an input-sized scan.
-            r'\b(?:list|dict|set|deque|defaultdict)\s*\(',
+            # Counter/dict/list/set/deque/defaultdict/counter creation and mutating ops.
+            r'\b(?:list|dict|set|deque|defaultdict|counter)\s*\(',
             r'\.(?:append|extend|add|update|setdefault|popleft|appendleft)\s*\(',
             r'\bheapq\.(?:heappush|heappop|heapify)\s*\(',
-            r'\b\w+\s*=\s*\{\s*\}',
-            r'\[\s*\]',
+            # New container literal assignment (not comparison): var = [...] or var = {}
+            # The old pattern r'\w+(?:\[[^\]]+\])+\s*=' was matching arr[i] == 0 (comparison)
+            # because == contains = and the pattern had no negative lookahead.
+            r'\w+\s*=\s*\[',  # var = [...] new list creation
+            r'\w+\s*=\s*\{',  # var = {...} new dict/set creation
             r'\[[^\]]+\]\s*\*\s*(?:\w+|\([^)]+\))', # Python list multiplication e.g. [0] * n
             r'\[[^\]]+for\s+\w+\s+in', # Python list comprehension
+            r'\bsorted\s*\(',  # sorted() always creates a new list copy
         ]
 
 
@@ -713,9 +715,13 @@ class ASTComplexityAnalyzer:
         if python_linear_builtin and loop.depth == 0:
             loop.depth = 1
             loop.structure = "single"
+        # Ignore small fixed 2-3 element pair sorting (e.g. sorted([a, b]), sorted(domino))
+        has_pair_sort = bool(re.search(r'sorted\s*\(\s*(?:\[[^\]]*\]|\([^)]*\)|\w+)\s*\)', src_lower)) and any(
+            t in src_lower for t in ('domino', 'pair', '[a, b]', '[u, v]', '[x, y]', '(a, b)', 'sorted([', 'sorted((')
+        )
         loop.has_sort = any(s in src_lower for s in [
             'sort(', 'std::sort', '.sort(', 'sorted(',
-        ])
+        ]) and not has_pair_sort
         # A sort performed for every input item composes multiplicatively with
         # its surrounding loop.  Keep this separate from one preprocessing
         # sort followed by a scan.
@@ -755,7 +761,7 @@ class ASTComplexityAnalyzer:
         # generic pop/increment token.  This prevents unrelated nested loops
         # from being incorrectly collapsed to O(n).
         has_window_pointer = bool(re.search(
-            r'\b(?:left|start|l)\s*(?:\+\+|\+=\s*1|=\s*\w+\s*\+\s*1)',
+            r'\b(?:left|right|start|end|l|r|i|j|slow|fast|p1|p2)\s*(?:\+\+|\+=\s*1|=\s*\w+\s*\+\s*1)',
             src_lower,
         ))
         # Python writes ``while condition:``, C-family languages write

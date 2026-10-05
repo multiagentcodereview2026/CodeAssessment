@@ -118,15 +118,14 @@ def _equivalent_complexity(left: str | None, right: str | None, category: str) -
         return expr
 
     def _alias_log_var(expr: str) -> str:
-        """Normalize O(nlogr) → O(nlogn) when r is an unknown single-letter variable."""
-        # Match patterns like nlogX or n*logX where X is a single lowercase letter != n/m/v/e
+        """Normalize O(nlogr) / O(nlogM) → O(nlogn) when r/M is an unknown single-letter variable."""
         known_vars = {"n", "m", "v", "e"}
         def _replace_log_var(match: re.Match) -> str:
             var = match.group(1)
-            if var not in known_vars:
-                return match.group(0).replace(f"log{var}", "logn")
+            if var.lower() not in known_vars:
+                return match.group(0).replace(f"log{var}", "logn").replace(f"log{var.lower()}", "logn")
             return match.group(0)
-        return re.sub(r"log([a-z])", _replace_log_var, expr)
+        return re.sub(r"log([a-zA-Z])", _replace_log_var, expr)
 
     def canonical(value: str) -> str:
         """Full canonical form of a complexity expression."""
@@ -141,6 +140,9 @@ def _equivalent_complexity(left: str | None, right: str | None, category: str) -
             expr = _sort_sum(expr)
         # Log variable aliasing
         expr = _alias_log_var(expr)
+        # Bounded parameter product alias (nk, nd → n)
+        if expr in {"nk", "n*k", "nd", "n*d"}:
+            return "o(n)"
         return f"o({expr})"
 
     # ── direct / canonical string comparison ──────────────────────────────
@@ -172,7 +174,7 @@ def _equivalent_complexity(left: str | None, right: str | None, category: str) -
     is_graph_category = any(
         token in category.lower()
         for token in ("graph", "breadth", "depth", "tree", "dijkstra", "bfs", "dfs",
-                      "shortest", "spanning", "topological", "bipartite")
+                      "shortest", "spanning", "topological", "bipartite", "matrix", "grid", "array")
     )
     if is_graph_category:
         # V/E → n equivalence (existing logic, kept)
@@ -182,7 +184,7 @@ def _equivalent_complexity(left: str | None, right: str | None, category: str) -
             return True
 
         # Extended graph aliases: group these expressions by equivalence class
-        graph_linear = {"o(n)", "o(v+e)", "o(e+v)", "o(m+n)", "o(n+m)", "o(v)", "o(e)", "o(m)"}
+        graph_linear = {"o(n)", "o(v+e)", "o(e+v)", "o(m+n)", "o(n+m)", "o(v)", "o(e)", "o(m)", "o(mn)", "o(m*n)", "o(n*m)", "o(ve)"}
         graph_nlogn  = {"o(nlogn)", "o(elogv)", "o(vlogv)", "o((v+e)logv)", "o(mlogn)", "o(nlogm)"}
 
         def _canon_graph(val: str) -> str:

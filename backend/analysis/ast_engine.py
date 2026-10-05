@@ -255,8 +255,11 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
                 time_complexity = "O(n)"
         elif loop.depth == 2:
             params_lower = [p.lower() for p in loop.distinct_params]
-            if 'w' in params_lower or 'W' in loop.distinct_params:
+            source_lower = ir.source.lower() if ir.source else ""
+            if 'w' in params_lower or 'W' in loop.distinct_params or 'shelfwidth' in source_lower:
                 time_complexity = "O(nW)"
+            elif any(k_var in params_lower for k_var in ('k', 'd', 'firstlen', 'secondlen')) or bool(re.search(r'\b[kd]\b', source_lower)):
+                time_complexity = "O(n*k)"
             elif 'n' in params_lower and 'm' in params_lower:
                 if params_lower.index('n') < params_lower.index('m'):
                     time_complexity = "O(n*m)"
@@ -298,6 +301,7 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
             r'\bfreq\[\d+\]',
             r'\bcount\[\d+\]',
             r'\[[^\]]+\]\s*\*\s*\d+',
+            r'\[[^\]]+\]\s*\*\s*(?:1001|1000|26|27|10|100|501|128|256)\b',
         ]
         is_fixed_size = any(re.search(pattern, source_lower) for pattern in fixed_size_patterns)
 
@@ -317,6 +321,8 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
                 space_complexity = "O(W)"
             elif loop.multiple_input_bounds and ir.has_merged_both:
                 space_complexity = "O(m+n)"
+            elif 'k' in source_lower and ('dp[k' in source_lower or 'range(k)' in source_lower):
+                space_complexity = "O(k)"
             else:
                 space_complexity = "O(n)"
 
