@@ -62,4 +62,8 @@ class ComplexityIR:
     multiple_input_bounds: bool = False
     space_complexity: str = ""
     time_complexity: str = ""
+    # Canonical Phase-M pattern label populated by the shared pattern library.
+    # It is intentionally descriptive; the engine remains the single place
+    # that applies precedence and computes the final complexity.
+    algorithm_pattern: str = "unknown"
 

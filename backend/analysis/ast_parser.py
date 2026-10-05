@@ -1,6 +1,7 @@
 import re
 from typing import Dict, List, Optional, Set, Tuple, Any
 from .complexity_ir import ComplexityIR, LoopIR, RecursionIR, GraphIR
+from .pattern_library import classify_pattern
 
 # Tree-sitter imports - handle gracefully if not available
 AST_AVAILABLE = False
@@ -116,6 +117,7 @@ class ASTComplexityAnalyzer:
             ir.is_constant_lookup = self._detect_constant_lookup()
             ir.multiple_input_bounds = ir.loop.multiple_input_bounds
             ir.has_merged_both = self._detect_merged_both_inputs()
+            ir.algorithm_pattern = classify_pattern(ir).name
 
         except Exception:
             # If AST extraction fails, fall back to regex
@@ -354,6 +356,7 @@ class ASTComplexityAnalyzer:
         ir.has_2d_allocation = self._detect_2d_allocation()
         ir.is_constant_lookup = self._detect_constant_lookup()
         ir.has_merged_both = self._detect_merged_both_inputs()
+        ir.algorithm_pattern = classify_pattern(ir).name
 
         return ir
 

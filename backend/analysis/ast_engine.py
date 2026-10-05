@@ -326,6 +326,8 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
         signals.append("two-dimensional-allocation")
     if ir.has_heap_operations:
         signals.append("heap-operation")
+    if ir.algorithm_pattern and ir.algorithm_pattern != "unknown":
+        signals.append(f"pattern:{ir.algorithm_pattern}")
     # A syntactically valid AST with no loops, recursion, allocation, graph,
     # or heap evidence is still a deterministic constant-work program. Treat
     # it as analyzed instead of discarding simple O(1) solutions.
