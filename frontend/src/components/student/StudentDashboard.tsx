@@ -42,7 +42,7 @@ export const StudentDashboard: React.FC = () => {
         <article className="p-4">
           <div className="flex items-center gap-2 text-sm font-medium text-slate-500"><Clock3 className="h-4 w-4 text-amber-700" /> Current streak</div>
           <p className="mt-3 font-mono text-3xl font-bold text-slate-900">{studentProgress.currentStreak}<span className="ml-2 text-base font-medium text-slate-500">days</span></p>
-          <p className="mt-1 text-xs text-slate-500">From your saved student profile</p>
+          <p className="mt-1 text-xs text-slate-500">Consecutive days with submissions</p>
         </article>
       </section>
 

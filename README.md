@@ -235,7 +235,7 @@ docker compose up --build -d
 
 | Service | Address |
 | --- | --- |
-| Application | http://localhost:5173 |
+| Application | http://localhost:8080 |
 | Backend | http://localhost:8000 |
 | API documentation | http://localhost:8000/docs |
 | Health check | http://localhost:8000/health |
@@ -309,7 +309,9 @@ Compose supplies the database/engine connection settings. The built frontend req
 | GET | `/api/auth/me` | Validate current session |
 | POST | `/api/auth/logout` | Revoke current token version |
 | GET | `/api/problems` | Practice catalogue |
-| GET | `/api/instructor-problems` | Instructor catalogue |
+| GET | `/api/instructor-problems` | Owned instructor questions or questions in a student's enrolled courses |
+| POST | `/api/instructor/problems` | Create a question and link it to a course assignment |
+| PUT/DELETE | `/api/instructor/problems/{problem_id}` | Edit or remove an owned question before student submissions exist |
 | GET | `/api/problems/{problem_id}` | Statement and public cases |
 | POST | `/api/submissions/run` | Execute public or supplied cases |
 | POST | `/api/submissions/submit` | Execute, assess, and save |

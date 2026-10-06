@@ -69,6 +69,35 @@ class Enrollment(Base):
     course = relationship("Course", back_populates="enrollments")
 
 
+class EnrollmentRequest(Base):
+    __tablename__ = "enrollment_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(String(100), ForeignKey("students.student_id"), nullable=False, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="PENDING", index=True)
+    requested_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    responded_at = Column(DateTime, nullable=True)
+
+    student = relationship("Student")
+    course = relationship("Course")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recipient_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    event_type = Column(String(50), nullable=False, index=True)
+    title = Column(String(200), nullable=False)
+    message = Column(Text, nullable=False)
+    target_url = Column(String(500), nullable=True)
+    is_read = Column(Boolean, nullable=False, default=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    recipient = relationship("User")
+
+
 class Student(Base):
     __tablename__ = "students"
 

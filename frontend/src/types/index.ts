@@ -61,6 +61,7 @@ export interface Problem {
   isInstructorAssigned?: boolean;
   courseCode?: string;
   dueDate?: string;
+  assignmentId?: number;
 }
 
 export interface TestCaseResult {

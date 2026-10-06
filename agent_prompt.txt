@@ -1,0 +1,1869 @@
+# CONTINUE AND FINISH THE EXISTING AI CODEASSESSMENT PROJECT
+
+You are taking over an EXISTING AI CodeAssessment project.
+
+IMPORTANT:
+This project has already had substantial implementation completed by previous coding agents.
+
+DO NOT:
+- restart the project
+- rebuild the architecture from scratch
+- replace working code unnecessarily
+- reset/revert the repository
+- delete existing functionality
+- create a parallel authentication system
+- create a second database architecture
+- fabricate test results
+- fabricate data
+- claim something works without actually testing it
+
+Your job is to:
+
+1. Inspect the CURRENT repository completely.
+2. Understand the existing implementation before modifying anything.
+3. Determine exactly what is already working.
+4. Determine exactly what is incomplete, broken, mocked, or untested.
+5. Implement ALL remaining required functionality.
+6. Test every important feature.
+7. Fix failures discovered during testing.
+8. Test the real frontend/backend/database flow.
+9. Test security and authorization.
+10. Test persistence after restart.
+11. Test the actual browser workflow.
+12. Verify the AI/Groq pipeline if credentials are available.
+13. Remove remaining live mock/fake data.
+14. Update documentation.
+15. Perform a final repository audit.
+16. Give an evidence-based final report.
+
+Do NOT just give me a plan.
+
+Actually modify the repository and execute the work.
+
+============================================================
+# 1. PROJECT
+============================================================
+
+Project:
+
+AI CodeAssessment / Explainable Multi-Agent Intelligent Programming Tutor
+
+Core architecture:
+
+Student
+   ↓
+Problem Bank OR Instructor Assignment
+   ↓
+Code Editor
+   ↓
+Submission
+   ↓
+Docker Execution Sandbox
+   ↓
+Multi-Agent AI Assessment
+   ↓
+PostgreSQL
+   ↓
+Student Result
+   ↓
+Instructor Analytics / Reports
+
+
+Instructor workflow:
+
+Instructor
+   ↓
+Course
+   ↓
+Enrollments
+   ↓
+Assignment
+   ↓
+Assignment Problems
+   ↓
+Student Submission
+   ↓
+AI Assessment
+   ↓
+PostgreSQL
+   ↓
+Instructor Analytics / Reports
+
+
+Independent practice:
+
+Student
+   ↓
+Global Problem Bank
+   ↓
+Submission
+   ↓
+assignment_id = NULL
+   ↓
+Student-only history/analytics
+
+
+CRITICAL BUSINESS RULE:
+
+Independent Problem Bank submissions MUST NOT appear in instructor course/assignment analytics.
+
+Only submissions with a valid assignment_id belonging to a course owned by the authenticated instructor may appear in instructor reports.
+
+============================================================
+# 2. EXISTING IMPLEMENTATION — VERIFY BEFORE CHANGING
+============================================================
+
+The previous agents have already implemented substantial functionality.
+
+DO NOT assume these are broken.
+
+Inspect and verify them first.
+
+Known implemented areas:
+
+AUTHENTICATION
+- Student registration/login
+- Instructor login
+- Password hashing
+- Signed bearer tokens
+- /api/auth/me
+- /api/auth/logout
+- Session/token revocation
+- Role-based authorization
+- Student profile linking
+- Instructor profile linking
+- Development instructor seed workflow
+
+DATABASE
+- PostgreSQL
+- SQLAlchemy
+- Authentication migration
+- Course/enrollment/assignment/submission relationships
+- Submission.assignment_id
+- AssignmentProblem relationships
+
+INSTRUCTOR OWNERSHIP
+Instructor APIs are supposed to resolve the instructor from the authenticated token.
+
+Course, enrollment, assignment, Problem Bank catalogue, analytics and related endpoints must be scoped to the authenticated instructor.
+
+COURSES
+- create
+- list
+- detail
+- update
+- archive/deactivate
+
+ENROLLMENTS
+- student lookup
+- enroll student
+- duplicate prevention
+- deactivate enrollment
+- course-specific roster
+
+ASSIGNMENTS
+- create assignment
+- real Problem Bank IDs
+- duplicate validation
+- invalid problem validation
+- problem ordering
+- transactional creation
+- assignment content freezing after submissions
+- status changes
+
+STUDENT COURSE FLOW
+- My Courses
+- course assignment navigation
+- assignment access validation
+
+SUBMISSIONS
+- authenticated student identity
+- enrollment validation
+- assignment validation
+- assignment/problem membership validation
+- assignment_id persistence
+- independent practice with assignment_id = NULL
+
+ANALYTICS
+- latest evaluated attempt per student/problem
+- separate attempt counting
+- student analytics
+- instructor analytics
+- completion calculations
+- score distribution
+- highest/lowest scores
+- empty states
+
+FRONTEND
+- authenticated API requests
+- real course data
+- real assignment data
+- real student data
+- persisted analytics
+- authenticated result pages
+- local role switching removed
+- fixed student IDs removed
+
+Previous live API testing already verified:
+- authentication
+- course creation
+- enrollment
+- assignment creation
+- real Problem Bank problem
+- assignment submission
+- independent submission
+- assignment_id persistence
+- independent assignment_id = NULL
+- instructor analytics excluding independent practice
+- backend persistence after recreation
+
+Previous backend scoped tests reported:
+38 passed
+
+BUT:
+That does NOT mean the project is finished.
+
+There are remaining features and verification tasks.
+
+============================================================
+# 3. FIRST STEP — AUDIT EVERYTHING
+============================================================
+
+Before changing code, inspect:
+
+git status
+git diff
+git log --oneline -10
+
+Then inspect:
+
+backend/
+frontend/
+database/
+Docker configuration
+README
+tests/
+
+Important backend files:
+
+backend/main.py
+backend/models.py
+backend/database.py
+backend/auth.py
+backend/schemas.py
+backend/migrations/
+backend/agents/
+backend/scoring/
+backend/tests/
+
+Important frontend areas:
+
+frontend/src/AppContext.tsx
+frontend/src/AuthContext.jsx
+frontend/src/hooks/useAuth.js
+
+Inspect:
+
+- instructor components
+- student components
+- course components
+- assignment components
+- Problem Bank
+- problem workspace/editor
+- submission/result views
+- analytics
+- reports
+- API utilities
+- routing
+- authentication
+- state management
+
+Search the entire project for:
+
+mock
+demo
+sample
+sampleData
+mockData
+defaultData
+fallback
+hardcoded
+student_id
+switchRole
+82.7
+85.0
+88.5
+demo_student
+
+Do NOT blindly delete test fixtures.
+
+Separate:
+TEST DATA
+from
+LIVE APPLICATION DATA.
+
+Create an internal checklist:
+
+A. Working
+B. Partially implemented
+C. Broken
+D. Mock/local-only
+E. Backend-only
+F. Frontend-only
+G. Implemented but untested
+H. Tests broken/stale
+
+Then work through the checklist.
+
+============================================================
+# 4. DO NOT CLAIM SUCCESS WITHOUT EVIDENCE
+============================================================
+
+For every major feature:
+
+IMPLEMENT
+→ TEST API
+→ TEST DATABASE
+→ TEST FRONTEND
+→ TEST END-TO-END
+
+A successful build does NOT prove functionality.
+
+A 200 API response does NOT prove the frontend/database workflow works.
+
+Do not say:
+
+"Everything is working."
+
+unless you actually verified it.
+
+At the end, report exact commands and exact results.
+
+Never invent numbers.
+
+============================================================
+# 5. AUTHENTICATION
+============================================================
+
+Verify the existing authentication implementation.
+
+Use an environment variable for JWT secret:
+
+JWT_SECRET_KEY=<private-secret>
+
+Do not hardcode production secrets.
+
+Verify development instructor provisioning.
+
+Use the existing seed mechanism if one exists.
+
+Do NOT create another authentication system.
+
+Test:
+
+1. Valid instructor login
+2. Invalid instructor password
+3. Unknown instructor
+4. Valid student login
+5. Invalid student password
+6. Unknown student
+7. /api/auth/me
+8. Logout
+9. Token revocation
+10. Page refresh
+11. Role authorization
+12. Account switching
+
+Frontend must NEVER silently switch to a fake/local user.
+
+============================================================
+# 6. COURSE MANAGEMENT
+============================================================
+
+Finish and verify the instructor course workflow.
+
+Instructor must be able to:
+
+Create course
+View course
+Edit course
+Archive/deactivate course
+View enrolled students
+View assignments
+View analytics
+
+Flow:
+
+Instructor Dashboard
+→ My Courses
+→ Course
+→ Manage Course
+
+Course editing MUST use the backend.
+
+Correct:
+
+Frontend
+→ PATCH/PUT
+→ FastAPI
+→ PostgreSQL
+→ response
+→ frontend refresh/invalidation
+
+NOT:
+
+React state only.
+
+Test:
+
+Create a test course.
+
+Edit title/description.
+
+Refresh browser.
+
+Verify PostgreSQL contains the changed value.
+
+Archive it.
+
+Verify historical data remains intact.
+
+============================================================
+# 7. COURSE-SPECIFIC ENROLLMENT
+============================================================
+
+Verify:
+
+Course
+→ Students
+→ Add Student
+
+Use real backend student lookup.
+
+Enrollment must be:
+
+student_id + course_id
+
+Test:
+
+- successful enrollment
+- duplicate enrollment
+- inactive enrollment
+- reactivation if supported
+- deactivation
+- roster refresh
+- student sees course
+- student loses active access after deactivation if that is the existing policy
+- historical submissions remain
+
+CRITICAL:
+
+Instructor A must NOT be able to enroll students into Instructor B's course.
+
+Test directly through the API.
+
+Do not rely only on frontend hiding.
+
+============================================================
+# 8. ASSIGNMENT MANAGEMENT
+============================================================
+
+Complete the instructor assignment UI if anything remains.
+
+Flow:
+
+Instructor
+→ Course
+→ Assignments
+→ Create Assignment
+
+Fields:
+
+- title
+- description
+- due date
+- status
+- selected problems
+
+Problem selection MUST use the actual Problem Bank.
+
+Do NOT use MOCK_PROBLEMS or hardcoded demo problems as the live source of truth.
+
+Test:
+
+- create
+- view
+- edit
+- status change
+- archive
+- due date edit
+- problem viewing
+- assignment statistics
+- refresh persistence
+
+CRITICAL:
+
+If an assignment has submissions:
+
+Problem membership must remain frozen if that is the current architecture.
+
+Status changes should remain possible.
+
+The UI should clearly tell the instructor when content editing is locked.
+
+============================================================
+# 9. PROBLEM BANK
+============================================================
+
+Problem Bank is GLOBAL.
+
+Problems are not instructor-owned.
+
+Do not duplicate Problem records.
+
+Expected relationship:
+
+problems
+   ↓
+assignment_problems
+   ↓
+assignments
+
+Test:
+
+- search
+- select
+- multiple selection
+- duplicate selection
+- invalid problem
+- ordering
+- save
+- reload
+
+Then directly query PostgreSQL.
+
+============================================================
+# 10. STUDENT ASSIGNMENT WORKFLOW
+============================================================
+
+Perform the complete real workflow.
+
+Instructor:
+
+Create course
+→ enroll student
+→ create assignment
+→ attach real Problem Bank problem
+
+Student:
+
+Login
+→ My Courses
+→ Course
+→ Assignment
+→ Problem
+→ Code
+→ Submit
+→ Assessment
+→ Result
+
+Database must contain:
+
+student_id = authenticated student
+problem_id = assigned problem
+assignment_id = actual assignment ID
+
+Then instructor:
+
+Login
+→ Course
+→ Assignment
+→ Student
+→ Submission
+
+Verify the submission appears and the score matches PostgreSQL.
+
+============================================================
+# 11. INDEPENDENT PRACTICE
+============================================================
+
+This is CRITICAL.
+
+Student:
+
+Global Problem Bank
+→ Problem
+→ Submit
+
+Database must contain:
+
+assignment_id = NULL
+
+Student should see the result/history.
+
+Instructor MUST NOT see this submission in:
+
+- course analytics
+- assignment analytics
+- course submission list
+- completion calculation
+- instructor student score
+- instructor reports
+
+This separation MUST be enforced in backend queries.
+
+Do NOT rely on frontend filtering.
+
+Directly test the SQL/API behavior.
+
+============================================================
+# 12. STUDENT PROGRESS
+============================================================
+
+Complete the instructor student-progress workflow.
+
+Flow:
+
+Instructor
+→ Course
+→ Students
+→ Student
+
+Display only data belonging to the instructor's course.
+
+Include where available:
+
+- student profile
+- course
+- assigned problems
+- submitted problems
+- pending problems
+- latest submission
+- attempts
+- latest score
+- average score
+- correctness
+- complexity
+- style
+- originality/similarity
+- assessment feedback
+- recommendations
+- progress trend
+- completion percentage
+
+Do not expose unrelated private student data.
+
+Backend authorization must enforce this.
+
+Independent practice must not appear unless explicitly designed.
+
+============================================================
+# 13. SUBMISSION REVIEW
+============================================================
+
+Complete instructor submission review.
+
+Flow:
+
+Course
+→ Assignment
+→ Student
+→ Submission
+
+Display persisted data:
+
+- source code
+- language
+- submission time
+- status
+- execution result
+- overall score
+- correctness
+- complexity
+- style
+- similarity/originality
+- explainability
+- recommendations
+- improved code
+- projected score
+- assessment flags
+
+IMPORTANT:
+
+Opening a saved submission must NOT rerun the AI assessment.
+
+Read the stored result.
+
+============================================================
+# 14. REPORTS / CSV EXPORT
+============================================================
+
+Implement CSV export if missing.
+
+At minimum support course-level export.
+
+Possible columns:
+
+Student ID
+Student Name
+Assignment
+Problems Assigned
+Problems Submitted
+Completion
+Average Score
+Correctness
+Complexity
+Style
+Originality
+Last Submission
+
+Only include data belonging to the authenticated instructor.
+
+Do NOT include independent practice.
+
+Exported values must use the same aggregation rules as the dashboard.
+
+If PDF export already exists and is functional, preserve it.
+
+Do NOT spend unnecessary time building a complex PDF engine if CSV is enough.
+
+============================================================
+# 15. SIMILARITY / ORIGINALITY
+============================================================
+
+Audit the existing similarity system.
+
+Do NOT fabricate similarity alerts.
+
+If actual persisted similarity information exists:
+
+Use it.
+
+If it does not exist:
+
+Display:
+
+"No similarity analysis available"
+
+Do NOT display fake alert counts.
+
+If similarity is shown, describe it as similarity evidence, not definitive plagiarism proof.
+
+============================================================
+# 16. DUE DATE / LATE SUBMISSION
+============================================================
+
+Implement a clear backend policy.
+
+Recommended policy unless the existing architecture specifies otherwise:
+
+- submissions remain allowed after due date
+- backend records whether submission is ON_TIME or LATE
+- no automatic score penalty
+
+Determine:
+
+submission.timestamp <= assignment.due_date
+→ ON_TIME
+
+submission.timestamp > assignment.due_date
+→ LATE
+
+Do NOT trust the frontend to calculate this.
+
+Do NOT invent score penalties.
+
+Store/display the status where appropriate.
+
+Example:
+
+Due: September 30, 2026
+Status: On time
+
+or:
+
+Due: September 30, 2026
+Status: Late
+
+Document the policy in README.
+
+============================================================
+# 17. ANALYTICS
+============================================================
+
+Preserve the existing policy:
+
+LATEST EVALUATED ATTEMPT PER STUDENT/PROBLEM
+
+Attempts are counted separately.
+
+Verify:
+
+Instructor overview:
+- total courses
+- total students
+- active assignments
+- submissions
+- class average
+
+Course:
+- students
+- assignments
+- assigned problems
+- submissions
+- completion
+- average score
+
+Assignment:
+- assigned students
+- submitted students
+- attempts
+- completion
+- average
+- highest
+- lowest
+- dimension averages
+
+Student:
+- assigned
+- completed
+- pending
+- latest scores
+- progress
+
+Do NOT average all attempts if latest-attempt policy is being used.
+
+Use consistent aggregation.
+
+============================================================
+# 18. SCORE DISTRIBUTION
+============================================================
+
+Verify that score distribution comes from REAL database values.
+
+Use buckets such as:
+
+0-20
+21-40
+41-60
+61-80
+81-100
+
+Count actual latest evaluated student/problem scores.
+
+Do NOT use:
+
+[0,0,0,0,0]
+
+unless there are genuinely zero records.
+
+highestScore must be actual maximum.
+
+lowestScore must be actual minimum.
+
+Do not substitute average for min/max.
+
+============================================================
+# 19. EMPTY STATES
+============================================================
+
+No fake values.
+
+Examples:
+
+No courses yet.
+No enrolled students.
+No assignments yet.
+No submissions yet.
+No graded submissions available.
+No similarity analysis available.
+
+Numeric zero must remain zero.
+
+Never use bad fallback patterns such as:
+
+value || fallback
+
+when 0 is a valid value.
+
+Use explicit null/undefined handling.
+
+============================================================
+# 20. FRONTEND/BACKEND SYNCHRONIZATION
+============================================================
+
+Audit:
+
+AppContext
+AuthContext
+useAuth
+API utilities
+React state
+query/invalidation logic
+
+Every mutation must be server-authoritative.
+
+Correct:
+
+POST/PATCH
+→ backend validation
+→ PostgreSQL commit
+→ response
+→ refresh/invalidate frontend data
+
+Test after:
+
+- course creation
+- course edit
+- enrollment
+- assignment creation
+- assignment edit
+- status change
+- submission
+
+Then refresh the browser.
+
+Verify the data persists.
+
+Verify logout/login.
+
+Verify account switching.
+
+No stale local state.
+
+============================================================
+# 21. REMOVE LIVE MOCK DATA
+============================================================
+
+Search the entire frontend/backend.
+
+Look for:
+
+mock
+demo
+sample
+fallback
+defaultData
+hardcoded
+82.7
+85.0
+88.5
+demo_student
+
+Separate test fixtures from production paths.
+
+Remove/replace mock data ONLY where it is being used by the real application.
+
+Do not break tests by deleting valid fixtures.
+
+============================================================
+# 22. STUDENT DASHBOARD SECURITY
+============================================================
+
+Student identity must come from the authenticated token.
+
+No fixed student ID.
+
+No trusting a URL parameter for private student data.
+
+Test:
+
+Student A sees A's:
+
+- courses
+- assignments
+- submissions
+- analytics
+- results
+- progress
+
+Student A cannot access Student B's private data.
+
+============================================================
+# 23. AUTHORIZATION MATRIX
+============================================================
+
+Create:
+
+Instructor A
+Instructor B
+
+Student A
+Student B
+
+Course A owned by Instructor A
+Course B owned by Instructor B
+
+Assignment A in Course A
+Assignment B in Course B
+
+Test:
+
+Instructor A → Course A = allowed
+Instructor A → Course B = denied
+
+Instructor B → Course B = allowed
+Instructor B → Course A = denied
+
+Instructor A → Assignment A = allowed
+Instructor A → Assignment B = denied
+
+Student A → own data = allowed
+Student A → Student B data = denied
+
+Student A → enrolled course = allowed
+Student A → unrelated course = denied
+
+Test DIRECTLY through APIs.
+
+Do not rely only on UI visibility.
+
+============================================================
+# 24. DATABASE INTEGRITY
+============================================================
+
+Inspect:
+
+users
+instructors
+students
+courses
+enrollments
+assignments
+assignment_problems
+submissions
+problems
+
+Verify:
+
+- foreign keys
+- unique constraints
+- duplicate enrollments
+- duplicate assignment/problem links
+- orphan records
+- assignment relationships
+- independent assignment_id NULL
+- coursework assignment_id non-NULL
+
+Use actual PostgreSQL queries.
+
+============================================================
+# 25. DATABASE PERSISTENCE
+============================================================
+
+After creating test data:
+
+- instructor
+- student
+- course
+- enrollment
+- assignment
+- assignment_problem
+- submission
+
+Run:
+
+docker compose restart backend
+
+Verify everything remains.
+
+Then:
+
+docker compose up -d --force-recreate backend
+
+Verify everything remains again.
+
+Do not rely on React state.
+
+Query PostgreSQL directly.
+
+============================================================
+# 26. BACKEND TEST SUITE
+============================================================
+
+Run the complete test suite:
+
+cd backend
+pytest tests -q
+
+Do NOT exclude broken tests just to get a passing number.
+
+There was previously a stale test involving:
+
+tests/test_execution.py
+models.VERDICT_ACCEPTED
+
+Inspect:
+
+- backend/models.py
+- tests/test_execution.py
+- execution engine
+- assessment code
+
+Determine whether the test is obsolete or the constant is required.
+
+Fix it properly.
+
+Then run:
+
+pytest tests -q
+
+Also run available focused tests for:
+
+- auth
+- instructor APIs
+- submissions
+- analytics
+- assignments
+- authorization
+- enrollment
+
+Use actual filenames.
+
+Final report must contain exact test result.
+
+============================================================
+# 27. FRONTEND TESTING
+============================================================
+
+Run:
+
+cd frontend
+npm run build
+
+Then:
+
+npm run lint
+
+Fix errors caused by the current implementation.
+
+If legacy lint errors remain, identify them.
+
+Do NOT claim lint passes unless it actually passes.
+
+============================================================
+# 28. DOCKER HEALTH
+============================================================
+
+Run:
+
+docker compose ps
+
+Verify required services:
+
+- frontend
+- backend
+- postgres
+- execution engine
+
+Check health/running state.
+
+Inspect logs.
+
+Look for:
+
+ERROR
+Traceback
+500
+database errors
+authentication errors
+
+Do not ignore recurring errors.
+
+============================================================
+# 29. REAL BROWSER E2E TEST
+============================================================
+
+This is mandatory.
+
+Use Playwright or the project's existing browser automation if available.
+
+Test the REAL running application.
+
+Do NOT replace browser testing with API testing.
+
+Scenario:
+
+1. Start Docker Compose.
+2. Open frontend.
+3. Login as instructor.
+4. Create course.
+5. Add student.
+6. Create assignment.
+7. Select real Problem Bank problem.
+8. Save.
+9. Refresh.
+10. Verify assignment persists.
+11. Edit course.
+12. Refresh.
+13. Verify course edit persists.
+14. Logout.
+15. Login student.
+16. Open My Courses.
+17. Open course.
+18. Open assignment.
+19. Open assigned problem.
+20. Submit valid code.
+21. Wait for assessment.
+22. Open result.
+23. Verify saved score.
+24. Logout.
+25. Login instructor.
+26. Open course.
+27. Open assignment.
+28. Open student.
+29. Open submission review.
+30. Verify source code and persisted assessment.
+31. Verify analytics.
+32. Verify score distribution.
+33. Verify completion.
+34. Logout.
+35. Login student.
+36. Open global Problem Bank.
+37. Submit independent practice.
+38. Verify result.
+39. Login instructor.
+40. Verify independent submission does NOT affect assignment analytics.
+41. Login Instructor B.
+42. Attempt to access Instructor A course.
+43. Verify denied.
+44. Refresh browser.
+45. Restart backend.
+46. Refresh.
+47. Verify data persists.
+
+Capture real evidence where possible.
+
+============================================================
+# 30. REAL GROQ / AI VERIFICATION
+============================================================
+
+The live assessment endpoint was previously called, but actual Groq model success was not separately confirmed.
+
+If Groq credentials/provider access are available:
+
+Run one real assessment.
+
+Verify:
+
+Groq request succeeds
+↓
+Explainability generated
+↓
+Recommendation generated
+↓
+Revision generated where applicable
+↓
+Score projection generated where applicable
+↓
+Result persisted
+↓
+Student sees result
+↓
+Instructor sees same persisted result
+
+If Groq is unavailable:
+
+DO NOT fake it.
+
+Report:
+
+"Groq live execution could not be verified because provider credentials/access were unavailable."
+
+Automated tests may use mocks.
+
+============================================================
+# 31. SECURITY AUDIT
+============================================================
+
+Search for:
+
+- hardcoded passwords
+- hardcoded JWT secrets
+- API keys
+- client-supplied identity
+- unprotected instructor endpoints
+- SQL injection risks
+- unsafe code execution
+- exposed hidden tests
+- sensitive information in logs
+
+Ensure:
+
+- passwords hashed
+- JWT secret from environment
+- backend role checks
+- backend ownership checks
+- Docker sandbox remains active
+- secrets are not committed
+- student identity comes from token
+
+============================================================
+# 32. PERFORMANCE / QUERY AUDIT
+============================================================
+
+Check instructor:
+
+- course dashboard
+- student roster
+- assignment analytics
+- student progress
+
+Check for obvious N+1 query problems.
+
+Use SQL aggregation where appropriate.
+
+Do not rewrite the entire application for theoretical performance improvements.
+
+Only fix clear issues.
+
+Check indexes for:
+
+student_id
+course_id
+assignment_id
+problem_id
+
+where appropriate.
+
+============================================================
+# 33. README
+============================================================
+
+Update README if needed.
+
+Document:
+
+- startup
+- Docker
+- PostgreSQL
+- migrations
+- development instructor seed
+- student registration
+- authentication
+- assignment workflow
+- submission workflow
+- analytics aggregation policy
+- independent practice
+- due-date/late policy
+- testing
+- frontend build
+- known limitations
+- Groq configuration
+
+============================================================
+# 34. TEST DATA CLEANUP
+============================================================
+
+Use uniquely named test users.
+
+Example:
+
+e2e_instructor_20261001
+e2e_student_20261001
+
+After testing:
+
+- archive test course
+- deactivate assignment if appropriate
+- deactivate enrollment
+- disable test accounts
+- revoke sessions
+
+Do not delete historical records if auditability is important.
+
+Ensure test data does not appear as active production coursework.
+
+============================================================
+# 35. UNRELATED EXISTING CHANGES
+============================================================
+
+Do not casually modify unrelated existing work.
+
+Known files that may contain unrelated edits:
+
+complexity_agent.py
+test_ai_assessment_integration.py
+test_instructor_api.py
+
+Inspect them.
+
+If a file is unrelated to the current integration, leave it alone unless it actually blocks the final application.
+
+There was also a reported suspicious path:
+
+prompts/complexi ty_prompt.txt
+
+with an embedded space.
+
+Inspect it before changing it.
+
+If test_instructor_api.py can create duplicate live data, make it safe or clearly identify it as a manual test.
+
+============================================================
+# 36. IMPORTANT IMPLEMENTATION RULES
+============================================================
+
+RULE 1:
+Do not rewrite working architecture.
+
+RULE 2:
+Do not create fake/mock data to make the dashboard look populated.
+
+RULE 3:
+Do not hardcode scores.
+
+RULE 4:
+Do not trust client-supplied student identity.
+
+RULE 5:
+Do not rely on frontend filtering for authorization.
+
+RULE 6:
+Do not mix independent practice into instructor analytics.
+
+RULE 7:
+Do not rerun AI when viewing a saved submission.
+
+RULE 8:
+Do not change assignment problem membership after submissions if the existing architecture freezes it.
+
+RULE 9:
+Do not silently swallow backend errors.
+
+RULE 10:
+Do not claim a test passed unless you actually ran it.
+
+RULE 11:
+Do not claim browser E2E unless you actually used the browser.
+
+RULE 12:
+Do not claim Groq succeeded unless the real provider call succeeded.
+
+RULE 13:
+Do not stop after implementing code. Test it.
+
+RULE 14:
+If you discover a bug, fix it and rerun the relevant tests.
+
+RULE 15:
+Before making large architectural changes, explain why the existing implementation cannot satisfy the requirement.
+
+============================================================
+# 37. EXECUTION ORDER
+============================================================
+
+Work in this order:
+
+PHASE 1 — AUDIT
+- inspect repository
+- inspect git
+- inspect backend
+- inspect frontend
+- inspect database/migrations
+- inspect tests
+- identify remaining gaps
+
+PHASE 2 — FIX REGRESSIONS
+- fix imports
+- fix stale tests
+- fix obvious backend/frontend errors
+
+PHASE 3 — INSTRUCTOR FEATURES
+- student progress
+- submission review
+- course editing
+- assignment editing
+- reports/CSV
+
+PHASE 4 — SUBMISSION POLICY
+- due date
+- late status
+- assignment locking
+
+PHASE 5 — DATA QUALITY
+- mock data audit
+- similarity integration
+- empty states
+- score distribution
+
+PHASE 6 — TESTING
+- backend tests
+- focused authorization tests
+- frontend build
+- frontend lint
+
+PHASE 7 — LIVE SYSTEM
+- Docker rebuild
+- database migration verification
+- authentication
+- real course
+- real enrollment
+- real assignment
+- real submission
+- independent practice
+
+PHASE 8 — SECURITY
+- instructor A/B isolation
+- student A/B isolation
+- unauthorized endpoint tests
+- identity spoofing tests
+
+PHASE 9 — BROWSER E2E
+- complete instructor workflow
+- complete student workflow
+- submission
+- result
+- analytics
+- independent practice
+- authorization
+- refresh
+- backend restart
+
+PHASE 10 — AI
+- real Groq verification if possible
+
+PHASE 11 — FINAL AUDIT
+- Docker
+- database
+- logs
+- Git diff
+- README
+- test data
+- unrelated changes
+
+============================================================
+# 38. FINAL ACCEPTANCE CHECKLIST
+============================================================
+
+Do NOT declare FULLY VERIFIED until these are actually tested.
+
+AUTHENTICATION
+[ ] student login
+[ ] instructor login
+[ ] invalid credentials rejected
+[ ] logout
+[ ] token/session revocation
+[ ] /api/auth/me
+[ ] role authorization
+
+DATABASE
+[ ] migration
+[ ] models match schema
+[ ] existing data preserved
+[ ] foreign keys
+[ ] no orphan records
+[ ] persistence after restart
+[ ] persistence after backend recreation
+
+COURSES
+[ ] create
+[ ] view
+[ ] edit
+[ ] archive
+[ ] refresh persistence
+
+ENROLLMENT
+[ ] student lookup
+[ ] enroll
+[ ] duplicate prevention
+[ ] deactivate
+[ ] roster
+[ ] student access
+[ ] cross-instructor protection
+
+ASSIGNMENTS
+[ ] create
+[ ] view
+[ ] edit
+[ ] archive/status
+[ ] due date
+[ ] real Problem Bank
+[ ] assignment_problem links
+[ ] ordering
+[ ] freeze after submission
+
+STUDENT
+[ ] My Courses
+[ ] assignment access
+[ ] problem access
+[ ] submission
+[ ] result
+[ ] history
+[ ] analytics
+[ ] progress
+
+SUBMISSIONS
+[ ] assigned submission has assignment_id
+[ ] independent submission has NULL assignment_id
+[ ] identity cannot be spoofed
+[ ] assignment membership enforced
+[ ] persisted result
+[ ] instructor submission review
+
+ANALYTICS
+[ ] real values
+[ ] latest-attempt policy
+[ ] attempt counts
+[ ] completion
+[ ] score distribution
+[ ] highest
+[ ] lowest
+[ ] dimension averages
+[ ] independent practice excluded
+
+INSTRUCTOR
+[ ] own courses only
+[ ] own students only
+[ ] own assignments only
+[ ] student progress
+[ ] submission review
+[ ] reports
+[ ] CSV export
+
+SIMILARITY
+[ ] real data if available
+[ ] no fabricated alerts
+[ ] honest empty state
+
+DUE DATE
+[ ] backend calculates on-time/late
+[ ] UI displays status
+[ ] policy documented
+
+SECURITY
+[ ] Instructor A cannot access B
+[ ] Instructor B cannot access A
+[ ] Student A cannot access B
+[ ] unauthorized APIs rejected
+[ ] identity spoofing rejected
+[ ] secrets protected
+
+FRONTEND
+[ ] no crashes
+[ ] loading states
+[ ] error states
+[ ] empty states
+[ ] charts safe
+[ ] refresh works
+[ ] logout works
+[ ] account switching works
+[ ] no live mock data
+
+TESTING
+[ ] full backend suite
+[ ] stale execution test fixed
+[ ] frontend build
+[ ] frontend lint checked
+[ ] browser E2E
+[ ] database persistence
+[ ] security tests
+[ ] real submission
+[ ] real analytics
+[ ] Groq verified OR unavailable explicitly documented
+
+============================================================
+# 39. VERY IMPORTANT — DO NOT STOP EARLY
+============================================================
+
+Do not stop after:
+
+- fixing one import
+- getting pytest to pass
+- getting npm build to pass
+- implementing a UI
+- getting an API 200
+- creating a database row
+
+Continue through the entire workflow.
+
+The final objective is:
+
+React
+  ↕
+FastAPI
+  ↕
+PostgreSQL
+  ↕
+AI Assessment Pipeline
+
+with:
+
+Authentication
+Authorization
+Persistence
+Assignments
+Submissions
+Analytics
+Reports
+Independent Practice
+Security
+Frontend synchronization
+AI assessment
+
+all working together.
+
+============================================================
+# 40. FINAL REPORT
+============================================================
+
+At the very end, provide EXACTLY these sections:
+
+## 1. CURRENT STATE BEFORE YOUR WORK
+
+Explain what was already implemented.
+
+## 2. CHANGES YOU MADE
+
+List every major change and important files modified.
+
+## 3. DATABASE CHANGES
+
+Explain migrations/schema changes.
+
+## 4. AUTHENTICATION
+
+Explain login/session/token/authorization.
+
+## 5. INSTRUCTOR WORKFLOW
+
+Explain:
+
+Instructor
+→ Course
+→ Enrollment
+→ Assignment
+→ Problem
+→ Submission
+→ Analytics
+
+## 6. STUDENT WORKFLOW
+
+Explain:
+
+Student
+→ My Courses
+→ Assignment
+→ Problem
+→ Submission
+→ Assessment
+→ Result
+
+## 7. INDEPENDENT PRACTICE
+
+Explain:
+
+assignment_id = NULL
+
+and exactly how it is excluded from instructor analytics.
+
+## 8. ANALYTICS
+
+Explain exactly how:
+
+- average
+- completion
+- latest attempt
+- attempts
+- score distribution
+- highest
+- lowest
+
+are calculated.
+
+## 9. TEST RESULTS
+
+Give actual commands and actual results.
+
+Example:
+
+pytest tests -q
+Result: 52 passed, 0 failed
+
+ONLY report numbers you actually obtained.
+
+## 10. BROWSER E2E RESULT
+
+Describe the exact browser workflow actually executed.
+
+## 11. SECURITY TEST RESULT
+
+Explain:
+
+- Instructor A vs Instructor B
+- Student A vs Student B
+- identity spoofing
+- unauthorized endpoints
+
+## 12. BUILD/LINT RESULT
+
+Give actual:
+
+npm run build
+npm run lint
+
+results.
+
+## 13. GROQ/AI RESULT
+
+State clearly whether real Groq execution was verified.
+
+If not:
+
+"Groq live execution could not be verified because provider credentials/access were unavailable."
+
+Do not fake this.
+
+## 14. REMAINING LIMITATIONS
+
+Be completely honest.
+
+List anything that remains incomplete or unverified.
+
+## 15. FINAL STATUS
+
+Use ONLY one:
+
+FULLY VERIFIED
+
+OR
+
+PARTIALLY VERIFIED — remaining issues listed above
+
+Do NOT say FULLY VERIFIED unless all critical acceptance criteria were actually tested.
+
+============================================================
+# FINAL INSTRUCTION
+============================================================
+
+START NOW.
+
+Do not merely tell me what you plan to do.
+
+First inspect the CURRENT repository.
+
+Then implement the remaining work.
+
+Then test it.
+
+Then fix failures.
+
+Then run the browser E2E.
+
+Then verify database persistence.
+
+Then verify security.
+
+Then verify frontend/backend synchronization.
+
+Then verify Groq if possible.
+
+Then produce the final evidence-based report.
+
+DO NOT fabricate anything.
+
+DO NOT restart the project.
+
+DO NOT destroy existing work.
+
+CONTINUE FROM THE CURRENT STATE.

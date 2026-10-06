@@ -5,6 +5,7 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/useAuth';
 import { Assignment } from '../../types';
 import { Modal } from '../common/Modal';
+import { DoubleConfirmDialog } from '../common/DoubleConfirmDialog';
 
 type ProblemOption = { id: string; title: string; difficulty: string; category?: string };
 
@@ -23,6 +24,7 @@ export const AssignmentsManagerView: React.FC = () => {
   const [problemsLoading, setProblemsLoading] = useState(true);
   const [problemLoadError, setProblemLoadError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<Assignment | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -174,7 +176,7 @@ export const AssignmentsManagerView: React.FC = () => {
                 </div>
                 <button title="Edit assignment" onClick={() => openEditModal(assignment)} className="rounded-md p-2 text-slate-600 hover:bg-slate-100 font-semibold text-xs border border-slate-200">Edit</button>
                 <button title="View assignment analytics" onClick={() => navigate(`/instructor/analytics?assignmentId=${assignment.id}`)} className="rounded-md p-2 text-slate-600 hover:bg-slate-100"><BarChart3 className="h-4 w-4" /></button>
-                <button title="Archive assignment" onClick={() => void deleteAssignment(assignment.id).catch(() => {})} className="rounded-md p-2 text-slate-600 hover:bg-rose-50 hover:text-rose-700"><Trash2 className="h-4 w-4" /></button>
+                <button title="Archive assignment" onClick={() => setArchiveTarget(assignment)} className="rounded-md p-2 text-slate-600 hover:bg-rose-50 hover:text-rose-700"><Trash2 className="h-4 w-4" /></button>
               </div>
             </article>
           ))}
@@ -227,6 +229,15 @@ export const AssignmentsManagerView: React.FC = () => {
           </footer>
         </form>
       </Modal>
+      <DoubleConfirmDialog
+        isOpen={Boolean(archiveTarget)}
+        title="Close this assignment?"
+        description={`${archiveTarget?.title} will be closed so students cannot continue submitting it. Existing submissions and scores will be kept.`}
+        actionLabel="close assignment"
+        busy={saving}
+        onClose={() => setArchiveTarget(null)}
+        onConfirm={async () => { if (!archiveTarget) return; setSaving(true); try { await deleteAssignment(archiveTarget.id); setArchiveTarget(null); } finally { setSaving(false); } }}
+      />
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Create coding assignment" subtitle="Choose a course and real Problem Bank entries" maxWidth="xl">
         <form onSubmit={createAssignment} className="space-y-4 text-sm">

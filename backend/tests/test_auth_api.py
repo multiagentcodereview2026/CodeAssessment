@@ -1,7 +1,7 @@
 import asyncio
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -14,10 +14,21 @@ from main import (
     get_authenticated_user,
     get_owned_assignment,
     get_owned_course,
+    get_problem,
     get_instructor_overview,
+    get_instructor_roster,
     get_submission,
     list_submissions,
     get_course_analytics,
+    list_instructor_similarity_cases,
+    update_instructor_similarity_case,
+    get_available_student_courses,
+    request_course_enrollment,
+    get_instructor_course_requests,
+    decide_course_request,
+    leave_student_course,
+    get_notifications,
+    mark_all_notifications_read,
     build_assignment_stats,
     build_course_stats,
     average_score,
@@ -27,13 +38,16 @@ from main import (
     get_student_course_assignments,
     get_student_courses,
     create_assignment,
+    create_instructor_problem,
+    list_instructor_problems,
+    enroll_student,
     login,
     logout,
     register,
     submit_and_evaluate_code,
     update_assignment,
 )
-from schemas import AssignmentCreate, AssignmentUpdate, CourseCreate, LoginRequest, RegisterRequest, SubmissionRequest
+from schemas import AssignmentCreate, AssignmentUpdate, CourseCreate, CourseUpdate, EnrollmentCreate, InstructorProblemCreate, CourseRequestCreate, LoginRequest, RegisterRequest, SubmissionRequest
 import main as main_module
 
 
@@ -290,6 +304,64 @@ def test_course_enrollment_scopes_student_course_and_assignment_views(db_session
     assert no_access.value.status_code == 404
 
 
+def test_enrolling_a_registered_student_makes_the_course_visible_in_my_courses(db_session):
+    instructor_user = add_account(
+        db_session,
+        username="instructor-1",
+        role="instructor",
+        password="valid-instructor-password",
+    )
+    student_user = add_account(
+        db_session,
+        username="student-1",
+        role="student",
+        password="valid-student-password",
+    )
+    course = models.Course(
+        course_code="CSE-201",
+        title="Algorithms",
+        instructor_id=instructor_user.instructor_profile.id,
+    )
+    db_session.add(course)
+    db_session.commit()
+
+    enrollment = enroll_student(
+        EnrollmentCreate(course_id=course.id, student_id="student-1"),
+        db_session,
+        instructor_user.instructor_profile,
+    )
+    visible_courses = get_student_courses(db_session, student_user.student_profile)
+
+    assert enrollment.student_id == "student-1"
+    assert [item.id for item in visible_courses] == [course.id]
+
+
+def test_unlinked_student_profile_cannot_be_enrolled(db_session):
+    instructor_user = add_account(
+        db_session,
+        username="instructor-1",
+        role="instructor",
+        password="valid-instructor-password",
+    )
+    db_session.add(models.Student(student_id="profile-only", name="Profile Only"))
+    course = models.Course(
+        course_code="CSE-202",
+        title="Data Structures",
+        instructor_id=instructor_user.instructor_profile.id,
+    )
+    db_session.add(course)
+    db_session.commit()
+
+    with pytest.raises(HTTPException) as rejected:
+        enroll_student(
+            EnrollmentCreate(course_id=course.id, student_id="profile-only"),
+            db_session,
+            instructor_user.instructor_profile,
+        )
+
+    assert rejected.value.status_code == 422
+
+
 def test_assignment_schema_rejects_empty_titles_empty_problems_and_duplicate_ids():
     assert AssignmentCreate(title="Task", course_id=1, problem_ids=["problem-1"]).title == "Task"
     invalid_payloads = [
@@ -310,6 +382,74 @@ def test_course_schema_rejects_blank_code_or_title():
     ):
         with pytest.raises(ValidationError):
             CourseCreate(**payload)
+
+
+def test_course_update_normalizes_text_and_rejects_blank_required_fields():
+    assert CourseUpdate(course_code=" CSE-101 ", title=" Intro ").model_dump(exclude_unset=True) == {
+        "course_code": "CSE-101",
+        "title": "Intro",
+    }
+    assert CourseUpdate(term="  ", description="  ").model_dump(exclude_unset=True) == {
+        "term": None,
+        "description": None,
+    }
+    for field in ("course_code", "title"):
+        with pytest.raises(ValidationError):
+            CourseUpdate(**{field: "   "})
+
+
+def test_instructor_question_is_saved_to_selected_course_with_private_cases(db_session):
+    instructor_user = add_account(db_session, username="instructor-1", role="instructor", password="valid-instructor-password")
+    other_instructor = add_account(db_session, username="instructor-2", role="instructor", password="other-instructor-password")
+    course = models.Course(course_code="CSE-401", title="Algorithms", instructor_id=instructor_user.instructor_profile.id)
+    other_course = models.Course(course_code="CSE-402", title="Other course", instructor_id=other_instructor.instructor_profile.id)
+    db_session.add_all([course, other_course])
+    db_session.commit()
+
+    payload = InstructorProblemCreate(
+        title="Rotate an array",
+        description="Rotate the input array by k positions.",
+        difficulty="Medium",
+        category="Arrays",
+        target_time_complexity="O(n)",
+        target_space_complexity="O(1)",
+        course_id=course.id,
+        test_cases=[
+            {"input": "[1,2,3], 1", "expected_output": "[3,1,2]", "is_hidden": False},
+            {"input": "[] , 0", "expected_output": "[]", "is_hidden": True},
+        ],
+    )
+    created = create_instructor_problem(payload, db_session, instructor_user.instructor_profile)
+    linked_assignment = db_session.query(models.Assignment).filter_by(id=created["assignment_id"]).one()
+    saved_problem = db_session.get(models.Problem, created["id"])
+    saved_cases = db_session.query(models.ProblemTestCase).filter_by(problem_id=created["id"]).order_by(models.ProblemTestCase.position).all()
+
+    assert linked_assignment.course_id == course.id
+    assert db_session.query(models.AssignmentProblem).filter_by(assignment_id=linked_assignment.id, problem_id=created["id"]).count() == 1
+    assert [case.visibility for case in saved_cases] == ["PUBLIC", "HIDDEN"]
+    assert len(created["test_cases"]) == 2
+    assert saved_problem.description == payload.description
+    assert any(problem["id"] == created["id"] and problem["course_code"] == "CSE-401"
+               for problem in list_instructor_problems(db_session, instructor_user))
+    assert get_problem(created["id"], db_session, instructor_user)["assignment_id"] == linked_assignment.id
+
+    student_user = add_account(db_session, username="student-1", role="student", password="valid-student-password")
+    db_session.add(models.Enrollment(student_id=student_user.student_profile.student_id, course_id=course.id, is_active=True))
+    db_session.commit()
+    student_questions = list_instructor_problems(db_session, student_user)
+    student_question = next(problem for problem in student_questions if problem["id"] == created["id"])
+    assert len(student_question["test_cases"]) == 1
+    assert student_question["test_cases"][0]["is_hidden"] is False
+    assert len(get_problem(created["id"], db_session, student_user)["test_cases"]) == 1
+    stranger = add_account(db_session, username="student-2", role="student", password="valid-student-password")
+    with pytest.raises(HTTPException) as outside_course:
+        get_problem(created["id"], db_session, stranger)
+    assert outside_course.value.status_code == 404
+
+    payload.course_id = other_course.id
+    with pytest.raises(HTTPException) as wrong_owner:
+        create_instructor_problem(payload, db_session, instructor_user.instructor_profile)
+    assert wrong_owner.value.status_code == 404
 
 
 def test_assignment_create_persists_ordered_links_and_rejects_partial_invalid_create(db_session):
@@ -570,6 +710,156 @@ def test_instructor_overview_uses_latest_owned_assignment_attempts_only(db_sessi
     assert analytics["total_submissions"] == 2
     assert analytics["completion_rate"] == 100.0
     assert analytics["avg_score"] == 90
+
+
+def test_live_roster_uses_active_owned_enrollments_and_assessment_data(db_session):
+    instructor_user = add_account(db_session, username="instructor-1", role="instructor", password="instructor-password")
+    other_instructor = add_account(db_session, username="instructor-2", role="instructor", password="other-instructor-password")
+    student_user = add_account(db_session, username="student-1", role="student", password="student-password")
+    student = student_user.student_profile
+    own_course = models.Course(course_code="CSE-101", title="Owned", instructor_id=instructor_user.instructor_profile.id)
+    other_course = models.Course(course_code="CSE-102", title="Other", instructor_id=other_instructor.instructor_profile.id)
+    problem = models.Problem(id="arrays-1", title="Arrays", category="Arrays", description="Statement", examples=[], constraints=[], starter_codes={}, test_cases=[])
+    db_session.add_all([own_course, other_course, problem])
+    db_session.flush()
+    own_assignment = models.Assignment(title="Owned work", course_id=own_course.id, status="ACTIVE")
+    other_assignment = models.Assignment(title="Other work", course_id=other_course.id, status="ACTIVE")
+    db_session.add_all([own_assignment, other_assignment])
+    db_session.flush()
+    db_session.add_all([
+        models.Enrollment(student_id=student.student_id, course_id=own_course.id, is_active=True),
+        models.Enrollment(student_id=student.student_id, course_id=other_course.id, is_active=True),
+        models.Submission(submission_id="own-score", student_id=student.student_id, problem_id=problem.id, assignment_id=own_assignment.id, language="python", code="", status="EVALUATED", overall_score=45),
+        models.Submission(submission_id="other-score", student_id=student.student_id, problem_id=problem.id, assignment_id=other_assignment.id, language="python", code="", status="EVALUATED", overall_score=100),
+    ])
+    db_session.commit()
+
+    roster = get_instructor_roster(db_session, instructor_user.instructor_profile)
+
+    assert len(roster) == 1
+    assert roster[0].id == student.student_id
+    assert roster[0].submissions_count == 1
+    assert roster[0].avg_score == 45
+    assert roster[0].weak_topics == ["Arrays"]
+    assert roster[0].status == "At Risk"
+
+
+def test_similarity_review_uses_owned_course_pairs_and_persists_actions(db_session):
+    instructor_user = add_account(db_session, username="similarity-instructor", role="instructor", password="instructor-password")
+    student_a_user = add_account(db_session, username="similarity-student-a", role="student", password="student-password-a")
+    student_b_user = add_account(db_session, username="similarity-student-b", role="student", password="student-password-b")
+    course = models.Course(course_code="SIM-101", title="Similarity course", instructor_id=instructor_user.instructor_profile.id)
+    problem = models.Problem(id="similarity-problem", title="Pair Comparison", description="Task", examples=[], constraints=[], starter_codes={}, test_cases=[])
+    db_session.add_all([course, problem])
+    db_session.flush()
+    assignment = models.Assignment(title="Similarity task", course_id=course.id, status="ACTIVE")
+    db_session.add(assignment)
+    db_session.flush()
+    code = """def compute(values):
+    total = 0
+    for value in values:
+        if value > 3:
+            total += value * 2
+        else:
+            total += value - 1
+    return total
+"""
+    db_session.add_all([
+        models.Submission(submission_id="SIM-A", student_id=student_a_user.student_profile.student_id, problem_id=problem.id, assignment_id=assignment.id, language="python", code=code, status="EVALUATED", overall_score=90),
+        models.Submission(submission_id="SIM-B", student_id=student_b_user.student_profile.student_id, problem_id=problem.id, assignment_id=assignment.id, language="python", code=code, status="EVALUATED", overall_score=88),
+    ])
+    db_session.commit()
+
+    response = list_instructor_similarity_cases(db_session, instructor_user.instructor_profile)
+    assert response["total_cases"] == 1
+    case = response["cases"][0]
+    assert case["similarityPercentage"] == 100
+    assert case["studentA"]["name"] != case["studentB"]["name"]
+
+    updated = update_instructor_similarity_case(case["id"], "request-review", db_session, instructor_user.instructor_profile)
+    assert updated["status"] == "review_requested"
+    refreshed = list_instructor_similarity_cases(db_session, instructor_user.instructor_profile)
+    assert refreshed["cases"][0]["reviewStatus"] == "review_requested"
+
+    update_instructor_similarity_case(case["id"], "dismiss", db_session, instructor_user.instructor_profile)
+    assert list_instructor_similarity_cases(db_session, instructor_user.instructor_profile)["total_cases"] == 0
+
+
+def test_student_course_request_approval_leave_and_notifications(db_session):
+    instructor_user = add_account(db_session, username="course-owner", role="instructor", password="instructor-password")
+    student_user = add_account(db_session, username="course-joiner", role="student", password="student-password")
+    course = models.Course(course_code="JOIN-101", title="Joining Flow", instructor_id=instructor_user.instructor_profile.id)
+    db_session.add(course)
+    db_session.commit()
+
+    available = get_available_student_courses(db_session, student_user.student_profile)
+    assert available[0].enrollment_status == "AVAILABLE"
+    request_response = Response()
+    requested = request_course_enrollment(
+        CourseRequestCreate(course_id=course.id), request_response, db_session, student_user.student_profile
+    )
+    assert requested.status == "PENDING"
+    assert request_response.status_code == 200
+    assert get_available_student_courses(db_session, student_user.student_profile)[0].enrollment_status == "PENDING"
+    assert len(get_instructor_course_requests(db_session, instructor_user.instructor_profile, course.id)) == 1
+
+    instructor_notices = get_notifications(db_session, instructor_user)
+    assert len(instructor_notices) == 1
+    assert instructor_notices[0].event_type == "course_join_request"
+    approved = decide_course_request(requested.id, "approve", db_session, instructor_user.instructor_profile)
+    assert approved.status == "APPROVED"
+    assert get_available_student_courses(db_session, student_user.student_profile)[0].enrollment_status == "ENROLLED"
+    assert get_notifications(db_session, student_user)[0].event_type == "course_request_decision"
+
+    leave_student_course(course.id, db_session, student_user.student_profile)
+    assert get_available_student_courses(db_session, student_user.student_profile)[0].enrollment_status == "AVAILABLE"
+    assert any(notice.event_type == "student_left_course" for notice in get_notifications(db_session, instructor_user))
+
+    mark_all_notifications_read(db_session, instructor_user)
+    assert not any(notice.is_read is False for notice in get_notifications(db_session, instructor_user))
+
+
+def test_course_request_rejection_can_be_resubmitted_and_is_owner_scoped(db_session):
+    instructor_user = add_account(db_session, username="course-owner-2", role="instructor", password="instructor-password")
+    other_instructor_user = add_account(db_session, username="course-owner-3", role="instructor", password="instructor-password")
+    student_user = add_account(db_session, username="course-joiner-2", role="student", password="student-password")
+    course = models.Course(course_code="JOIN-102", title="Request Review", instructor_id=instructor_user.instructor_profile.id)
+    other_course = models.Course(course_code="JOIN-103", title="Other Course", instructor_id=other_instructor_user.instructor_profile.id)
+    db_session.add_all([course, other_course])
+    db_session.commit()
+
+    response = Response()
+    first_request = request_course_enrollment(CourseRequestCreate(course_id=course.id), response, db_session, student_user.student_profile)
+    assert first_request.status == "PENDING"
+    with pytest.raises(HTTPException) as wrong_owner:
+        decide_course_request(first_request.id, "approve", db_session, other_instructor_user.instructor_profile)
+    assert wrong_owner.value.status_code == 404
+
+    rejected = decide_course_request(first_request.id, "reject", db_session, instructor_user.instructor_profile)
+    assert rejected.status == "REJECTED"
+    assert get_available_student_courses(db_session, student_user.student_profile)[0].enrollment_status == "AVAILABLE"
+
+    second_request = request_course_enrollment(CourseRequestCreate(course_id=course.id), Response(), db_session, student_user.student_profile)
+    assert second_request.id != first_request.id
+    assert second_request.status == "PENDING"
+
+
+def test_notification_read_state_is_private_to_recipient(db_session):
+    instructor_user = add_account(db_session, username="notice-owner", role="instructor", password="instructor-password")
+    student_user = add_account(db_session, username="notice-student", role="student", password="student-password")
+    notice = models.Notification(
+        recipient_user_id=instructor_user.id,
+        event_type="course_join_request",
+        title="Request",
+        message="A student requested access.",
+    )
+    db_session.add(notice)
+    db_session.commit()
+
+    with pytest.raises(HTTPException) as private_notice:
+        main_module.mark_notification_read(notice.id, db_session, student_user)
+    assert private_notice.value.status_code == 404
+    assert get_notifications(db_session, instructor_user)[0].is_read is False
 
 
 def test_submission_history_is_private_and_zero_score_is_not_treated_as_missing(db_session):

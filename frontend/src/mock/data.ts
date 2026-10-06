@@ -515,7 +515,7 @@ public:
     correctness: {
       score: 20,
       max: 25,
-      notes: 'All public test cases passed. Edge case with duplicate negative keys passed without memory corruption.'
+      notes: 'All test cases passed. Edge case with duplicate negative keys passed without memory corruption.'
     },
     timeComplexity: {
       score: 18,
