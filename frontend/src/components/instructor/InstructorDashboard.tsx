@@ -227,7 +227,7 @@ export const InstructorDashboard: React.FC = () => {
             {topSimilarityAlert ? `${topSimilarityAlert.similarityPercentage}% AST Match` : 'No active flags'}
           </h3>
           <p className="mt-1 text-xs text-slate-500 leading-relaxed">
-            {topSimilarityAlert
+            {topSimilarityAlert && topSimilarityAlert.studentA && topSimilarityAlert.studentB
               ? `${topSimilarityAlert.studentA.name} and ${topSimilarityAlert.studentB.name} need side-by-side review.`
               : 'Reviewed alerts disappear once marked resolved.'}
           </p>
@@ -322,7 +322,7 @@ export const InstructorDashboard: React.FC = () => {
                   <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
                     <div
                       className="bg-emerald-600 h-full rounded-full transition-all duration-500"
-                      style={{ width: `${(asg.submittedCount / asg.totalCount) * 100}%` }}
+                      style={{ width: `${asg.totalCount && asg.totalCount > 0 ? Math.min(100, Math.round((asg.submittedCount / asg.totalCount) * 100)) : 0}%` }}
                     />
                   </div>
                 </div>

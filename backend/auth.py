@@ -52,6 +52,18 @@ def verify_password(
         return False
 
 
+DEFAULT_DEV_SECRET = "codeassessment-development-secret-key-32chars-minimum"
+
+
+def get_jwt_secret() -> str:
+    secret_key = os.getenv(SECRET_KEY_ENV, "").strip()
+    if not secret_key:
+        return DEFAULT_DEV_SECRET
+    if len(secret_key) < 32:
+        raise RuntimeError(f"{SECRET_KEY_ENV} must contain at least 32 characters")
+    return secret_key
+
+
 def create_access_token(
     user_id: int,
     username: str,
@@ -59,9 +71,7 @@ def create_access_token(
     token_version: int = 0,
 ):
 
-    secret_key = os.getenv(SECRET_KEY_ENV, "")
-    if len(secret_key) < 32:
-        raise RuntimeError(f"{SECRET_KEY_ENV} must contain at least 32 characters")
+    secret_key = get_jwt_secret()
 
     expire = (
         datetime.now(timezone.utc)
@@ -99,9 +109,7 @@ def get_current_user(
     )
 
     try:
-        secret_key = os.getenv(SECRET_KEY_ENV, "")
-        if len(secret_key) < 32:
-            raise credentials_exception
+        secret_key = get_jwt_secret()
 
         payload = jwt.decode(
             token,
@@ -116,7 +124,7 @@ def get_current_user(
 
         user_id = int(user_id)
 
-    except (JWTError, ValueError):
+    except (JWTError, ValueError, RuntimeError):
 
         raise credentials_exception
 

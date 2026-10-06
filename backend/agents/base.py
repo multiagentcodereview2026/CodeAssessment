@@ -1,3 +1,4 @@
+import os
 import json
 import logging
 import re
@@ -17,20 +18,25 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# Initialize Groq LLM
-groq_api_key = settings.GROQ_API_KEY
 
-try:
-    from langchain_groq import ChatGroq
-    llm = ChatGroq(
-        model_name=settings.GROQ_MODEL,
-        temperature=0.0,
-        groq_api_key=groq_api_key,
-        model_kwargs={"response_format": {"type": "json_object"}}
-    )
-except Exception as e:
-    logger.warning(f"Could not initialize ChatGroq ({e}). Mocking LLM for offline testing.")
-    llm = None
+def get_llm():
+    """Dynamically get or initialize ChatGroq instance using active credentials."""
+    api_key = os.getenv("GROQ_API_KEY", "").strip() or (settings.GROQ_API_KEY or "").strip()
+    if not api_key:
+        return None
+    try:
+        from langchain_groq import ChatGroq
+        model = os.getenv("GROQ_MODEL", "").strip() or settings.GROQ_MODEL or "llama-3.3-70b-versatile"
+        return ChatGroq(
+            model_name=model,
+            temperature=0.0,
+            groq_api_key=api_key,
+            model_kwargs={"response_format": {"type": "json_object"}}
+        )
+    except Exception as e:
+        logger.warning(f"Could not initialize ChatGroq: {e}")
+        return None
+
 
 def load_prompt(agent_name: str) -> str:
     """Load agent system prompt from text file."""
@@ -39,6 +45,7 @@ def load_prompt(agent_name: str) -> str:
         return prompt_path.read_text(encoding="utf-8")
     return f"You are the {agent_name} agent. Return valid JSON."
 
+
 def sanitize_code_comments(code: str) -> str:
     """Sanitize prompt injection attempts in student code comments."""
     if not code:
@@ -46,6 +53,7 @@ def sanitize_code_comments(code: str) -> str:
     pattern = r"(?i)(ignore\s+previous|system\s+prompt|admin\s+override|give\s+100)"
     sanitized = re.sub(pattern, "[FILTERED_DIRECTIVE]", code)
     return sanitized
+
 
 def extract_clean_json(text: str) -> str:
     """Extract clean JSON string, stripping thinking tags and markdown."""
@@ -61,10 +69,12 @@ def extract_clean_json(text: str) -> str:
         
     return text.strip()
 
+
 async def invoke_agent(system_prompt: str, user_payload: Dict[str, Any], schema: type[BaseModel], fallback_dict: Dict[str, Any]) -> Dict[str, Any]:
     """Invoke Groq LLM with strict JSON validation and fallback handling."""
-    if not llm or not settings.GROQ_API_KEY:
-        logger.info("Using deterministic fallback logic (No GROQ_API_KEY provided)")
+    llm = get_llm()
+    if not llm:
+        logger.info("Using deterministic fallback logic (No active GROQ_API_KEY)")
         return fallback_dict
 
     try:
@@ -80,3 +90,4 @@ async def invoke_agent(system_prompt: str, user_payload: Dict[str, Any], schema:
     except Exception as e:
         logger.error(f"Error invoking agent with Groq: {e}. Utilizing graceful fallback.")
         return fallback_dict
+
