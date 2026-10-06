@@ -15,8 +15,8 @@ _ALLOWED_SHORT = {"i", "j", "k", "n", "m", "x", "y", "u", "v", "r", "c"}
 _GENERIC_NAMES = {"tmp", "temp", "data", "val", "value", "obj", "res", "result", "var"}
 
 
-def _finding(category: str, message: str, severity: str = "minor", penalty: int = 1) -> dict[str, Any]:
-    return {"category": category, "message": message, "severity": severity, "penalty": penalty}
+def _finding(category: str, message: str, severity: str = "minor", penalty: int = 1, line: int | None = None) -> dict[str, Any]:
+    return {"category": category, "message": message, "severity": severity, "penalty": penalty, "line": line}
 
 
 def _score(issues: list[dict[str, Any]], category: str) -> float:
@@ -42,7 +42,7 @@ def _python_metrics(source: str) -> tuple[list[dict[str, Any]], list[dict[str, A
                 args = [a.arg for a in node.args.args]
                 for name in args:
                     if len(name) == 1 and name not in _ALLOWED_SHORT:
-                        naming.append(_finding("naming", f"Parameter `{name}` is too cryptic."))
+                        naming.append(_finding("naming", f"Parameter `{name}` is too cryptic.", line=node.lineno))
                 lines = (getattr(node, "end_lineno", node.lineno) - node.lineno + 1)
                 if lines > 120:
                     readability.append(_finding("readability", f"Function `{node.name}` is very long.", "major", 5))
@@ -52,9 +52,9 @@ def _python_metrics(source: str) -> tuple[list[dict[str, Any]], list[dict[str, A
                     modularity.append(_finding("modularity", f"Function `{node.name}` has many parameters.", "moderate", 3))
             elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
                 if len(node.id) == 1 and node.id not in _ALLOWED_SHORT:
-                    naming.append(_finding("naming", f"Variable `{node.id}` is cryptic."))
+                    naming.append(_finding("naming", f"Variable `{node.id}` is cryptic.", line=node.lineno))
                 elif node.id.lower() in _GENERIC_NAMES:
-                    naming.append(_finding("naming", f"Variable `{node.id}` is generic."))
+                    naming.append(_finding("naming", f"Variable `{node.id}` is generic.", line=node.lineno))
             elif isinstance(node, (ast.For, ast.While, ast.If, ast.Try)):
                 depth = 0
                 parent = getattr(node, "_style_parent", None)
@@ -63,37 +63,42 @@ def _python_metrics(source: str) -> tuple[list[dict[str, Any]], list[dict[str, A
                         depth += 1
                     parent = getattr(parent, "_style_parent", None)
                 if depth >= 4:
-                    readability.append(_finding("readability", "Control flow is deeply nested.", "moderate", 3))
+                    readability.append(_finding("readability", "Control flow is deeply nested.", "moderate", 3, node.lineno))
     lines = source.splitlines()
     if any(len(line) > 120 for line in lines):
-        readability.append(_finding("readability", "One or more lines exceed 120 characters.", "minor", 1))
+        line = next((i for i, text in enumerate(lines, 1) if len(text) > 120), None)
+        readability.append(_finding("readability", "One or more lines exceed 120 characters.", "minor", 1, line))
     if source.strip() and not re.search(r"(^|\n)\s*#", source):
-        readability.append(_finding("readability", "No explanatory comments were found.", "minor", 1))
+        readability.append(_finding("readability", "No explanatory comments were found.", "minor", 1, 1))
     if tree is not None and sum(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) for n in ast.walk(tree)) == 1:
         functions = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
         if functions and (getattr(functions[0], "end_lineno", 0) - functions[0].lineno) > 40:
-            modularity.append(_finding("modularity", "A large implementation could be decomposed into helpers.", "minor", 1))
+            modularity.append(_finding("modularity", "A large implementation could be decomposed into helpers.", "minor", 1, functions[0].lineno))
     if re.search(r"\b(?:TODO|FIXME)\b", source, re.I):
-        maintainability.append(_finding("maintainability", "TODO/FIXME markers remain in the submission.", "minor", 1))
+        line = next((i for i, text in enumerate(lines, 1) if re.search(r"\b(?:TODO|FIXME)\b", text, re.I)), None)
+        maintainability.append(_finding("maintainability", "TODO/FIXME markers remain in the submission.", "minor", 1, line))
     return naming, readability, modularity, maintainability
 
 
 def _generic_metrics(source: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     naming, readability, modularity, maintainability = [], [], [], []
-    for name in re.findall(r"\b(?:int|long|double|string|auto|var|let|const)\s+([A-Za-z_]\w*)", source):
+    for match in re.finditer(r"\b(?:int|long|double|string|auto|var|let|const)\s+([A-Za-z_]\w*)", source):
+        name = match.group(1)
+        line = source.count("\n", 0, match.start()) + 1
         if len(name) == 1 and name not in _ALLOWED_SHORT:
-            naming.append(_finding("naming", f"Variable `{name}` is cryptic."))
+            naming.append(_finding("naming", f"Variable `{name}` is cryptic.", line=line))
         elif name.lower() in _GENERIC_NAMES:
-            naming.append(_finding("naming", f"Variable `{name}` is generic."))
+            naming.append(_finding("naming", f"Variable `{name}` is generic.", line=line))
     if any(len(line) > 120 for line in source.splitlines()):
-        readability.append(_finding("readability", "One or more lines exceed 120 characters.", "minor", 1))
+        line = next((i for i, text in enumerate(source.splitlines(), 1) if len(text) > 120), None)
+        readability.append(_finding("readability", "One or more lines exceed 120 characters.", "minor", 1, line))
     if source.strip() and not re.search(r"(^|\n)\s*(//|/\*|\*)", source):
-        readability.append(_finding("readability", "No explanatory comments were found.", "minor", 1))
+        readability.append(_finding("readability", "No explanatory comments were found.", "minor", 1, 1))
     depth = max(((len(line) - len(line.lstrip(" \t"))) // 4 for line in source.splitlines()), default=0)
     if depth >= 5:
-        readability.append(_finding("readability", "Control flow appears deeply nested.", "moderate", 3))
+        readability.append(_finding("readability", "Control flow appears deeply nested.", "moderate", 3, 1))
     if len(re.findall(r"\b(?:void|int|bool|string|auto)\s+\w+\s*\([^)]*\)", source)) == 1 and source.count("\n") > 60:
-        modularity.append(_finding("modularity", "A large implementation could be decomposed into helpers.", "minor", 1))
+        modularity.append(_finding("modularity", "A large implementation could be decomposed into helpers.", "minor", 1, 1))
     return naming, readability, modularity, maintainability
 
 
