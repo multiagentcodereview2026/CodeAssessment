@@ -26,6 +26,8 @@ try:
         model_name=settings.GROQ_MODEL,
         temperature=0.0,
         groq_api_key=groq_api_key,
+        timeout=settings.GROQ_TIMEOUT_SECONDS,
+        max_retries=settings.GROQ_MAX_RETRIES,
         model_kwargs={"response_format": {"type": "json_object"}}
     )
 except Exception as e:
@@ -78,5 +80,8 @@ async def invoke_agent(system_prompt: str, user_payload: Dict[str, Any], schema:
         validated = schema.model_validate_json(content)
         return validated.model_dump()
     except Exception as e:
-        logger.error(f"Error invoking agent with Groq: {e}. Utilizing graceful fallback.")
+        # AI feedback is optional.  Preserve deterministic AST/execution
+        # results and return immediately instead of retrying a rate-limited
+        # provider request until the whole submission times out.
+        logger.warning(f"Groq unavailable; using deterministic fallback: {e}")
         return fallback_dict
