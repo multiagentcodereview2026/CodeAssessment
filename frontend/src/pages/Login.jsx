@@ -23,17 +23,31 @@ const Login = () => {
     setError('');
     setSuccess('');
 
+    const trimmedUsername = username.trim();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedUsername) {
+      setError('Username is required.');
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       if (mode === 'register') {
-        if (!email) {
-          setError('Email is required for registration.');
+        if (!trimmedEmail || !trimmedEmail.includes('@')) {
+          setError('A valid email containing "@" is required for registration.');
           setIsSubmitting(false);
           return;
         }
-        await register(username, email, password, role);
+        if (password.length < 12) {
+          setError('Password must be at least 12 characters long.');
+          setIsSubmitting(false);
+          return;
+        }
+        await register(trimmedUsername, trimmedEmail, password, role);
         setSuccess('Account created! Signing you in...');
         // Auto-login after registration
-        const user = await login(username, password, role);
+        const user = await login(trimmedUsername, password, role);
         setTimeout(() => {
           if (role === 'instructor' || user.role === 'instructor') {
             navigate('/instructor/dashboard');
@@ -42,7 +56,7 @@ const Login = () => {
           }
         }, 500);
       } else {
-        const user = await login(username, password, role);
+        const user = await login(trimmedUsername, password, role);
         if (role === 'instructor' || user.role === 'instructor') {
           navigate('/instructor/dashboard');
         } else {
@@ -243,14 +257,19 @@ const Login = () => {
             </AnimatePresence>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">Password</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide">Password</label>
+                {mode === 'register' && (
+                  <span className="text-[11px] text-slate-400 font-medium">Min 12 characters</span>
+                )}
+              </div>
               <div className="relative">
                 <Lock className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
+                  placeholder={mode === 'register' ? "Enter password (min 12 chars)" : "Enter password"}
                   required
                   className="w-full pl-10 pr-12 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 transition-all"
                 />

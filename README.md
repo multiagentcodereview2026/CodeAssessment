@@ -66,7 +66,7 @@ JWT signing requires `JWT_SECRET_KEY` with at least 32 characters. Instructor AP
 
 ### 3. Write code and run public tests
 
-The Monaco workspace collects the language and source. **Run** calls `/api/submissions/run`. When a problem ID is supplied, the backend loads its public cases; otherwise the endpoint can accept supplied cases for a custom run.
+The  Monaco workspace collects the language and source. **Run** calls `/api/submissions/run`. When a problem ID is supplied, the backend loads its public cases; otherwise the endpoint can accept supplied cases for a custom run.
 
 The backend execution client prepares supported solution wrappers, calls the execution engine, and returns compilation status, verdicts, output, errors, timing, and case counts. This path does not call the assessment graph or create a saved submission.
 

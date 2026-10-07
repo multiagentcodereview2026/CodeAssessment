@@ -194,15 +194,101 @@ public:
     }
 ]
 
+from auth import hash_password
+
+DEFAULT_DEV_PASSWORD = "password123456"
+
 def seed_database():
     Base.metadata.create_all(bind=engine)
     db: Session = SessionLocal()
     try:
-        # Seed Students
+        # Seed Students & their User login accounts
         for s_data in INITIAL_STUDENTS:
-            existing = db.query(models.Student).filter(models.Student.student_id == s_data["student_id"]).first()
-            if not existing:
-                db.add(models.Student(**s_data))
+            user = db.query(models.User).filter(models.User.username == s_data["student_id"]).first()
+            if not user:
+                user = models.User(
+                    username=s_data["student_id"],
+                    email=s_data["email"],
+                    full_name=s_data["name"],
+                    hashed_password=hash_password(DEFAULT_DEV_PASSWORD),
+                    role="student",
+                    is_active=True,
+                )
+                db.add(user)
+                db.flush()
+
+            existing_student = db.query(models.Student).filter(models.Student.student_id == s_data["student_id"]).first()
+            if not existing_student:
+                db.add(models.Student(
+                    student_id=s_data["student_id"],
+                    name=s_data["name"],
+                    email=s_data["email"],
+                    xp=s_data["xp"],
+                    streak_days=s_data["streak_days"],
+                    user_id=user.id,
+                ))
+            elif existing_student.user_id is None:
+                existing_student.user_id = user.id
+
+        # Seed Default Instructor Account
+        instructor_user = db.query(models.User).filter(models.User.username == "instructor").first()
+        if not instructor_user:
+            instructor_user = models.User(
+                username="instructor",
+                email="instructor@kmit.in",
+                full_name="Faculty Instructor",
+                hashed_password=hash_password(DEFAULT_DEV_PASSWORD),
+                role="instructor",
+                is_active=True,
+            )
+            db.add(instructor_user)
+            db.flush()
+
+        if instructor_user.instructor_profile is None:
+            instructor_profile = models.Instructor(user_id=instructor_user.id, department="Computer Science")
+            db.add(instructor_profile)
+            db.flush()
+        else:
+            instructor_profile = instructor_user.instructor_profile
+
+        # Seed Course & Assignments for Instructor
+        course = db.query(models.Course).filter(models.Course.course_code == "CS-201").first()
+        if not course:
+            course = models.Course(
+                course_code="CS-201",
+                title="Data Structures & Algorithms",
+                description="Core algorithmic problems, complexity analysis, and coding assignments.",
+                instructor_id=instructor_profile.id,
+                term="Spring 2026",
+            )
+            db.add(course)
+            db.flush()
+
+        # Enroll students in the course
+        for s_data in INITIAL_STUDENTS:
+            student_rec = db.query(models.Student).filter(models.Student.student_id == s_data["student_id"]).first()
+            if student_rec:
+                enrollment = db.query(models.Enrollment).filter(
+                    models.Enrollment.course_id == course.id,
+                    models.Enrollment.student_id == student_rec.student_id,
+                ).first()
+                if not enrollment:
+                    db.add(models.Enrollment(course_id=course.id, student_id=student_rec.student_id))
+
+        # Create sample assignment
+        asg = db.query(models.Assignment).filter(
+            models.Assignment.course_id == course.id,
+            models.Assignment.title == "Assignment 1: Algorithms & Complexity"
+        ).first()
+        if not asg:
+            asg = models.Assignment(
+                title="Assignment 1: Algorithms & Complexity",
+                description="Solve Two Sum and Binary Search with optimal time and space complexity.",
+                course_id=course.id,
+                status="ACTIVE",
+            )
+            db.add(asg)
+            db.flush()
 
         # Seed Problems
         for p_data in INITIAL_PROBLEMS:
@@ -213,8 +299,22 @@ def seed_database():
                 for k, v in p_data.items():
                     setattr(existing, k, v)
 
+        db.flush()
+
+        # Link problem to assignment
+        p_link = db.query(models.AssignmentProblem).filter(
+            models.AssignmentProblem.assignment_id == asg.id,
+            models.AssignmentProblem.problem_id == "two-sum"
+        ).first()
+        if not p_link:
+            db.add(models.AssignmentProblem(assignment_id=asg.id, problem_id="two-sum", position=1))
+
+
         db.commit()
-        print("Database seeded successfully with Problems and Students!")
+        print("Database seeded successfully with Problems, Students, and User accounts!")
+        print(f"Default login credentials:")
+        print(f"  Student:    Username = 24BD1A058Z (or other roll numbers) / Password = {DEFAULT_DEV_PASSWORD}")
+        print(f"  Instructor: Username = instructor / Password = {DEFAULT_DEV_PASSWORD}")
     except Exception as e:
         print(f"Error seeding database: {e}")
         db.rollback()
@@ -223,3 +323,4 @@ def seed_database():
 
 if __name__ == "__main__":
     seed_database()
+

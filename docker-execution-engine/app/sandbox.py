@@ -391,7 +391,19 @@ def execute_in_sandbox(
             )
             elapsed_ms = int((time.monotonic() - start_time) * 1000)
         else:
-            # Local Sandboxed Fallback
+            # Local Process Fallback (strictly guarded to prevent unconfined host code execution)
+            allow_unsafe = os.getenv("ALLOW_UNSAFE_HOST_EXECUTION", "false").lower() == "true"
+            if not allow_unsafe:
+                return SandboxRunResult(
+                    status=VERDICT_SYSTEM_ERROR,
+                    runtime_ms=0,
+                    memory_kb=0,
+                    compile_success=False,
+                    compile_stderr="Docker execution sandbox is unavailable and unconfined host execution is disabled.",
+                    actual_output=None,
+                    stderr="Docker execution sandbox is unavailable and unconfined host execution is disabled."
+                )
+
             if lang_config.compile_cmd:
                 local_compile = list(lang_config.compile_cmd)
                 if shutil.which(local_compile[0]):
