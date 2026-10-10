@@ -11,6 +11,7 @@ class ComplexityAnalysis:
     status: str = "REVIEW_REQUIRED"
     signals: list[str] = field(default_factory=list)
     dynamic_measurements: list[dict[str, Any]] = field(default_factory=list)
+    evidence_quality: str = "none"
     explanation: str = ""
 
 
