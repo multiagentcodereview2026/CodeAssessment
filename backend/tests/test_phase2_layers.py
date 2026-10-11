@@ -114,3 +114,14 @@ def test_python_cyclic_index_placement_is_amortized_linear():
         "python",
     )
     assert result.time_complexity == "O(n)"
+
+
+def test_cpp_stdin_input_storage_is_not_auxiliary_space():
+    result = analyze_source(
+        "#include <vector>\n#include <iostream>\nusing namespace std;\n"
+        "int main(){ int n; cin >> n; vector<int> arr(n); "
+        "for(int i=0;i<n;i++) cin >> arr[i]; sort(arr.begin(),arr.end()); "
+        "cout << arr[n-1]; }",
+        "cpp",
+    )
+    assert result.space_complexity == "O(1)"

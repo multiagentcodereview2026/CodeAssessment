@@ -74,6 +74,13 @@ async def profile_submission(
             }
         )
 
+    # Benchmark execution order is not a contract; sort before comparing
+    # growth so dynamic evidence is deterministic.
+    measurements.sort(key=lambda row: row.get("input_size", 0))
+    valid_count = sum(
+        1 for row in measurements
+        if row.get("input_size", 0) > 0 and row.get("runtime_ms", 0) > 0
+    )
     estimated_time = _estimate_growth(measurements)
 
     if estimated_time is None:
@@ -82,6 +89,7 @@ async def profile_submission(
             method="dynamic",
             confidence=0.0,
             dynamic_measurements=measurements,
+            evidence_quality="insufficient",
             explanation=(
                 "Not enough valid benchmark measurements were available."
             ),
@@ -102,6 +110,7 @@ async def profile_submission(
         method="dynamic",
         status="ANALYZED",
         dynamic_measurements=measurements,
+        evidence_quality="strong" if valid_count >= 3 else "limited",
         explanation=(
             "Complexity was estimated from runtime and memory growth "
             "across controlled benchmark inputs."

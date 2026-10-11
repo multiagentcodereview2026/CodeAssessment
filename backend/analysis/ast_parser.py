@@ -1,7 +1,9 @@
 import re
 from typing import Dict, List, Optional, Set, Tuple, Any
-from .complexity_ir import ComplexityIR, LoopIR, RecursionIR, GraphIR
-from .pattern_library import classify_pattern
+from .complexity_ir import ComplexityIR, LoopIR, RecursionIR, GraphIR, ControlFlowIR
+from .pattern_library import classify_pattern, detect_semantic_patterns
+from .dependent_bounds import detect_dependent_bounds
+from .library_costs import detect_library_costs
 
 # Tree-sitter imports - handle gracefully if not available
 AST_AVAILABLE = False
@@ -54,6 +56,8 @@ class ASTComplexityAnalyzer:
             'python': ('tree_sitter_python', 'language'),
             'py': ('tree_sitter_python', 'language'),
             'java': ('tree_sitter_java', 'language'),
+            'javascript': ('tree_sitter_javascript', 'language'),
+            'js': ('tree_sitter_javascript', 'language'),
         }
 
         lang_key = self.language.lower().strip()
@@ -101,28 +105,47 @@ class ASTComplexityAnalyzer:
 
     def _ast_analysis(self) -> ComplexityIR:
         """AST-based analysis (when tree-sitter is available)."""
-        ir = ComplexityIR(language=self.language, source=self.source)
+        ir = ComplexityIR(
+            language=self.language,
+            source=self.source,
+            parser_backend="tree-sitter",
+        )
 
         try:
             # Extract features from AST
             ir.loop = self._extract_loop_features(self.tree.root_node)
             ir.recursion = self._extract_recursion_features(self.tree.root_node)
             ir.graph = self._extract_graph_features(self.tree.root_node)
+            ir.control_flow = self._extract_control_flow_features()
 
             # Extract additional algorithm patterns
             ir.has_heap_operations = self._detect_heap_operations()
             ir.has_matrix_bounds = self._detect_matrix_bounds()
             ir.has_dynamic_allocation = self._detect_dynamic_allocation()
+            ir.input_storage_only = self._detect_input_storage_only()
             ir.has_2d_allocation = self._detect_2d_allocation()
             ir.is_constant_lookup = self._detect_constant_lookup()
             ir.multiple_input_bounds = ir.loop.multiple_input_bounds
             ir.has_merged_both = self._detect_merged_both_inputs()
+            costs = detect_library_costs(self.source, self.language)
+            ir.library_costs = {
+                "sort": costs.sort,
+                "hash_average_constant": costs.hash_average_constant,
+                "heap_logarithmic": costs.heap_logarithmic,
+                "dynamic_append_amortized": costs.dynamic_append_amortized,
+            }
+            dependent = detect_dependent_bounds(self.source, self.language)
+            ir.loop.dependent_bounds = dependent.detected
+            ir.loop.dependent_relation = dependent.relation
+            ir.loop.dependent_sum_class = dependent.sum_class
             ir.algorithm_pattern = classify_pattern(ir).name
+            ir.semantic_patterns = detect_semantic_patterns(ir)
 
         except Exception:
             # If AST extraction fails, fall back to regex
             return self._regex_analysis()
 
+        self._populate_normalized_facts(ir)
         return ir
 
     def _regex_analysis(self) -> ComplexityIR:
@@ -130,7 +153,11 @@ class ASTComplexityAnalyzer:
         Fallback regex-based analysis when AST parsing fails or is unavailable.
         Enhanced version with comprehensive pattern detection.
         """
-        ir = ComplexityIR(language=self.language, source=self.source)
+        ir = ComplexityIR(
+            language=self.language,
+            source=self.source,
+            parser_backend="regex-fallback",
+        )
         src = self.source.lower()
 
         # === LOOP DETECTION ===
@@ -162,8 +189,19 @@ class ASTComplexityAnalyzer:
             sequential_pattern = re.search(r'for\s*\([^}]*\}\s*[^}]*for\s*\(', src, re.DOTALL)
             is_sequential = bool(sequential_pattern) and not double_nested and not triple_nested
 
-            # Check for logarithmic inner loop: while(x>1) x/=2 inside for loop
-            has_log_inner = bool(re.search(r'for\s*\([^}]*while\s*\([^)]*x\s*/=\s*2', src, re.DOTALL))
+            # Check for logarithmic inner loop: while(x>1) { x/=2; } inside
+            # a linear loop.  The update is in the while body, after the
+            # closing condition parenthesis.
+            has_log_inner = bool(re.search(
+                r'for\s*\([^)]*\)\s*\{[^{}]*while\s*\([^)]*\)\s*\{[^{}]*(?:/=\s*2|>>=\s*1|/=\s*10)',
+                src,
+                re.DOTALL,
+            ))
+            has_nested_linear = bool(re.search(
+                r'for\s*\([^)]*\)\s*\{[^{}]*while\s*\([^)]*\)\s*\{',
+                src,
+                re.DOTALL,
+            ))
 
             # Check for amortized patterns: sliding window, two-pointer, monotonic stack, heap ops
             is_sliding_window = bool(re.search(r'\bwhile\s*\([^)]*sum|l\+\+|left\+\+', src))
@@ -183,6 +221,10 @@ class ASTComplexityAnalyzer:
                 # for(i<n){while(x>1)x/=2;} = O(n log n)
                 ir.loop.depth = 1
                 ir.loop.structure = "logarithmic_nested"
+            elif has_nested_linear:
+                # Insertion-sort style for + while is genuinely quadratic.
+                ir.loop.depth = 2
+                ir.loop.structure = "nested"
             elif total_loops > 1:
                 ir.loop.depth = 1
                 ir.loop.structure = "sequential"
@@ -209,6 +251,11 @@ class ASTComplexityAnalyzer:
         # Logarithmic step patterns
         log_patterns = [r'\*=\s*2', r'/=\s*2', r'\*=\s*10', r'/=\s*10', r'<<=', r'>>=']
         ir.loop.is_logarithmic_step = any(re.search(p, src) for p in log_patterns)
+        log_headers = re.findall(r'\bfor\s*\([^)]*(?:\*=\s*2|/=\s*2|>>=\s*1)', src)
+        if len(log_headers) >= 2:
+            ir.loop.depth = 2
+            ir.loop.structure = "log_squared"
+            ir.loop.is_logarithmic_step = True
 
         # Heap operations - only priority_queue specific patterns, not generic push/pop
         ir.has_heap_operations = self._detect_heap_operations()
@@ -241,6 +288,12 @@ class ASTComplexityAnalyzer:
         # Exclude C++ keywords that have parentheses like for, while, if, switch
         cpp_keywords = {'for', 'while', 'if', 'switch', 'catch', 'try'}
         func_matches = list(re.finditer(r'\b(\w+)\s*\([^)]*\)\s*\{', src))
+        # JavaScript function expressions/arrow functions and C++ lambdas
+        # are named by an assignment rather than a declaration keyword.
+        func_matches += list(re.finditer(
+            r'\b(\w+)\s*=\s*(?:function\s*\([^)]*\)|\([^)]*\)\s*=>|\[[^\]]*\]\s*\([^)]*\))\s*(?:->\s*[^\{]+)?\{',
+            src,
+        ))
         for func_match in func_matches:
             func_name = func_match.group(1)
 
@@ -262,9 +315,15 @@ class ASTComplexityAnalyzer:
                 ir.recursion.branch_factor = min(call_count, 4)
 
                 # Check for memoization
-                if any(pattern in src for pattern in ['dp[', 'memo[', 'cache[']):
+                if any(pattern in src for pattern in ['dp[', 'memo[', 'cache[', '@cache', '@lru_cache']) or re.search(
+                    r'\b(?:f|dp|memo|cache)\s*\[[^\]]+\]\s*\[[^\]]+\]', src
+                ):
                     ir.recursion.has_memoization = True
                     ir.recursion.pattern = "memoized"
+                    ir.recursion.memo_dimensions = 2 if (
+                        re.search(r'\b(?:f|dp|memo|cache)\s*\[[^\]]+\]\s*\[[^\]]+\]', src)
+                        or re.search(r'@(?:cache|lru_cache)', src)
+                    ) else 1
                 elif call_count >= 2:
                     ir.recursion.pattern = "branching"
                 else:
@@ -378,12 +437,147 @@ class ASTComplexityAnalyzer:
         # === SPACE COMPLEXITY PATTERNS ===
 
         ir.has_dynamic_allocation = self._detect_dynamic_allocation()
+        ir.input_storage_only = self._detect_input_storage_only()
         ir.has_2d_allocation = self._detect_2d_allocation()
         ir.is_constant_lookup = self._detect_constant_lookup()
         ir.has_merged_both = self._detect_merged_both_inputs()
+        costs = detect_library_costs(self.source, self.language)
+        ir.library_costs = {
+            "sort": costs.sort,
+            "hash_average_constant": costs.hash_average_constant,
+            "heap_logarithmic": costs.heap_logarithmic,
+            "dynamic_append_amortized": costs.dynamic_append_amortized,
+        }
+        dependent = detect_dependent_bounds(self.source, self.language)
+        ir.loop.dependent_bounds = dependent.detected
+        ir.loop.dependent_relation = dependent.relation
+        ir.loop.dependent_sum_class = dependent.sum_class
         ir.algorithm_pattern = classify_pattern(ir).name
+        ir.semantic_patterns = detect_semantic_patterns(ir)
+        ir.control_flow = self._extract_control_flow_features()
 
+        self._populate_normalized_facts(ir)
         return ir
+
+    def _extract_control_flow_features(self) -> ControlFlowIR:
+        """Extract conservative CFG/data-flow facts shared by all languages."""
+        src = self.source.lower()
+        branch_count = len(re.findall(r'\b(?:if|elif|else|switch|case|catch)\b', src))
+        early_exit_count = len(re.findall(r'\b(?:break|continue|return)\b', src))
+        updates = len(re.findall(
+            r'\b(?:[a-z_]\w*)\s*(?:\+\+|--|\+=\s*1|-=\s*1|=\s*[^;\n]+\+\s*1)',
+            src,
+        ))
+        push = bool(re.search(r'\.(?:push|push_back|append|add|offer)\s*\(', src))
+        pop = bool(re.search(r'\.(?:pop|pop_back|popleft|remove|poll)\s*\(', src))
+        pointer = bool(re.search(
+            r'\b(?:left|right|start|end|slow|fast|l|r|i|j)\s*(?:\+\+|--|\+=|-=)',
+            src,
+        ))
+        return ControlFlowIR(
+            branch_count=branch_count,
+            early_exit_count=early_exit_count,
+            loop_carried_updates=updates,
+            amortized_push_pop=push and pop,
+            monotonic_pointer_updates=pointer,
+            branch_join_count=max(0, branch_count - 1),
+        )
+
+    @staticmethod
+    def _populate_normalized_facts(ir: ComplexityIR) -> None:
+        """Publish a stable Stage 1 structural-facts view.
+
+        The inference engine intentionally keeps using the richer typed IR;
+        this snapshot is a language-neutral contract for later algebra/CFG
+        stages and for benchmark diagnostics.
+        """
+        loop = ir.loop
+        recursion = ir.recursion
+        graph = ir.graph
+        flow = ir.control_flow
+        bounds = list(loop.bounds or [])
+        params = list(loop.distinct_params or [])
+        ir.normalized_facts = {
+            "parser_backend": ir.parser_backend,
+            "language": ir.language,
+            "loop": {
+                "depth": int(loop.depth or 0),
+                "structure": loop.structure or "none",
+                "bounds": bounds,
+                "bound_count": len(bounds),
+                "distinct_params": params,
+                "multiple_input_bounds": bool(loop.multiple_input_bounds or ir.multiple_input_bounds),
+                "constant_inner_loop": bool(loop.has_constant_inner_loop),
+                "sort": bool(loop.has_sort),
+                "sort_inside_loop": bool(loop.sort_inside_loop),
+                "binary_search": bool(loop.has_binary_search),
+                "binary_search_inside_loop": bool(loop.binary_search_inside_loop),
+                "logarithmic_step": bool(loop.is_logarithmic_step),
+                "sliding_window": bool(loop.is_sliding_window),
+                "monotonic_stack": bool(loop.is_monotonic_stack),
+                "amortized_membership": bool(loop.is_amortized_membership),
+                "amortized_index_placement": bool(loop.is_amortized_index_placement),
+                "dependent_bounds": bool(loop.dependent_bounds),
+                "dependent_relation": loop.dependent_relation or "",
+                "dependent_sum_class": loop.dependent_sum_class or "",
+            },
+            "recursion": {
+                "detected": bool(recursion.is_recursive),
+                "pattern": recursion.pattern or "linear",
+                "branch_factor": int(recursion.branch_factor or 0),
+                "memoized": bool(recursion.has_memoization),
+                "divide_and_conquer": bool(recursion.is_divide_and_conquer),
+                "calls_inside_loop": bool(recursion.calls_inside_loop),
+                "reduction": recursion.reduction_type or "linear",
+                "work_per_level": recursion.work_per_level or "O(1)",
+                "mutual": bool(recursion.has_mutual_recursion),
+                "call_graph_nodes": int(recursion.call_graph_nodes or 0),
+                "call_graph_edges": int(recursion.call_graph_edges or 0),
+                "recursive_cycle_size": int(recursion.recursive_cycle_size or 0),
+            },
+            "graph": {
+                "detected": bool(graph.is_graph),
+                "structure": graph.structure or "none",
+                "traversal_inside_loop": bool(graph.traversal_inside_loop),
+            },
+            "control_flow": {
+                "branch_count": int(flow.branch_count or 0),
+                "branch_join_count": int(flow.branch_join_count or 0),
+                "early_exit_count": int(flow.early_exit_count or 0),
+                "loop_carried_updates": int(flow.loop_carried_updates or 0),
+                "amortized_push_pop": bool(flow.amortized_push_pop),
+                "monotonic_pointer_updates": bool(flow.monotonic_pointer_updates),
+            },
+            "storage": {
+                "dynamic": bool(ir.has_dynamic_allocation),
+                "input_only": bool(ir.input_storage_only),
+                "two_dimensional": bool(ir.has_2d_allocation),
+                "constant_lookup": bool(ir.is_constant_lookup),
+                "classification": ASTComplexityAnalyzer._classify_space_facts(ir),
+            },
+            "operations": {
+                "heap": bool(ir.has_heap_operations or loop.has_heap_operations),
+                "bit": bool(loop.has_bit_operations),
+                "matrix_bounds": bool(ir.has_matrix_bounds or loop.has_matrix_bounds),
+                "merged_inputs": bool(ir.has_merged_both),
+            },
+            "library_costs": dict(ir.library_costs or {}),
+            "algorithm_pattern": ir.algorithm_pattern or "unknown",
+            "semantic_patterns": list(ir.semantic_patterns or []),
+        }
+
+    @staticmethod
+    def _classify_space_facts(ir: ComplexityIR) -> str:
+        """Return a conservative Stage 6 auxiliary-space class."""
+        if ir.has_2d_allocation:
+            return "quadratic-or-product"
+        if ir.graph.is_graph and not ir.input_storage_only:
+            return "graph-state"
+        if ir.has_dynamic_allocation and not ir.input_storage_only:
+            return "linear"
+        if ir.recursion.is_recursive:
+            return "recursion-stack"
+        return "constant"
 
     def _detect_heap_operations(self) -> bool:
         """Detect priority queue / heap operations that add O(log n) factor."""
@@ -391,6 +585,8 @@ class ASTComplexityAnalyzer:
 
         heap_patterns = [
             r"priority_queue\s*<[^>]*>\s*\w+",
+            r"\bpriorityqueue\b",
+            r"\b(?:minheap|maxheap|heap)\s*=\s*new\s+",
             r"make_heap\s*\(",
             r"push_heap\s*\(",
             r"pop_heap\s*\(",
@@ -405,18 +601,25 @@ class ASTComplexityAnalyzer:
             re.search(p, src) for p in [r'\.push\s*\(', r'\.pop\s*\(', r'\.top\s*\(']
         )
 
-        return has_pq_ops or any(re.search(p, src) for p in heap_patterns)
+        js_heap_ops = bool(re.search(r"\b(?:heap|minheap|maxheap)\b", src)) and bool(
+            re.search(r"\.(?:push|pop|peek|extract(?:min|max))\s*\(", src)
+        )
+        return has_pq_ops or js_heap_ops or any(re.search(p, src) for p in heap_patterns)
 
     def _detect_matrix_bounds(self) -> bool:
         """Detect matrix operations with distinct m*n bounds."""
         src = self.source.lower()
 
         # Look for nested loops with different bounds like a.size() and a[i].size()
-        has_matrix_access = bool(re.search(r"a\[\s*i\s*\]\.\s*size\s*\(\)", src)) or \
-                           bool(re.search(r"matrix\[\s*i\s*\]\.\s*size\s*\(\)", src)) or \
-                           bool(re.search(r"grid\[\s*i\s*\]\.\s*size\s*\(\)", src)) or \
-                           bool(re.search(r"a\[0\]\.size\(\)", src)) or \
-                           bool(re.search(r"vector\s*<\s*vector\s*<", src))
+        # A vector<vector<T>> declaration alone is an allocation shape, not
+        # evidence of independent matrix input dimensions.
+        has_matrix_access = (
+            bool(re.search(r"a\[\s*i\s*\]\.\s*size\s*\(\)", src)) or
+            bool(re.search(r"matrix\[\s*i\s*\]\.\s*size\s*\(\)", src)) or
+            bool(re.search(r"grid\[\s*i\s*\]\.\s*size\s*\(\)", src)) or
+            bool(re.search(r"a\[0\]\.size\(\)", src)) or
+            ("vector<vector" in src and len(re.findall(r"\bfor\s*\(", src)) >= 2)
+        )
 
         # Look for explicit m*n parameters or bounds
         has_mn_params = bool(re.search(r"\bm\b.*\bn\b", src)) or \
@@ -449,6 +652,7 @@ class ASTComplexityAnalyzer:
             r'\.insert\s*\(',
             r'\bnew\s+\w+',
             r'\bmalloc\s*\(',
+            r'\b(?:calloc|realloc)\s*\(',
             # Python containers and mutating operations.
             # Counter/dict/list/set/deque/defaultdict/counter creation and mutating ops.
             r'\b(?:list|dict|set|deque|defaultdict|counter)\s*\(',
@@ -459,9 +663,13 @@ class ASTComplexityAnalyzer:
             # because == contains = and the pattern had no negative lookahead.
             r'\w+\s*=\s*\[',  # var = [...] new list creation
             r'\w+\s*=\s*\{',  # var = {...} new dict/set creation
-            r'\[[^\]]+\]\s*\*\s*(?:\w+|\([^)]+\))', # Python list multiplication e.g. [0] * n
+            # Require the list literal to begin at a token boundary.  Without
+            # this guard ``row[0] * column`` is falsely treated as allocation.
+            r'(?<![\w\]])\[[^\]]+\]\s*\*\s*(?:\w+|\([^)]+\))', # [0] * n
             r'\[[^\]]+for\s+\w+\s+in', # Python list comprehension
             r'\bsorted\s*\(',  # sorted() always creates a new list copy
+            r'\.slice\s*\(',  # JavaScript slice() creates a new array copy
+            r'\.filter\s*\(',  # JavaScript Array.filter() creates a new array copy
         ]
 
 
@@ -538,6 +746,20 @@ class ASTComplexityAnalyzer:
 
         return False
 
+    def _detect_input_storage_only(self) -> bool:
+        """Identify a standalone input container, excluded from auxiliary SC."""
+        if self.language not in {'cpp', 'c++', 'c'}:
+            return False
+        src = self.source.lower()
+        has_input_size = bool(re.search(r'cin\s*>>\s*\w+', src))
+        has_sized_vector = bool(re.search(r'vector\s*<[^>]+>\s+\w+\s*\(\s*\w+\s*\)', src))
+        has_input_loop = bool(re.search(
+            r'for\s*\([^)]*cin\s*>>|cin\s*>>\s*\w+\s*\[|for\s+\w+\s*:\s*\w+',
+            src,
+        ))
+        has_extra_buffer = bool(re.search(r'\b(?:merged|result|answer|output|dp|seen|visited)\b\s*(?:=|\.|\[)', src))
+        return has_input_size and has_sized_vector and has_input_loop and not has_extra_buffer
+
     def _detect_2d_allocation(self) -> bool:
         """Detect 2D dynamic allocation."""
         src = self.source.lower()
@@ -605,6 +827,9 @@ class ASTComplexityAnalyzer:
         loop_types = {
             'for_statement', 'while_statement', 'do_statement',
             'for_range_loop', 'enhanced_for_statement',
+            # JavaScript uses for_in_statement for both for...in and
+            # for...of loops in tree-sitter-javascript.
+            'for_in_statement',
             # Python comprehensions execute an input-sized iteration even
             # though they do not appear as a standalone for_statement.
             'list_comprehension', 'set_comprehension',
@@ -638,11 +863,18 @@ class ASTComplexityAnalyzer:
             if re.search(r';[^;]*[<>]=?\s*(?:[1-9]|[1-9]\d|100)\b', lower):
                 return True
             # Small fixed direction/array-alphabet loops are also constant.
-            if re.search(r'\b(?:2|3|4|8|10|26|27|36|52)\b', lower) and ('for' in lower or 'range' in lower):
+            # Python ``range(n - 2)`` is input-sized; do not mistake its
+            # offset literal for a constant bound. Literal Python ranges were
+            # handled by the stricter rule above, so this fallback is only for
+            # C/C++/Java-style headers.
+            if re.search(r'\b(?:2|3|4|8|10|26|27|36|52)\b', lower) and 'for' in lower and 'range' not in lower:
                 return True
             return False
 
-        constant_loop_ids = {id(node) for node in loop_nodes if is_constant_bounded(node)}
+        # Tree-sitter may materialize distinct Python wrapper objects for the
+        # same underlying node while walking parent links.  ``id(node)`` is
+        # therefore not a stable identity here; source offsets are.
+        constant_loop_ids = {node.start_byte for node in loop_nodes if is_constant_bounded(node)}
 
         # 1. Determine nesting depth and parent-child hierarchy
         max_depth = 0
@@ -651,18 +883,37 @@ class ASTComplexityAnalyzer:
             ancestors = 0
             curr = node.parent
             while curr:
-                if curr.type in loop_types and id(curr) not in constant_loop_ids:
+                if curr.type in loop_types and curr.start_byte not in constant_loop_ids:
                     ancestors += 1
                 curr = curr.parent
             loop_ancestor_counts.append(ancestors)
-            if id(node) not in constant_loop_ids:
+            if node.start_byte not in constant_loop_ids:
                 max_depth = max(max_depth, ancestors + 1)
 
         loop.depth = max_depth
 
+        # Some tree-sitter Python versions expose parent wrappers whose type
+        # metadata is incomplete during upward traversal.  Recover nesting
+        # from stable source ranges as a language-neutral fallback.  This is
+        # important for ``for`` + two-pointer ``while`` algorithms such as
+        # 3Sum: the inner pointer scan is repeated for every outer item.
+        active_loops = [
+            node for node in loop_nodes if node.start_byte not in constant_loop_ids
+        ]
+        for outer in active_loops:
+            for inner in active_loops:
+                if outer is inner:
+                    continue
+                if (
+                    outer.start_byte < inner.start_byte
+                    and inner.end_byte <= outer.end_byte
+                ):
+                    loop.depth = max(loop.depth, 2)
+                    break
+
         # Check if loops are sequential vs nested
         top_level_loops = [loop_nodes[i] for i, anc in enumerate(loop_ancestor_counts)
-                           if anc == 0 and id(loop_nodes[i]) not in constant_loop_ids]
+                           if anc == 0 and loop_nodes[i].start_byte not in constant_loop_ids]
         if max_depth == 1 and len(top_level_loops) > 1:
             loop.structure = "sequential"
         elif max_depth == 2:
@@ -675,7 +926,7 @@ class ASTComplexityAnalyzer:
         # 2. Check logarithmic step patterns across loops (% b, &=, /= 2, *= 2, >>= 1)
         log_loop_count = 0
         for node in loop_nodes:
-            if id(node) in constant_loop_ids:
+            if node.start_byte in constant_loop_ids:
                 continue
             # Always define full_text first so while/do branches never hit NameError
             full_text = node.text.decode('utf-8', errors='ignore').lower() if isinstance(node.text, bytes) else str(node.text).lower()
@@ -719,9 +970,27 @@ class ASTComplexityAnalyzer:
         has_pair_sort = bool(re.search(r'sorted\s*\(\s*(?:\[[^\]]*\]|\([^)]*\)|\w+)\s*\)', src_lower)) and any(
             t in src_lower for t in ('domino', 'pair', '[a, b]', '[u, v]', '[x, y]', '(a, b)', 'sorted([', 'sorted((')
         )
+        # Sorting a fixed-size temporary (for example
+        # ``vector<int> triplet = {a, b, c}; sort(triplet.begin(),
+        # triplet.end());``) is constant work.  It must not turn a triple
+        # nested brute-force search into O(n^2 log n).
+        fixed_initializer_sort = False
+        for match in re.finditer(
+            r'(?:vector\s*<[^;{}]+>\s+)?(\w+)\s*=\s*\{([^{}]*)\}',
+            src_lower,
+        ):
+            variable, initializer = match.groups()
+            element_count = 0 if not initializer.strip() else initializer.count(',') + 1
+            if element_count <= 4 and re.search(
+                rf'\bsort\s*\(\s*{re.escape(variable)}\s*\.\s*begin\s*\(\s*\)\s*,\s*'
+                rf'{re.escape(variable)}\s*\.\s*end\s*\(\s*\)\s*\)',
+                src_lower,
+            ):
+                fixed_initializer_sort = True
+                break
         loop.has_sort = any(s in src_lower for s in [
             'sort(', 'std::sort', '.sort(', 'sorted(',
-        ]) and not has_pair_sort
+        ]) and not has_pair_sort and not fixed_initializer_sort
         # A sort performed for every input item composes multiplicatively with
         # its surrounding loop.  Keep this separate from one preprocessing
         # sort followed by a scan.
@@ -743,6 +1012,12 @@ class ASTComplexityAnalyzer:
             and re.search(r'\b(?:mid|middle|m)\s*=\s*[^\n;]*(?:/\s*2|>>\s*1)', src_lower)
             and re.search(r'\b(?:left|right|l|r)\s*=\s*[^\n;]*\b(?:mid|middle|m)\b', src_lower)
         )
+        python_halving_loop = bool(
+            re.search(r'\bwhile\s+\w+\s*(?:<|<=|>|>=)\s*\w+\s*:', src_lower)
+            and re.search(r'\b(?:mid|middle|m)\s*=\s*[^\n#]*(?:/\s*2|//\s*2|>>\s*1)', src_lower)
+            and re.search(r'\b(?:low|high|left|right|l|r)\s*=\s*[^\n#]*\b(?:mid|middle|m)\b', src_lower)
+        )
+        halving_loop = halving_loop or python_halving_loop
         loop.has_binary_search = explicit_binary_call or halving_loop
         # A binary-search call nested in another loop is multiplicative.  Keep
         # this separate from a loop whose own update halves the search range.
@@ -755,6 +1030,24 @@ class ASTComplexityAnalyzer:
                 for pattern in binary_call_patterns)
             for node in loop_nodes
         )
+        # A binary-search iteration that invokes a user-defined helper must
+        # include the helper's per-iteration scan.  This covers patterns such
+        # as Koko/Shipping Capacity without assuming the helper's cost is
+        # constant merely because the call is nested in a loop.
+        helper_names = set(re.findall(r'\bdef\s+(\w+)\s*\(', src_lower))
+        helper_names.update(re.findall(
+            r'\b(?:int|long|bool|void|double|float|string)\s+(\w+)\s*\([^)]*\)\s*\{',
+            src_lower,
+        ))
+        helper_call_inside_loop = any(
+            any(re.search(rf'\b{re.escape(name)}\s*\(',
+                         (node.text.decode('utf-8', errors='ignore')
+                          if isinstance(node.text, bytes) else str(node.text)).lower())
+                for name in helper_names)
+            for node in loop_nodes
+        )
+        if loop.has_binary_search and helper_call_inside_loop and max_depth >= 1:
+            loop.binary_search_inside_loop = True
         loop.binary_search_loop_depth = max_depth if loop.binary_search_inside_loop else 0
         loop.has_heap_operations = self._detect_heap_operations()
         # Amortized patterns are recognized structurally, rather than by a
@@ -819,6 +1112,22 @@ class ASTComplexityAnalyzer:
             and bool(re.search(r'\b(?:dict|map|set|count|used|name_count)', src_lower))
         )
 
+        # Open-addressed hash tables in C-family implementations often use a
+        # collision probe such as ``while (used[h]) h = (h + 1) & mask``.
+        # The probe is amortized constant per input insertion; it must not be
+        # multiplied by a separate capacity-doubling setup loop.
+        loop.is_amortized_membership = loop.is_amortized_membership or (
+            bool(re.search(r'\bfor\s*\(', src_lower))
+            and bool(re.search(
+                r'\bwhile\s*\(\s*(?:used|occupied|filled|table)\s*\[',
+                src_lower,
+            ))
+            and bool(re.search(
+                r'\b(?:h|slot|pos|idx)\s*(?:\+\+|\+=\s*1|=\s*\([^\n;]*\+\s*1\)',
+                src_lower,
+            ))
+        )
+
         # In-place cyclic placement (e.g. First Missing Positive) may have a
         # nested ``while`` inside a scan, but every swap puts an item into its
         # final slot.  The total number of swaps is amortized O(n), not O(n²).
@@ -846,10 +1155,32 @@ class ASTComplexityAnalyzer:
             arbitrary_containers = [b for b in bounds_vars if b not in {'n', 'm', 'v', 'e', 'rows', 'cols', 'w', 'k'}]
             if arbitrary_containers and len(arbitrary_containers) == len(bounds_vars) - 1:
                 bounds_vars = ['n']
+
+        # Enhanced/range loops expose independent dimensions directly in the
+        # iterable names (``for row in left`` followed by ``for col in
+        # right``). Preserve that evidence as O(m*n) instead of collapsing
+        # every nested pair to O(n^2).
+        if max_depth >= 2:
+            iterables = re.findall(
+                r'\bfor\s+(?:\([^)]*\)|[a-zA-Z_]\w*)\s+(?:in|of)\s+([a-zA-Z_]\w*)',
+                src_lower,
+            )
+            iterables += re.findall(
+                r'\bfor\s*\([^:;]+:\s*([a-zA-Z_]\w*)\)', src_lower,
+            )
+            iterables += re.findall(
+                r'\bfor\s*\([^)]*\b(?:in|of)\s+([a-zA-Z_]\w*)\)', src_lower,
+            )
+            if len(dict.fromkeys(iterables)) >= 2:
+                bounds_vars = ['m', 'n']
+
         loop.distinct_params = bounds_vars
         loop.multiple_input_bounds = len(bounds_vars) >= 2
 
-        if (loop.is_sliding_window or loop.is_monotonic_stack) and max_depth == 2:
+        # A genuine amortized window/stack nested in a scan can be collapsed
+        # to linear time.  Do not collapse a sorted outer scan with an inner
+        # pointer loop: that is the standard O(n^2) 3Sum shape.
+        if (loop.is_sliding_window or loop.is_monotonic_stack) and max_depth == 2 and not loop.has_sort:
             loop.depth = 1
             loop.structure = "sequential"
 
@@ -862,7 +1193,7 @@ class ASTComplexityAnalyzer:
             'left++', 'l++', 'start++', 'left += 1', 'left+=1',
             'l += 1', 'l+=1', 'start += 1', 'start+=1',
         ))
-        if legacy_amortized and max_depth == 2:
+        if legacy_amortized and max_depth == 2 and not loop.has_sort:
             loop.depth = 1
             loop.structure = "sequential"
 
@@ -878,6 +1209,53 @@ class ASTComplexityAnalyzer:
             loop.depth = 1
             loop.structure = "sequential"
 
+        # Source-level fallbacks cover compact C/C++ loop headers that
+        # tree-sitter represents without a loop parent relationship.  Keep
+        # these narrowly tied to canonical complexity idioms.
+        nested_log_pattern = bool(re.search(
+            r'\bfor\s*\([^)]*;[^)]*;[^)]*\+\+[^)]*\)\s*\{[^{}]*'
+            r'\bwhile\s*\([^)]*\)\s*\{[^{}]*(?:/=|>>=|\*=)\s*(?:2|10)',
+            src_lower, re.DOTALL,
+        ))
+        log_squared_pattern = bool(re.search(
+            r'\bfor\s*\([^)]*(?:\*=|/=|>>=)\s*2[^)]*\)\s*'
+            r'(?:\{\s*)?for\s*\([^)]*(?:\*=|/=|>>=)\s*2',
+            src_lower, re.DOTALL,
+        ))
+        if log_squared_pattern:
+            loop.depth = max(loop.depth, 2)
+            loop.structure = "log_squared"
+            loop.is_logarithmic_step = True
+            loop.is_sliding_window = False
+        elif nested_log_pattern:
+            loop.depth = max(loop.depth, 2)
+            loop.structure = "logarithmic_nested"
+            loop.is_logarithmic_step = True
+            loop.is_sliding_window = False
+        else:
+            # Insertion sort's inner scan moves backwards through the prefix;
+            # unlike a sliding window it is a genuinely nested worst-case
+            # linear scan.
+            insertion_pattern = bool(re.search(
+                r'\bfor\s*\([^)]*\)\s*\{[^{}]*\bwhile\s*\([^)]*'
+                r'(?:>=\s*0|>\s*[-\w]|\b[a-z_]\w*\s*>)',
+                src_lower, re.DOTALL,
+            )) and bool(re.search(r'(?:j\s*--|a\s*\[\s*j\s*\]|\bkey\b)', src_lower))
+            if insertion_pattern:
+                loop.depth = max(loop.depth, 2)
+                loop.structure = "nested"
+                loop.is_sliding_window = False
+
+        # Compact insertion-sort implementations often omit whitespace and
+        # use a single-letter key.  The canonical backward scan is still
+        # unambiguous: an outer forward scan, inner j>=0 guard, and j-- move.
+        if (re.search(r'\bfor\s*\([^)]*\)\s*\{', src_lower) and
+                re.search(r'\bwhile\s*\(\s*j\s*>=\s*0\s*&&', src_lower) and
+                re.search(r'\bj\s*--', src_lower)):
+            loop.depth = max(loop.depth, 2)
+            loop.structure = "nested"
+            loop.is_sliding_window = False
+
         return loop
 
     def _extract_recursion_features(self, root) -> RecursionIR:
@@ -887,7 +1265,7 @@ class ASTComplexityAnalyzer:
 
         func_nodes = []
         def find_funcs(node):
-            if node.type in ['function_definition', 'method_declaration']:
+            if node.type in ['function_definition', 'method_declaration', 'function_declaration']:
                 func_nodes.append(node)
             for child in node.children:
                 find_funcs(child)
@@ -906,12 +1284,18 @@ class ASTComplexityAnalyzer:
             name = ""
             declarator = fn_node.child_by_field_name('declarator')
             if declarator:
-                for c in declarator.children:
-                    if c.type in ['identifier', 'field_identifier']:
-                        name = c.text.decode('utf-8', errors='ignore') if isinstance(c.text, bytes) else str(c.text)
+                # Prefer the declarator's named identifier.  Taking the first
+                # identifier child can select a parameter name (for example
+                # ``values``) and makes a normal helper call look recursive.
+                candidate = declarator
+                while candidate is not None:
+                    if candidate.type in ['identifier', 'field_identifier']:
+                        name = candidate.text.decode('utf-8', errors='ignore') if isinstance(candidate.text, bytes) else str(candidate.text)
                         break
-                if not name and declarator.type in ['identifier', 'field_identifier']:
-                    name = declarator.text.decode('utf-8', errors='ignore') if isinstance(declarator.text, bytes) else str(declarator.text)
+                    candidate = (
+                        candidate.child_by_field_name('declarator')
+                        or candidate.child_by_field_name('name')
+                    )
             if not name:
                 name_node = fn_node.child_by_field_name('name')
                 if name_node:
@@ -931,7 +1315,7 @@ class ASTComplexityAnalyzer:
         graph_calls = {name: [] for name in known_names}
         for name, fn_node, _ in graph_records:
             def collect_graph_calls(node):
-                if node.type in {'call_expression', 'call'}:
+                if node.type in {'call_expression', 'call', 'method_invocation'}:
                     func_expr = node.child_by_field_name('function') or (node.children[0] if node.children else None)
                     if func_expr:
                         raw = func_expr.text.decode('utf-8', errors='ignore') if isinstance(func_expr.text, bytes) else str(func_expr.text)
@@ -984,30 +1368,21 @@ class ASTComplexityAnalyzer:
             return rec
 
         for fn_node in func_nodes:
-            fn_name = ""
-            declarator = fn_node.child_by_field_name('declarator')
-            if declarator:
-                for c in declarator.children:
-                    if c.type in ['identifier', 'field_identifier']:
-                        fn_name = c.text.decode('utf-8', errors='ignore') if isinstance(c.text, bytes) else str(c.text)
-                        break
-                if not fn_name and declarator.type in ['identifier', 'field_identifier']:
-                    fn_name = declarator.text.decode('utf-8', errors='ignore') if isinstance(declarator.text, bytes) else str(declarator.text)
-
-            # Python function definitions expose the name through the
-            # ``name`` field rather than a C/C++-style declarator.  Without
-            # this fallback, nested helpers such as ``backtrack`` are never
-            # recognized as recursive and backtracking is understated as
-            # linear time.
-            if not fn_name:
-                name_node = fn_node.child_by_field_name('name')
-                if name_node:
-                    fn_name = name_node.text.decode('utf-8', errors='ignore') if isinstance(name_node.text, bytes) else str(name_node.text)
+            fn_name = function_name(fn_node)
 
             if not fn_name or fn_name in {'main', 'if', 'for', 'while'}:
                 continue
 
             fn_text = fn_node.text.decode('utf-8', errors='ignore') if isinstance(fn_node.text, bytes) else str(fn_node.text)
+
+            # Normalize the declaration name from the function header.  Some
+            # C-like grammars expose a parameter identifier as the first child
+            # of a declarator; using it would turn a normal helper call into a
+            # false self-recursion signal.
+            header = fn_text.split('{', 1)[0].split(':', 1)[0].strip()
+            declared = re.search(r'(?:def\s+)?([A-Za-z_]\w*)\s*\([^()]*\)\s*$', header)
+            if declared:
+                fn_name = declared.group(1)
 
             self_calls = []
             calls_inside_loop = False
@@ -1017,7 +1392,7 @@ class ASTComplexityAnalyzer:
                 # Tree-sitter names calls ``call_expression`` in C/C++/Java
                 # and simply ``call`` in Python.  Treat both uniformly so
                 # nested Python backtracking helpers are recognized.
-                if node.type in {'call_expression', 'call'}:
+                if node.type in {'call_expression', 'call', 'method_invocation'}:
                     func_expr = node.child_by_field_name('function') or (node.children[0] if node.children else None)
                     if func_expr:
                         call_name = func_expr.text.decode('utf-8', errors='ignore') if isinstance(func_expr.text, bytes) else str(func_expr.text)
@@ -1034,8 +1409,41 @@ class ASTComplexityAnalyzer:
 
             find_calls(fn_node)
 
+            # Guard against grammar-specific name resolution selecting a
+            # parameter/helper identifier.  Only a call to the declared
+            # function name inside its body is genuine self-recursion.
+            body_text = fn_text.split('{', 1)[1] if '{' in fn_text else fn_text
+            if not re.search(rf'\b{re.escape(fn_name)}\s*\(', body_text):
+                self_calls = []
+
             if self_calls:
                 rec.is_recursive = True
+
+                # Measure work performed by one recursive activation.  This
+                # is intentionally local to the function containing the
+                # self-call; a caller's loops are handled by the call-graph
+                # composition layer instead.  T(n)=T(n-1)+O(n^d) therefore
+                # carries an O(n^(d+1)) total-time recurrence.
+                local_loops = []
+                def collect_local_loops(node):
+                    if node.type in loop_types:
+                        local_loops.append(node)
+                    for child in node.children:
+                        collect_local_loops(child)
+                collect_local_loops(fn_node)
+                local_depth = 0
+                for candidate in local_loops:
+                    depth = 1
+                    parent = candidate.parent
+                    while parent is not None and parent is not fn_node:
+                        if parent.type in loop_types:
+                            depth += 1
+                        parent = parent.parent
+                    local_depth = max(local_depth, depth)
+                if local_depth >= 2:
+                    rec.work_per_level = "O(n^2)"
+                elif local_depth == 1:
+                    rec.work_per_level = "O(n)"
 
                 # Determine mutual exclusivity vs simultaneous branching
                 is_exclusive = False
@@ -1105,9 +1513,24 @@ class ASTComplexityAnalyzer:
 
                 if is_path_compression:
                     rec.pattern = "path_compression"
-                elif any(m in fn_text for m in ['memo[', 'dp[', 'cache[']):
+                elif any(m in fn_text.lower() for m in [
+                    'memo[', 'dp[', 'cache[', 'containskey(',
+                    'memo.get(', 'cache.get(', 'memo.set(', 'cache.set(',
+                    '.has(', '@cache', '@lru_cache', 'lru_cache(',
+                ]):
                     rec.has_memoization = True
                     rec.pattern = "memoized"
+                    memo_text = fn_text.lower()
+                    # Detect the state dimensionality instead of reducing all
+                    # memoized recurrences to generic O(n).  C/C++/Java DP
+                    # tables use f[i][j], while Python decorators and maps
+                    # commonly encode a one- or two-argument state.
+                    if re.search(r"\b(?:memo|dp|cache|f)\s*\[[^\]]+\]\s*\[[^\]]+\]", memo_text) \
+                            or re.search(r"(?:cache|memo)\s*\(\s*[^,]+\s*,\s*[^)]+\)", memo_text) \
+                            or re.search(r"@(?:cache|lru_cache)", memo_text) and len(re.findall(r"\b(?:i|j|x|y|left|right|index|pos)\b", memo_text)) >= 2:
+                        rec.memo_dimensions = 2
+                    else:
+                        rec.memo_dimensions = 1
                 elif calls_inside_loop:
                     rec.pattern = "factorial"
                 elif rec.branch_factor >= 2:
@@ -1119,7 +1542,11 @@ class ASTComplexityAnalyzer:
 
                 return rec
 
-        return self._regex_analysis().recursion
+        # With a parsed function set, absence of a verified self-call is
+        # meaningful. Falling back to broad regex recursion heuristics here
+        # misclassifies ordinary helper calls (for example solve() calling
+        # count_matches()) as recursive.
+        return rec
 
     def _extract_graph_features(self, root) -> GraphIR:
         """Extract graph features from AST."""
@@ -1134,6 +1561,26 @@ class ASTComplexityAnalyzer:
             src_lower,
         ))
         if python_neighbor_loop and python_visited:
+            graph.is_graph = True
+            graph.structure = "adj_list"
+        # C++ contest BFS commonly uses a color array named c rather than a
+        # descriptive visited/color identifier.  The combination of an
+        # adjacency-list parameter, queue, and color assignment is sufficient
+        # graph evidence without broadening generic vector detection.
+        if (self.language not in {'python', 'py'} and
+                re.search(r'vector\s*<\s*vector\s*<', src_lower) and
+                re.search(r'\bqueue\s*<', src_lower) and
+                re.search(r'\b(?:c|color|colour)\s*\[', src_lower)):
+            graph.is_graph = True
+            graph.structure = "adj_list"
+        # Java BFS commonly uses List<List<Integer>>, ArrayDeque and a
+        # boolean/color array. This is graph traversal evidence even without
+        # identifiers named graph, adj, or visited.
+        if (self.language in {'java', 'javascript', 'js'} and
+                re.search(r'(?:list\s*<\s*list|arraylist\s*<)', src_lower) and
+                re.search(r'(?:arraydeque|deque|queue)', src_lower) and
+                re.search(r'(?:boolean\s*\[\]|boolean\s+\w+\s*=|color|seen)', src_lower) and
+                re.search(r'\.(?:get|poll|remove|add)\s*\(', src_lower)):
             graph.is_graph = True
             graph.structure = "adj_list"
         if ('p[' in src_lower or 'parent[' in src_lower) and ('p[a]' in src_lower or 'p[b]' in src_lower or 'sz[' in src_lower or 'size[' in src_lower):
