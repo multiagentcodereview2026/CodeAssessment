@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   MessageSquareText,
@@ -12,19 +12,33 @@ import {
   X
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/useAuth';
 import { DifficultyBadge } from '../common/Badge';
 
 export const FeedbackRecommendationsView: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { submissions, openAssessmentResult, openProblemWorkspace, activeAssessment } = useApp();
+  const { authFetch } = useAuth();
 
   // Tab State: 'feedback' | 'recommendations' (Strict binary toggle)
   const initialTab = searchParams.get('tab') === 'practice' ? 'recommendations' : 'feedback';
   const [activeTab, setActiveTab] = useState<'feedback' | 'recommendations'>(initialTab);
   const [search, setSearch] = useState('');
 
-  const { recommendedTopics, practiceProblems } = activeAssessment;
+  const [recommendationData, setRecommendationData] = useState<{ topics: Array<{ topic: string; average_score: number; assessed_problems: number; reason: string }>; problems: Array<{ id: string; title: string; difficulty: string; category: string; reason: string }> }>({ topics: [], problems: [] });
+  const [recommendationError, setRecommendationError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    authFetch('/api/student/recommendations', { cache: 'no-store' }).then(async (response) => {
+      if (!response.ok) throw new Error('Recommendations could not be loaded.');
+      return response.json();
+    }).then((data) => { if (!cancelled) setRecommendationData({ topics: Array.isArray(data.topics) ? data.topics : [], problems: Array.isArray(data.problems) ? data.problems : [] }); })
+      .catch((error) => { if (!cancelled) setRecommendationError(error.message); });
+    return () => { cancelled = true; };
+  }, [authFetch, submissions.length]);
+  const recommendedTopics = recommendationData.topics;
+  const practiceProblems = recommendationData.problems;
   const revisionPlan = activeAssessment.scoreProjection.focusAreas.map((area, index) => ({
     title: area,
     detail: activeAssessment.suggestedImprovements[index] || 'Apply the AI recommendation and resubmit to update the projected score.',
@@ -262,17 +276,18 @@ export const FeedbackRecommendationsView: React.FC = () => {
             </div>
 
             {recommendedTopics.length === 0 ? <p className="py-4 text-sm text-slate-500">Not enough independent-practice evidence to recommend a topic cluster yet.</p> : <div className="flex flex-wrap gap-3">
-              {recommendedTopics.map((topic, idx) => (
+              {recommendedTopics.map((topic) => (
                 <div
-                  key={idx}
+                  key={topic.topic}
                   onClick={() => navigate('/problems')}
                   className="p-4 rounded-2xl bg-slate-50 border border-slate-200 hover:border-indigo-400 hover:bg-white transition-all cursor-pointer flex items-center justify-between min-w-[200px] flex-1 group"
                 >
                   <div>
                     <span className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
-                      {topic}
+                      {topic.topic}
                     </span>
-                    <p className="text-[11px] text-slate-400 mt-0.5">3 Practice problems</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{topic.assessed_problems} assessed · {topic.average_score}% average</p>
+                    <p className="mt-1 text-[11px] text-slate-500">{topic.reason}</p>
                   </div>
                   <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
                 </div>
@@ -295,7 +310,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
               </button>
             </div>
 
-            {practiceProblems.length === 0 ? <p className="py-4 text-sm text-slate-500">No targeted practice is available yet. Complete an independent-practice assessment to build a recommendation.</p> : <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {recommendationError ? <p className="py-4 text-sm text-rose-700">{recommendationError}</p> : practiceProblems.length === 0 ? <p className="py-4 text-sm text-slate-500">No targeted practice is available yet. Complete an independent-practice assessment to build a recommendation.</p> : <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {practiceProblems.map((prob, idx) => (
                 <div
                   key={prob.id}
@@ -310,12 +325,9 @@ export const FeedbackRecommendationsView: React.FC = () => {
                       {prob.title}
                     </h4>
                     <div className="flex flex-wrap gap-1 mt-2">
-                      {prob.tags.map((t, tIdx) => (
-                        <span key={tIdx} className="text-[10px] bg-slate-200/60 text-slate-700 px-1.5 py-0.5 rounded">
-                          {t}
-                        </span>
-                      ))}
+                      <span className="text-[10px] bg-slate-200/60 text-slate-700 px-1.5 py-0.5 rounded">{prob.category}</span>
                     </div>
+                    <p className="mt-2 text-[11px] text-slate-500">{prob.reason}</p>
                   </div>
 
                   <button

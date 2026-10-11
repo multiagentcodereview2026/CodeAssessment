@@ -1301,6 +1301,50 @@ def get_student_practice_analytics(
         raise HTTPException(status_code=404, detail="Student not found")
     return build_student_analytics(db, student, independent_only=True)
 
+
+@app.get("/api/student/recommendations")
+def get_student_recommendations(
+    db: Session = Depends(get_db),
+    student: models.Student = Depends(get_current_student),
+):
+    """Evidence-based recommendations from independent practice only."""
+    submissions = db.query(models.Submission).filter(
+        models.Submission.student_id == student.student_id,
+        models.Submission.assignment_id == None,
+        models.Submission.status == "EVALUATED",
+        models.Submission.overall_score.isnot(None),
+    ).all()
+    latest = latest_assessed_attempts(submissions, preserve_assignment=False)
+    problems = db.query(models.Problem).filter(models.Problem.is_public_practice == True).order_by(models.Problem.id).all()
+    problem_by_id = {problem.id: problem for problem in problems}
+    scores_by_topic: dict[str, list[float]] = {}
+    mastered = set()
+    for submission in latest:
+        problem = problem_by_id.get(submission.problem_id)
+        if problem is None:
+            continue
+        scores_by_topic.setdefault(problem.category or "Uncategorized", []).append(submission.overall_score)
+        if submission.overall_score >= 70:
+            mastered.add(submission.problem_id)
+    topics = [
+        {"topic": topic, "average_score": round(sum(scores) / len(scores), 1), "assessed_problems": len(scores), "reason": f"Your independent-practice average in {topic} is {round(sum(scores) / len(scores), 1)}%."}
+        for topic, scores in scores_by_topic.items()
+        if scores and sum(scores) / len(scores) < 70
+    ]
+    topics.sort(key=lambda item: (item["average_score"], -item["assessed_problems"], item["topic"]))
+    selected_topics = [item["topic"] for item in topics[:3]]
+    candidates = [problem for problem in problems if problem.id not in mastered and (not selected_topics or problem.category in selected_topics)]
+    if not latest:
+        candidates = problems[:3]
+        reason = "Starter recommendation: complete practice assessments to personalize this list."
+    else:
+        reason = "Recommended from your independent-practice topic evidence."
+    return {
+        "topics": topics[:3],
+        "problems": [{"id": problem.id, "title": problem.title, "difficulty": problem.difficulty, "category": problem.category, "reason": reason} for problem in candidates[:3]],
+        "scope": "independent_practice_only",
+    }
+
 @app.get("/api/instructor/overview")
 def get_instructor_overview(
     db: Session = Depends(get_db),
