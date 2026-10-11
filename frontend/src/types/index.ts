@@ -175,6 +175,7 @@ export interface SubmissionItem {
   problemSlug?: string;
   problemTitle: string;
   score: number;
+  evaluationStatus?: string;
   status: 'Passed' | 'Partial' | 'Failed';
   language: string;
   date: string;

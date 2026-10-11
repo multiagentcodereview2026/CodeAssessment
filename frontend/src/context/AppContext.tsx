@@ -279,6 +279,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (cancelled) return;
         setSubmissions(records.map((record: any): SubmissionItem => {
           const execution = record.execution_result || {};
+          const feedback = record.feedback && typeof record.feedback === 'object' ? record.feedback : {};
           const passed = Number(execution.passed_cases || 0);
           const total = Number(execution.total_cases || (passed + Number(execution.failed_cases || 0)));
           const passedAll = total > 0 && passed === total;
@@ -287,7 +288,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             problemId: record.problem_id,
             problemSlug: record.problem_id,
             problemTitle: titles.get(record.problem_id) || record.problem_id,
-            score: Math.round(Number(record.overall_score || 0)),
+            score: Math.round(Number(record.overall_score ?? 0)),
+            evaluationStatus: String(record.status || ''),
+            feedbackSummary: typeof feedback.summary === 'string' ? feedback.summary : '',
             status: passedAll ? 'Passed' : passed > 0 ? 'Partial' : 'Failed',
             language: record.language || '—',
             date: record.created_at ? new Date(record.created_at).toLocaleString() : 'Saved submission',
@@ -424,7 +427,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const addSubmission = (newSub: SubmissionItem, newAssessment: AssessmentResult) => {
-    setSubmissions(prev => [newSub, ...prev]);
+    setSubmissions(prev => [{ ...newSub, evaluationStatus: newSub.evaluationStatus || 'EVALUATED' }, ...prev]);
     setActiveAssessment(newAssessment);
     
     // update student progress

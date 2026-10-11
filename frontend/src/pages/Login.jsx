@@ -64,7 +64,10 @@ const Login = () => {
         }
       }
     } catch (err) {
-      setError(err.message || 'Authentication failed. Please check your credentials.');
+      const message = err.message || 'Authentication failed. Please check your credentials.';
+      setError(mode === 'login' && message === 'Invalid credentials'
+        ? 'Sign-in failed. Check your username or email, password, and selected account type. If you are new, select Register to create your account.'
+        : message);
     } finally {
       setIsSubmitting(false);
     }
@@ -216,7 +219,7 @@ const Login = () => {
           >
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">
-                Username
+                {mode === 'login' ? 'Username or email' : 'Username'}
               </label>
               <div className="relative">
                 <User className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -224,7 +227,7 @@ const Login = () => {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. demo_student"
+                  placeholder={mode === 'login' ? 'e.g. demo_student or student@example.com' : 'e.g. demo_student'}
                   required
                   className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 transition-all"
                 />

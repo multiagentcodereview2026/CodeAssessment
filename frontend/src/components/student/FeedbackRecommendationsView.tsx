@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   MessageSquareText,
   Sparkles,
   Calendar,
-  ArrowRight,
   Search,
   BookOpen,
   Target,
@@ -13,27 +12,122 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DifficultyBadge } from '../common/Badge';
-import { TOPIC_MASTERY } from '../../data/learningInsights';
+import { Difficulty } from '../../types';
+import { useAuth } from '../../context/useAuth';
+
+type PracticeProblem = { id: string; title: string; difficulty: string; category: string };
+type TopicProgress = { name: string; averageScore: number | null; attempts: number; color: string; nextAction: string };
+const TOPIC_COLORS = ['#10b981', '#3b82f6', '#06b6d4', '#8b5cf6', '#f59e0b', '#ef4444'];
 
 export const FeedbackRecommendationsView: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { submissions, openAssessmentResult, openProblemWorkspace, activeAssessment } = useApp();
+  const { submissions, openAssessmentResult, openProblemWorkspace } = useApp();
+  const { authFetch } = useAuth();
 
   // Tab State: 'feedback' | 'recommendations' (Strict binary toggle)
   const initialTab = searchParams.get('tab') === 'practice' ? 'recommendations' : 'feedback';
   const [activeTab, setActiveTab] = useState<'feedback' | 'recommendations'>(initialTab);
   const [search, setSearch] = useState('');
+  const [practiceCatalogue, setPracticeCatalogue] = useState<PracticeProblem[]>([]);
+  const [catalogueLoading, setCatalogueLoading] = useState(true);
+  const [catalogueError, setCatalogueError] = useState('');
+  const [catalogueRetry, setCatalogueRetry] = useState(0);
+  const [selectedTopic, setSelectedTopic] = useState('');
+  const evaluatedSubmissions = useMemo(() => submissions.filter(submission => submission.evaluationStatus === 'EVALUATED'), [submissions]);
 
-  const { recommendedTopics, practiceProblems } = activeAssessment;
-  const revisionPlan = activeAssessment.scoreProjection.focusAreas.map((area, index) => ({
-    title: area,
-    detail: activeAssessment.suggestedImprovements[index] || 'Apply the AI recommendation and resubmit to update the projected score.',
-    status: index === 0 ? 'Priority' : index === 1 ? 'Next' : 'Refinement'
-  }));
-  const weakestTopics = [...TOPIC_MASTERY].sort((a, b) => a.mastery - b.mastery).slice(0, 3);
+  useEffect(() => {
+    setActiveTab(new URLSearchParams(location.search).get('tab') === 'practice' ? 'recommendations' : 'feedback');
+  }, [location.search]);
 
-  const filteredSubmissions = submissions.filter((s) =>
+  useEffect(() => {
+    let cancelled = false;
+    const loadCatalogue = async () => {
+      setCatalogueLoading(true);
+      setCatalogueError('');
+      try {
+        const response = await authFetch('/api/problems', { cache: 'no-store' });
+        if (!response.ok) throw new Error('Practice problems could not be loaded.');
+        const records = await response.json();
+        if (!Array.isArray(records)) throw new Error('The practice catalogue returned an invalid response.');
+        if (!cancelled) setPracticeCatalogue(records.map((problem: any) => ({
+          id: String(problem.id),
+          title: String(problem.title || problem.id),
+          difficulty: String(problem.difficulty || 'Medium'),
+          category: String(problem.category || 'Algorithms')
+        })));
+      } catch (error) {
+        if (!cancelled) setCatalogueError(error instanceof Error ? error.message : 'Practice problems could not be loaded.');
+      } finally {
+        if (!cancelled) setCatalogueLoading(false);
+      }
+    };
+    void loadCatalogue();
+    return () => { cancelled = true; };
+  }, [authFetch, catalogueRetry]);
+
+  const topicProgress = useMemo<TopicProgress[]>(() => {
+    const attemptsByCategory = new Map<string, Map<string, number>>();
+    const categoryByProblem = new Map(practiceCatalogue.map(problem => [problem.id, problem.category]));
+    // Keep only each problem's latest score so repeated submissions do not
+    // give one problem disproportionate weight in the category average.
+    const latestProblemScores = new Map<string, number>();
+    for (const submission of evaluatedSubmissions) {
+      if (!latestProblemScores.has(submission.problemId)) latestProblemScores.set(submission.problemId, submission.score);
+    }
+    for (const [problemId, score] of latestProblemScores) {
+      const category = categoryByProblem.get(problemId);
+      if (!category) continue;
+      if (!attemptsByCategory.has(category)) attemptsByCategory.set(category, new Map());
+      attemptsByCategory.get(category)!.set(problemId, score);
+    }
+    const categoryProblemCounts = new Map<string, number>();
+    for (const problem of practiceCatalogue) categoryProblemCounts.set(problem.category, (categoryProblemCounts.get(problem.category) || 0) + 1);
+    const categories = [...categoryProblemCounts.keys()];
+    return categories.map((name, index) => {
+      const attempts = attemptsByCategory.get(name);
+      const mastery = attempts?.size
+        ? Math.round([...attempts.values()].reduce((total, score) => total + score, 0) / attempts.size)
+        : null;
+      return {
+        name,
+        averageScore: mastery,
+        attempts: attempts?.size || 0,
+        color: TOPIC_COLORS[index % TOPIC_COLORS.length],
+        nextAction: mastery == null
+          ? 'Start a problem in this topic to establish your progress.'
+          : mastery < 70
+            ? 'Your recent average is below 70. Practice another problem in this topic.'
+            : 'Your recent average is 70 or higher. Try a harder problem in this topic.'
+      };
+    }).sort((a, b) => {
+      if (a.averageScore == null && b.averageScore != null) return 1;
+      if (b.averageScore == null && a.averageScore != null) return -1;
+      if (a.averageScore != null && b.averageScore != null && a.averageScore !== b.averageScore) return a.averageScore - b.averageScore;
+      return (categoryProblemCounts.get(b.name) || 0) - (categoryProblemCounts.get(a.name) || 0) || a.name.localeCompare(b.name);
+    });
+  }, [practiceCatalogue, evaluatedSubmissions]);
+
+  const recommendedTopics = topicProgress.slice(0, 3);
+  const attemptedProblemIds = new Set(evaluatedSubmissions.map(submission => submission.problemId));
+  const practiceProblems = useMemo(() => {
+    const matching = practiceCatalogue.filter(problem => !selectedTopic || problem.category === selectedTopic);
+    const unattempted = matching.filter(problem => !attemptedProblemIds.has(problem.id));
+    return (unattempted.length ? unattempted : matching).slice(0, 6);
+  }, [practiceCatalogue, selectedTopic, evaluatedSubmissions]);
+
+  const handleSelectTab = (tab: 'feedback' | 'recommendations') => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(location.search);
+    if (tab === 'recommendations') params.set('tab', 'practice');
+    else params.delete('tab');
+    navigate({ pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' }, { replace: true });
+  };
+
+  const latestSubmission = evaluatedSubmissions[0];
+
+  const filteredSubmissions = evaluatedSubmissions.filter((s) =>
     s.problemTitle.toLowerCase().includes(search.toLowerCase()) ||
     (s.feedbackSummary && s.feedbackSummary.toLowerCase().includes(search.toLowerCase())) ||
     s.language.toLowerCase().includes(search.toLowerCase())
@@ -64,7 +158,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
 
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-slate-600 bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200 shadow-xs">
-            Evaluated Submissions: <strong className="text-indigo-600 font-mono text-sm ml-1">{submissions.length}</strong>
+            Evaluated Submissions: <strong className="text-indigo-600 font-mono text-sm ml-1">{evaluatedSubmissions.length}</strong>
           </span>
         </div>
       </div>
@@ -74,7 +168,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
         {/* Binary 2-Tab Switcher */}
         <div className="flex bg-slate-200/60 p-1.5 rounded-2xl border border-slate-200/80 max-w-md w-full md:w-auto">
           <button
-            onClick={() => setActiveTab('feedback')}
+            onClick={() => handleSelectTab('feedback')}
             className={`flex-1 md:flex-initial py-2.5 px-5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'feedback'
                 ? 'bg-white text-indigo-600 shadow-sm shadow-indigo-100'
@@ -84,12 +178,12 @@ export const FeedbackRecommendationsView: React.FC = () => {
             <MessageSquareText className="w-3.5 h-3.5" />
             <span>AI Feedback</span>
             <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${activeTab === 'feedback' ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
-              {submissions.length}
+              {evaluatedSubmissions.length}
             </span>
           </button>
 
           <button
-            onClick={() => setActiveTab('recommendations')}
+            onClick={() => handleSelectTab('recommendations')}
             className={`flex-1 md:flex-initial py-2.5 px-5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'recommendations'
                 ? 'bg-white text-indigo-600 shadow-sm shadow-indigo-100'
@@ -133,31 +227,25 @@ export const FeedbackRecommendationsView: React.FC = () => {
           <div className="bg-white rounded-3xl border border-indigo-200/80 p-5 sm:p-6 shadow-xs">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div>
-                <span className="text-xs font-extrabold uppercase text-indigo-700">Revision Checklist</span>
-                <h3 className="mt-1 text-base font-bold text-slate-900">
-                  Raise {activeAssessment.problemTitle} from {activeAssessment.scoreProjection.currentScore} to {activeAssessment.scoreProjection.projectedScore}
-                </h3>
-                <p className="mt-1 text-xs text-slate-500 leading-relaxed">
-                  Focus areas are derived from the current assessment, so the checklist maps directly to backend assessment fields.
-                </p>
+                <span className="text-xs font-extrabold uppercase text-indigo-700">Continue learning</span>
+                {latestSubmission ? <>
+                  <h3 className="mt-1 text-base font-bold text-slate-900">Continue with {latestSubmission.problemTitle}</h3>
+                  <p className="mt-1 text-xs text-slate-500 leading-relaxed">Your latest saved assessment scored {latestSubmission.score}/100. Open its report for the feedback and next steps from that evaluation.</p>
+                </> : <>
+                  <h3 className="mt-1 text-base font-bold text-slate-900">Start your first practice problem</h3>
+                  <p className="mt-1 text-xs text-slate-500 leading-relaxed">Your saved evaluations and topic progress will appear here after you submit a solution.</p>
+                </>}
               </div>
-              <button
-                onClick={() => handleStartPractice(activeAssessment.problemId)}
-                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Code2 className="w-3.5 h-3.5" />
-                <span>Revise in Sandbox</span>
-              </button>
-            </div>
-
-            <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
-              {revisionPlan.map((item) => (
-                <div key={item.title} className="rounded-2xl bg-slate-50 border border-slate-200/80 p-4">
-                  <span className="text-[10px] font-bold uppercase text-indigo-600">{item.status}</span>
-                  <h4 className="mt-1 text-xs font-extrabold text-slate-900">{item.title}</h4>
-                  <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">{item.detail}</p>
-                </div>
-              ))}
+              {latestSubmission ? <div className="flex gap-2">
+                <button onClick={() => handleOpenReport(latestSubmission.id)} className="px-4 py-2.5 rounded-xl border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer">
+                  <Sparkles className="w-3.5 h-3.5" /><span>View latest report</span>
+                </button>
+                <button onClick={() => handleStartPractice(latestSubmission.problemId)} className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer">
+                  <Code2 className="w-3.5 h-3.5" /><span>Practice again</span>
+                </button>
+              </div> : <button onClick={() => navigate('/problems')} className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer">
+                <Code2 className="w-3.5 h-3.5" /><span>Browse problems</span>
+              </button>}
             </div>
           </div>
 
@@ -203,7 +291,9 @@ export const FeedbackRecommendationsView: React.FC = () => {
                       </div>
 
                       <p className="text-xs text-slate-600 leading-relaxed font-sans">
-                        {item.feedbackSummary || 'Code passed test validations. Evaluated against multi-agent rubric.'}
+                        {item.feedbackSummary || (item.status === 'Passed'
+                          ? 'All test cases passed. Open the report for the full evaluation.'
+                          : 'Open the report to review the test results and evaluation feedback.')}
                       </p>
                     </div>
                   </div>
@@ -238,17 +328,17 @@ export const FeedbackRecommendationsView: React.FC = () => {
         <div className="space-y-6">
           {/* Recommended Topic Clusters */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {weakestTopics.map((topic) => (
-              <div key={topic.name} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
+            {recommendedTopics.map((topic) => (
+              <button key={topic.name} onClick={() => setSelectedTopic(topic.name)} className={`text-left bg-white rounded-2xl border p-5 shadow-xs transition-colors ${selectedTopic === topic.name ? 'border-indigo-400 ring-2 ring-indigo-100' : 'border-slate-200/80 hover:border-indigo-300'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-extrabold text-slate-700">{topic.name}</span>
-                  <span className="text-xs font-mono font-bold text-amber-700">{topic.mastery}%</span>
+                  <span className={`text-xs font-mono font-bold ${topic.averageScore == null ? 'text-slate-500' : topic.averageScore < 70 ? 'text-amber-700' : 'text-emerald-700'}`}>{topic.averageScore == null ? 'Not tried' : `Avg ${topic.averageScore}%`}</span>
                 </div>
                 <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${topic.mastery}%`, backgroundColor: topic.color }} />
+                  {topic.averageScore != null && <div className="h-full rounded-full" style={{ width: `${topic.averageScore}%`, backgroundColor: topic.color }} />}
                 </div>
-                <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">{topic.nextAction}</p>
-              </div>
+                <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">{topic.attempts ? `${topic.attempts} problem${topic.attempts === 1 ? '' : 's'} attempted. ` : ''}{topic.nextAction}</p>
+              </button>
             ))}
           </div>
 
@@ -259,25 +349,16 @@ export const FeedbackRecommendationsView: React.FC = () => {
                 <BookOpen className="w-5 h-5 text-indigo-600" />
                 <h3 className="text-base font-bold text-slate-900">Recommended Topic Clusters</h3>
               </div>
-              <span className="text-xs text-slate-400 font-medium">High syllabus weight</span>
+              <button onClick={() => setSelectedTopic('')} className="text-xs text-indigo-600 font-medium hover:underline">Show all topics</button>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              {recommendedTopics.map((topic, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => navigate('/problems')}
-                  className="p-4 rounded-2xl bg-slate-50 border border-slate-200 hover:border-indigo-400 hover:bg-white transition-all cursor-pointer flex items-center justify-between min-w-[200px] flex-1 group"
-                >
-                  <div>
-                    <span className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
-                      {topic}
-                    </span>
-                    <p className="text-[11px] text-slate-400 mt-0.5">3 Practice problems</p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
-                </div>
+            <div className="flex flex-wrap gap-2">
+              {topicProgress.map((topic) => (
+                <button key={topic.name} onClick={() => setSelectedTopic(topic.name)} className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${selectedTopic === topic.name ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-300'}`}>
+                  {topic.name}<span className="ml-2 text-slate-400">{topic.averageScore == null ? 'New' : `Avg ${topic.averageScore}%`}</span>
+                </button>
               ))}
+              {!catalogueLoading && topicProgress.length === 0 && <p className="text-sm text-slate-500">No topics are available yet.</p>}
             </div>
           </div>
 
@@ -288,16 +369,16 @@ export const FeedbackRecommendationsView: React.FC = () => {
                 <Target className="w-5 h-5 text-indigo-600" />
                 <h3 className="text-base font-bold text-slate-900">Targeted Practice Problems</h3>
               </div>
-              <button
-                onClick={() => navigate('/problems')}
-                className="text-xs font-bold text-indigo-600 hover:underline cursor-pointer"
-              >
-                Explore all
-              </button>
+              <span className="text-xs text-slate-500">{selectedTopic || 'Showing all topics'}</span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {practiceProblems.map((prob, idx) => (
+            {catalogueLoading ? <p className="py-6 text-center text-sm text-slate-500">Loading practice problems…</p>
+              : catalogueError ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{catalogueError}<button onClick={() => setCatalogueRetry(value => value + 1)} className="ml-2 font-bold underline">Retry</button></div>
+              : practiceProblems.length === 0 ? <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center">
+                <p className="text-sm font-semibold text-slate-700">No practice problems found for this topic.</p>
+                <button onClick={() => setSelectedTopic('')} className="mt-2 text-xs font-bold text-indigo-600 hover:underline">Show recommended problems</button>
+              </div>
+              : <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{practiceProblems.map((prob, idx) => (
                 <div
                   key={prob.id}
                   className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between space-y-4 hover:border-indigo-400 hover:bg-white transition-all group"
@@ -305,17 +386,13 @@ export const FeedbackRecommendationsView: React.FC = () => {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-bold font-mono text-slate-400">#{idx + 1}</span>
-                      <DifficultyBadge difficulty={prob.difficulty} />
+                      <DifficultyBadge difficulty={(['Easy', 'Medium', 'Hard'].includes(prob.difficulty) ? prob.difficulty : 'Medium') as Difficulty} />
                     </div>
                     <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
                       {prob.title}
                     </h4>
                     <div className="flex flex-wrap gap-1 mt-2">
-                      {prob.tags.map((t, tIdx) => (
-                        <span key={tIdx} className="text-[10px] bg-slate-200/60 text-slate-700 px-1.5 py-0.5 rounded">
-                          {t}
-                        </span>
-                      ))}
+                      <span className="text-[10px] bg-slate-200/60 text-slate-700 px-1.5 py-0.5 rounded">{prob.category}</span>
                     </div>
                   </div>
 
@@ -327,8 +404,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
                     <span>Start Practice</span>
                   </button>
                 </div>
-              ))}
-            </div>
+              ))}</div>}
           </div>
         </div>
       )}

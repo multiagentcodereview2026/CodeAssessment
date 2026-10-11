@@ -14,8 +14,13 @@ from typing import Any, List, Optional
 from fastapi import FastAPI, Depends, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+<<<<<<< Updated upstream
 from sqlalchemy import func, or_
 from analysis.analyzer_service import analyze_submission_complexity
+=======
+from sqlalchemy import func, text
+from sqlalchemy import or_
+>>>>>>> Stashed changes
 
 import models
 from auth import (
@@ -28,7 +33,11 @@ from auth import (
 )
 from database import (
     SessionLocal,
+<<<<<<< Updated upstream
     ensure_submission_assignment_column,
+=======
+    engine,
+>>>>>>> Stashed changes
     get_db,
 )
 from schemas import (
@@ -534,7 +543,14 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    """Report healthy only when the configured application database responds."""
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except Exception as error:
+        logger.warning("Database health check failed: %s", type(error).__name__)
+        raise HTTPException(status_code=503, detail="Database connection unavailable") from error
+    return {"status": "healthy", "database": "connected"}
 
 # ==========================================
 # Problem Repository Endpoints
