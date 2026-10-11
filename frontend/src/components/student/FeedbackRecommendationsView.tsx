@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DifficultyBadge } from '../common/Badge';
-import { TOPIC_MASTERY } from '../../data/learningInsights';
 
 export const FeedbackRecommendationsView: React.FC = () => {
   const navigate = useNavigate();
@@ -31,7 +30,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
     detail: activeAssessment.suggestedImprovements[index] || 'Apply the AI recommendation and resubmit to update the projected score.',
     status: index === 0 ? 'Priority' : index === 1 ? 'Next' : 'Refinement'
   }));
-  const weakestTopics = [...TOPIC_MASTERY].sort((a, b) => a.mastery - b.mastery).slice(0, 3);
+  const weakestTopics: Array<{ name: string; mastery: number; color: string; nextAction: string }> = [];
 
   const filteredSubmissions = submissions.filter((s) =>
     s.problemTitle.toLowerCase().includes(search.toLowerCase()) ||
@@ -237,7 +236,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
       {activeTab === 'recommendations' && (
         <div className="space-y-6">
           {/* Recommended Topic Clusters */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {weakestTopics.length > 0 && <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {weakestTopics.map((topic) => (
               <div key={topic.name} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
                 <div className="flex items-center justify-between">
@@ -250,7 +249,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
                 <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">{topic.nextAction}</p>
               </div>
             ))}
-          </div>
+          </div>}
 
           {/* Recommended Topic Clusters */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 sm:p-8 space-y-4">
@@ -262,7 +261,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
               <span className="text-xs text-slate-400 font-medium">High syllabus weight</span>
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            {recommendedTopics.length === 0 ? <p className="py-4 text-sm text-slate-500">Not enough independent-practice evidence to recommend a topic cluster yet.</p> : <div className="flex flex-wrap gap-3">
               {recommendedTopics.map((topic, idx) => (
                 <div
                   key={idx}
@@ -278,7 +277,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
                   <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
                 </div>
               ))}
-            </div>
+            </div>}
           </div>
 
           {/* Targeted Practice Problems */}
@@ -296,7 +295,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {practiceProblems.length === 0 ? <p className="py-4 text-sm text-slate-500">No targeted practice is available yet. Complete an independent-practice assessment to build a recommendation.</p> : <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {practiceProblems.map((prob, idx) => (
                 <div
                   key={prob.id}
@@ -328,7 +327,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
                   </button>
                 </div>
               ))}
-            </div>
+            </div>}
           </div>
         </div>
       )}

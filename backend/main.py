@@ -45,6 +45,7 @@ from schemas import (
     SubmissionDetails,
     QuickRunRequest,
     QuickRunResponse,
+    ProblemHintsResponse,
     StudentAnalyticsResponse,
     # Instructor schemas
     CourseCreate,
@@ -70,6 +71,7 @@ from schemas import (
 )
 from docker_runner.executor import execute_code_sandboxed
 from agents.complexity import analyze_student_complexity, unavailable_analysis
+from agents.base import llm, extract_clean_json
 from workflow.graph import evaluation_graph
 from workflow.state import EvaluationState
 from instructor_repository import (
@@ -545,6 +547,7 @@ def list_problems(db: Session = Depends(get_db)):
     """Fetch the DSA practice catalogue, excluding course assignments."""
     problems = (
         db.query(models.Problem)
+        .filter(models.Problem.is_public_practice == True)
         .filter(~models.Problem.id.in_(INSTRUCTOR_PROBLEM_IDS))
         .order_by(models.Problem.id)
         .all()
@@ -667,6 +670,7 @@ def create_instructor_problem(
         target_time_complexity=payload.target_time_complexity,
         target_space_complexity=payload.target_space_complexity,
         complexity_source="instructor-provided",
+        is_public_practice=False,
     )
     assignment = models.Assignment(
         title=payload.title,
@@ -800,24 +804,27 @@ def get_problem(
     problem = db.query(models.Problem).filter(models.Problem.id == problem_id).first()
     if not problem:
         raise HTTPException(status_code=404, detail=f"Problem '{problem_id}' not found.")
-    assignment = db.query(models.Assignment).join(models.AssignmentProblem).join(models.Course).filter(
+    assignments = db.query(models.Assignment).join(models.AssignmentProblem).join(models.Course).filter(
         models.AssignmentProblem.problem_id == problem_id,
         models.Assignment.status.in_(["ACTIVE", "UPCOMING"]),
         models.Course.is_active == True,
-    ).first()
-    if problem_id in INSTRUCTOR_PROBLEM_IDS and assignment is None:
+    ).all()
+    assignment = assignments[0] if assignments else None
+    if not problem.is_public_practice and assignment is None:
         raise HTTPException(status_code=404, detail="Course question is not available")
-    if assignment is not None:
+    if not problem.is_public_practice:
         if current_user.role == "instructor":
             instructor = db.query(models.Instructor).filter(models.Instructor.user_id == current_user.id).first()
-            allowed = instructor is not None and assignment.course.instructor_id == instructor.id
+            assignment = next((item for item in assignments if instructor is not None and item.course.instructor_id == instructor.id), None)
+            allowed = assignment is not None
         elif current_user.role == "student":
             student = db.query(models.Student).filter(models.Student.user_id == current_user.id).first()
-            allowed = student is not None and db.query(models.Enrollment.id).filter(
+            assignment = next((item for item in assignments if student is not None and db.query(models.Enrollment.id).filter(
                 models.Enrollment.student_id == student.student_id,
-                models.Enrollment.course_id == assignment.course_id,
+                models.Enrollment.course_id == item.course_id,
                 models.Enrollment.is_active == True,
-            ).first() is not None
+            ).first() is not None), None)
+            allowed = assignment is not None
         else:
             allowed = False
         if not allowed:
@@ -833,10 +840,55 @@ def get_problem(
             "course_code": assignment.course.course_code,
             "due_date": utc_isoformat(assignment.due_date) if assignment.due_date else None,
             "assignment_id": assignment.id,
-        } if assignment else assignment_metadata(problem.id)),
+        } if (assignment and not problem.is_public_practice) else assignment_metadata(problem.id)),
         "target_time_complexity": problem.target_time_complexity,
         "target_space_complexity": problem.target_space_complexity,
     }
+
+
+@app.post("/api/problems/{problem_id}/hints", response_model=ProblemHintsResponse)
+async def generate_problem_hints(
+    problem_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Generate three progressive, public-context-only learning hints on demand."""
+    problem = db.query(models.Problem).filter(models.Problem.id == canonical_problem_id(problem_id)).first()
+    if problem is None or not problem.is_public_practice:
+        # Course-only questions must be verified through their assignment route
+        # before they can receive assistance.
+        course_question = db.query(models.Assignment).join(models.AssignmentProblem).join(models.Course).filter(
+            models.AssignmentProblem.problem_id == problem_id,
+            models.Assignment.status.in_(["ACTIVE", "UPCOMING"]),
+            models.Course.is_active == True,
+        ).all()
+        allowed = False
+        if current_user.role == "student":
+            student = db.query(models.Student).filter(models.Student.user_id == current_user.id).first()
+            allowed = student is not None and any(db.query(models.Enrollment.id).filter(models.Enrollment.student_id == student.student_id, models.Enrollment.course_id == assignment.course_id, models.Enrollment.is_active == True).first() for assignment in course_question)
+        elif current_user.role == "instructor":
+            instructor = db.query(models.Instructor).filter(models.Instructor.user_id == current_user.id).first()
+            allowed = instructor is not None and any(assignment.course.instructor_id == instructor.id for assignment in course_question)
+        if problem is None or not allowed:
+            raise HTTPException(status_code=404, detail="Problem not found")
+    if llm is None:
+        raise HTTPException(status_code=503, detail="Hint generation is unavailable. Please try again later.")
+    prompt = (
+        "Return JSON only: {\"hints\":[string,string,string]}. Generate three progressive hints for the supplied programming problem. "
+        "Hint 1 is a gentle observation; Hint 2 names an algorithm/data structure and state; Hint 3 gives language-independent implementation steps. "
+        "Never include full source code, hidden tests, expected hidden outputs, or a complete solution."
+    )
+    payload = {"title": problem.title, "description": problem.description, "constraints": problem.constraints or [], "examples": problem.examples or [], "topic": problem.category, "difficulty": problem.difficulty}
+    try:
+        from langchain_core.messages import SystemMessage, HumanMessage
+        response = await llm.ainvoke([SystemMessage(content=prompt), HumanMessage(content=json.dumps(payload))])
+        parsed = ProblemHintsResponse.model_validate_json(extract_clean_json(response.content))
+        if any(len(hint.strip()) < 12 for hint in parsed.hints):
+            raise ValueError("Generated hints were incomplete")
+        return parsed
+    except Exception as error:
+        logger.warning("Hint generation failed for %s: %s", problem.id, error)
+        raise HTTPException(status_code=503, detail="Hint generation failed. Please retry shortly.")
 
 # ==========================================
 # Code Execution & Submission Endpoints
@@ -1165,26 +1217,27 @@ def calculate_submission_streak(submissions: list[models.Submission]) -> int:
         current_day -= timedelta(days=1)
     return streak
 
-@app.get("/api/analytics/student/{student_id}", response_model=StudentAnalyticsResponse)
-def get_student_analytics(
-    student_id: str,
-    db: Session = Depends(get_db),
-    student: models.Student = Depends(get_current_student),
-):
-    if student_id != student.student_id:
-        raise HTTPException(status_code=404, detail="Student not found")
-
-    submissions = db.query(models.Submission).filter(
-        models.Submission.student_id == student_id,
+def build_student_analytics(
+    db: Session,
+    student: models.Student,
+    *,
+    independent_only: bool,
+) -> StudentAnalyticsResponse:
+    """Build personal analytics with an explicit submission-source scope."""
+    query = db.query(models.Submission).filter(
+        models.Submission.student_id == student.student_id,
         models.Submission.status == "EVALUATED",
-    ).order_by(models.Submission.created_at).all()
+    )
+    if independent_only:
+        query = query.filter(models.Submission.assignment_id == None)
+    submissions = query.order_by(models.Submission.created_at).all()
     latest = latest_assessed_attempts(submissions, preserve_assignment=False)
     avg_overall = average_score(latest)
     avg_correctness = average_score(latest, "correctness_score")
     avg_complexity = average_score(latest, "complexity_score")
     avg_style = average_score(latest, "style_score")
     avg_similarity = average_score(latest, "similarity_score")
-    total_problems = db.query(models.Problem).count()
+    total_problems = db.query(models.Problem).filter(models.Problem.is_public_practice == True).count()
     unique_solved = len({submission.problem_id for submission in latest if submission.overall_score >= 70})
 
     score_trend = [
@@ -1223,6 +1276,30 @@ def get_student_analytics(
         category_breakdown=category_breakdown,
         weak_topics=weak_topics
     )
+
+
+@app.get("/api/analytics/student/{student_id}", response_model=StudentAnalyticsResponse)
+def get_student_analytics(
+    student_id: str,
+    db: Session = Depends(get_db),
+    student: models.Student = Depends(get_current_student),
+):
+    """Dashboard overview: independent practice plus enrolled course work."""
+    if student_id != student.student_id:
+        raise HTTPException(status_code=404, detail="Student not found")
+    return build_student_analytics(db, student, independent_only=False)
+
+
+@app.get("/api/analytics/student/{student_id}/practice", response_model=StudentAnalyticsResponse)
+def get_student_practice_analytics(
+    student_id: str,
+    db: Session = Depends(get_db),
+    student: models.Student = Depends(get_current_student),
+):
+    """Analytics & Progress: independent practice only, never course work."""
+    if student_id != student.student_id:
+        raise HTTPException(status_code=404, detail="Student not found")
+    return build_student_analytics(db, student, independent_only=True)
 
 @app.get("/api/instructor/overview")
 def get_instructor_overview(
@@ -2081,10 +2158,26 @@ def get_student_courses(
     result = []
     for enrollment in enrollments:
         course = enrollment.course
-        assignment_count = db.query(models.Assignment).filter(
+        assignments = db.query(models.Assignment).filter(
             models.Assignment.course_id == course.id,
             models.Assignment.status.in_(["ACTIVE", "UPCOMING"]),
-        ).count()
+        ).all()
+        assignment_ids = [assignment.id for assignment in assignments]
+        assigned_problem_ids = {
+            problem_id for (problem_id,) in db.query(models.AssignmentProblem.problem_id).filter(
+                models.AssignmentProblem.assignment_id.in_(assignment_ids)
+            ).all()
+        } if assignment_ids else set()
+        assessed = db.query(models.Submission).filter(
+            models.Submission.student_id == student.student_id,
+            models.Submission.assignment_id.in_(assignment_ids),
+            models.Submission.status == "EVALUATED",
+            models.Submission.overall_score.isnot(None),
+        ).all() if assignment_ids else []
+        latest = latest_assessed_attempts(assessed, preserve_assignment=False)
+        completed_problem_ids = {submission.problem_id for submission in latest if submission.problem_id in assigned_problem_ids}
+        completed = len(completed_problem_ids)
+        total_assigned = len(assigned_problem_ids)
         result.append(StudentCourseResponse(
             id=course.id,
             course_code=course.course_code,
@@ -2094,7 +2187,12 @@ def get_student_courses(
             instructor_id=course.instructor_id,
             is_active=course.is_active,
             created_at=course.created_at,
-            assignments_count=assignment_count,
+            assignments_count=len(assignments),
+            instructor_name=(course.instructor.user.full_name if course.instructor and course.instructor.user and course.instructor.user.full_name else "Instructor details unavailable"),
+            average_score=average_score(latest),
+            completed_questions=completed,
+            pending_questions=max(0, total_assigned - completed),
+            progress_percent=round(completed / total_assigned * 100, 1) if total_assigned else None,
         ))
     return result
 

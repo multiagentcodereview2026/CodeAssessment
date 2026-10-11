@@ -140,6 +140,9 @@ class Problem(Base):
     complexity_confidence = Column(Float, nullable=True)
     complexity_reasoning = Column(Text, nullable=True)
     content_hash = Column(String(64), nullable=True, unique=True, index=True)
+    # Course-only questions remain private unless an instructor deliberately
+    # publishes them to the reusable practice catalogue.
+    is_public_practice = Column(Boolean, nullable=False, default=True, server_default="true", index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     submissions = relationship("Submission", back_populates="problem")
@@ -231,6 +234,10 @@ class Submission(Base):
     student = relationship("Student", back_populates="submissions")
     problem = relationship("Problem", back_populates="submissions")
     assignment = relationship("Assignment", back_populates="submissions")
+
+    @property
+    def source(self) -> str:
+        return "INSTRUCTOR_ASSIGNED" if self.assignment_id is not None else "INDEPENDENT_PRACTICE"
 VERDICT_ACCEPTED = "ACCEPTED"
 VERDICT_WRONG_ANSWER = "WRONG_ANSWER"
 VERDICT_TIME_LIMIT_EXCEEDED = "TIME_LIMIT_EXCEEDED"

@@ -182,6 +182,7 @@ export interface SubmissionItem {
   passedTestCases: number;
   totalTestCases: number;
   feedbackSummary?: string;
+  source: 'Independent Practice' | 'Instructor Assigned';
 }
 
 export interface CategoryScore {

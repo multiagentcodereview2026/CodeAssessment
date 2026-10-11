@@ -1,9 +1,29 @@
-import React from 'react';
-import { useApp } from '../../context/AppContext';
+import React, { useEffect, useState } from 'react';
+import { useAuth } from '../../context/useAuth';
 import { ScoreTrendLineChart } from '../common/ChartComponents';
 
 export const AnalyticsProgressView: React.FC = () => {
-  const { studentProgress } = useApp();
+  const { user, authFetch } = useAuth();
+  const [studentProgress, setStudentProgress] = useState<any>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    authFetch(`/api/analytics/student/${encodeURIComponent(user.id)}/practice`, { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Independent-practice analytics could not be loaded.');
+        return response.json();
+      })
+      .then((data) => { if (!cancelled) setStudentProgress({
+        overallScore: data.overall_score, problemsSolved: data.problems_solved || 0, totalProblems: data.total_problems || 0,
+        currentStreak: data.streak_days || 0, weakTopics: data.weak_topics || [], scoreTrend: data.score_trend || [],
+        categoryWiseScores: (data.category_breakdown || []).filter((item: any) => item.value != null).map((item: any) => ({ ...item, percentage: item.value, scoreDisplay: `${item.value}%` })),
+      }); })
+      .catch((loadError) => { if (!cancelled) setError(loadError.message); });
+    return () => { cancelled = true; };
+  }, [authFetch, user]);
+  if (error) return <main className="mx-auto max-w-6xl py-8 text-sm text-rose-700">{error}</main>;
+  if (!studentProgress) return <main className="mx-auto max-w-6xl py-8 text-sm text-slate-500">Loading independent-practice analytics…</main>;
   const totalAssessed = studentProgress.scoreTrend.length;
 
   return (
@@ -11,7 +31,7 @@ export const AnalyticsProgressView: React.FC = () => {
       <header className="border-b border-slate-200 pb-5">
         <p className="text-xs font-bold uppercase text-indigo-700">Your account</p>
         <h1 className="mt-1 text-2xl font-bold text-slate-900">Analytics & Progress</h1>
-        <p className="mt-1 text-sm text-slate-600">Metrics use your saved assessed submissions. Independent practice and course assignments are both included in your personal history.</p>
+        <p className="mt-1 text-sm text-slate-600">Metrics use only your independent-practice assessments. Instructor-assigned coursework is shown in My Courses.</p>
       </header>
 
       <section className="grid gap-4 sm:grid-cols-3">

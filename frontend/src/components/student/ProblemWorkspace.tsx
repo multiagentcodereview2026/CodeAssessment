@@ -83,6 +83,7 @@ export const ProblemWorkspace: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     setRemoteProblem(null);
+    setHints([]); setVisibleHints(0); setHintError('');
     setProblemLoadError(null);
     setIsProblemLoading(true);
 
@@ -138,6 +139,10 @@ export const ProblemWorkspace: React.FC = () => {
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [submissionStep, setSubmissionStep] = useState<number>(0);
+  const [hints, setHints] = useState<string[]>([]);
+  const [visibleHints, setVisibleHints] = useState(0);
+  const [hintsLoading, setHintsLoading] = useState(false);
+  const [hintError, setHintError] = useState('');
   const [isEditorFullscreen, setIsEditorFullscreen] = useState<boolean>(false);
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
@@ -158,6 +163,19 @@ export const ProblemWorkspace: React.FC = () => {
     && runOutput.results.every((result) => result.passed)
     && verifiedRunKey === currentRunKey
   );
+
+  const revealHint = async () => {
+    setHintError('');
+    if (hints.length) { setVisibleHints((count) => Math.min(count + 1, hints.length)); return; }
+    setHintsLoading(true);
+    try {
+      const response = await authFetch(`/api/problems/${encodeURIComponent(workspaceProblemId)}/hints`, { method: 'POST' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !Array.isArray(data.hints)) throw new Error(data.detail || 'Hints could not be generated.');
+      setHints(data.hints); setVisibleHints(1);
+    } catch (error) { setHintError(error instanceof Error ? error.message : 'Hints could not be generated.'); }
+    finally { setHintsLoading(false); }
+  };
 
   // A draft belongs to one user, problem, and language. It remains in this
   // browser for 60 days after the last edit, including across reloads,
@@ -650,6 +668,7 @@ export const ProblemWorkspace: React.FC = () => {
         score: newAssessment.multiScores.overallScore,
         date: 'Just now',
         language: newAssessment.language,
+        source: assignmentId ? 'Instructor Assigned' : 'Independent Practice',
         executionTime: newAssessment.executionTime,
         passedTestCases: passedCases,
         totalTestCases: totalCases
@@ -852,6 +871,15 @@ export const ProblemWorkspace: React.FC = () => {
                     ))}
                   </div>
                 </div>
+
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div><h4 className="text-xs font-bold text-indigo-900">Need a nudge?</h4><p className="mt-1 text-xs text-indigo-800">Hints are optional and reveal one level at a time.</p></div>
+                    <button onClick={() => void revealHint()} disabled={hintsLoading || visibleHints >= 3} className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{hintsLoading ? 'Generating hint…' : visibleHints ? (visibleHints >= 3 ? 'All hints revealed' : 'Reveal next hint') : 'Get a hint'}</button>
+                  </div>
+                  {hintError && <p role="alert" className="mt-3 text-xs text-rose-700">{hintError} <button onClick={() => void revealHint()} className="font-bold underline">Retry</button></p>}
+                  {hints.slice(0, visibleHints).map((hint, index) => <div key={index} className="mt-3 rounded-lg border border-indigo-100 bg-white p-3 text-xs text-slate-700"><span className="font-bold text-indigo-700">Hint {index + 1}: </span>{hint}</div>)}
+                </div>
               </>
             ) : (
               /* Test Cases Tab */
@@ -997,37 +1025,8 @@ export const ProblemWorkspace: React.FC = () => {
                 <h3 className="text-lg font-extrabold text-white">
                   Multi-Agent AI Assessment in Progress
                 </h3>
-                <p className="text-xs text-slate-400 max-w-sm mt-1 mb-6">
-                  Evaluating algorithmic correctness, AST complexity, style semantics & originality rubric.
-                </p>
-
-                {/* Pipeline Checklist */}
-                <div className="w-full max-w-md bg-slate-900 rounded-2xl p-4 border border-slate-800 text-left space-y-2.5 text-xs">
-                  <div className={`flex items-center gap-2.5 ${submissionStep >= 1 ? 'text-emerald-400' : 'text-slate-500'}`}>
-                    {submissionStep > 1 ? <Check className="w-4 h-4 text-emerald-400" /> : <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />}
-                    <span className="font-semibold">1. Compiling & running all test cases securely</span>
-                  </div>
-
-                  <div className={`flex items-center gap-2.5 ${submissionStep >= 2 ? 'text-emerald-400' : 'text-slate-500'}`}>
-                    {submissionStep > 2 ? <Check className="w-4 h-4 text-emerald-400" /> : submissionStep === 2 ? <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" /> : <Cpu className="w-4 h-4" />}
-                    <span className="font-semibold">2. AST Time & Space Complexity Profiler</span>
-                  </div>
-
-                  <div className={`flex items-center gap-2.5 ${submissionStep >= 3 ? 'text-emerald-400' : 'text-slate-500'}`}>
-                    {submissionStep > 3 ? <Check className="w-4 h-4 text-emerald-400" /> : submissionStep === 3 ? <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" /> : <Layers className="w-4 h-4" />}
-                    <span className="font-semibold">3. Code Quality, Style & Structure Assessment</span>
-                  </div>
-
-                  <div className={`flex items-center gap-2.5 ${submissionStep >= 4 ? 'text-emerald-400' : 'text-slate-500'}`}>
-                    {submissionStep > 4 ? <Check className="w-4 h-4 text-emerald-400" /> : submissionStep === 4 ? <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                    <span className="font-semibold">4. Plagiarism & Cohort Similarity Scan</span>
-                  </div>
-
-                  <div className={`flex items-center gap-2.5 ${submissionStep >= 5 ? 'text-emerald-400' : 'text-slate-500'}`}>
-                    {submissionStep >= 5 ? <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                    <span className="font-semibold">5. Synthesizing Explainable Report & Score Projection</span>
-                  </div>
-                </div>
+                <p className="text-xs text-slate-400 max-w-sm mt-1 mb-6">Running the secure judge and assessment workflow. This service returns one final report, so individual agent stages cannot be shown as completed until the result is saved.</p>
+                <div className="w-full max-w-md bg-slate-900 rounded-2xl p-4 border border-slate-800 text-left text-xs text-slate-300"><div className="flex items-center gap-2.5"><div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" /><span className="font-semibold">Secure execution and assessment are running</span></div><p className="mt-2 text-slate-400">The report will show execution status, correctness, complexity availability, style, and similarity when the server completes.</p></div>
               </div>
             )}
           </div>

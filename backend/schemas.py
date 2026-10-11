@@ -144,11 +144,15 @@ class QuickRunResponse(BaseModel):
     total_cases: int
     results: List[Dict[str, Any]] = []
 
+class ProblemHintsResponse(BaseModel):
+    hints: List[str] = Field(min_length=3, max_length=3)
+
 class SubmissionResponse(BaseModel):
     submission_id: str
     student_id: str
     problem_id: str
     assignment_id: Optional[int] = None
+    source: Literal["INDEPENDENT_PRACTICE", "INSTRUCTOR_ASSIGNED"] = "INDEPENDENT_PRACTICE"
     language: str
     status: str
     overall_score: Optional[float] = None
@@ -304,6 +308,11 @@ class StudentCreateByInstructor(BaseModel):
 
 class StudentCourseResponse(CourseResponse):
     assignments_count: int = 0
+    instructor_name: str = "Instructor details unavailable"
+    average_score: Optional[float] = None
+    completed_questions: int = 0
+    pending_questions: int = 0
+    progress_percent: Optional[float] = None
 
 class StudentAssignmentResponse(BaseModel):
     id: int
