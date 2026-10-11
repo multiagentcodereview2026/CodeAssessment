@@ -157,12 +157,10 @@ export const ProblemWorkspace: React.FC = () => {
   } | null>(null);
   const [verifiedRunKey, setVerifiedRunKey] = useState<string | null>(null);
   const currentRunKey = JSON.stringify([workspaceProblemId, language, code]);
-  const canSubmit = Boolean(
-    runOutput?.status === 'success'
-    && runOutput.results.length > 0
-    && runOutput.results.every((result) => result.passed)
-    && verifiedRunKey === currentRunKey
-  );
+  // A final assessment must be able to report incorrect, compiling-failed,
+  // and runtime-failed code. The backend judge is the authority; public-run
+  // success is useful feedback, not an authorization gate.
+  const canSubmit = Boolean(code.trim() && remoteProblem);
 
   const revealHint = async () => {
     setHintError('');
@@ -471,12 +469,12 @@ export const ProblemWorkspace: React.FC = () => {
 
   // Submit Code (Live 10-Agent LangGraph AI Assessment Pipeline)
   const handleSubmitCode = async () => {
-    if (!canSubmit) {
+    if (!code.trim()) {
       setRunOutput((current) => current || {
         status: 'error',
         time: '—',
         memory: '—',
-        reason: 'Run your code and pass every test case to enable submission.',
+        reason: 'Enter code before submitting for assessment.',
         results: []
       });
       return;
@@ -967,15 +965,15 @@ export const ProblemWorkspace: React.FC = () => {
                 </button>
                 <button
                   onClick={handleSubmitCode}
-                  disabled={isRunning || isSubmitting || isProblemLoading || !remoteProblem || !canSubmit}
-                  title={canSubmit ? 'All test cases passed. You can submit.' : 'Run the current code and pass every test case to enable submission.'}
+                  disabled={isRunning || isSubmitting || isProblemLoading || !canSubmit}
+                  title={canSubmit ? 'Submit this code for a full assessment.' : 'Enter code to submit it for assessment.'}
                   className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold shadow-md shadow-indigo-600/30 flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>Submit Code</span>
                 </button>
                 <span className={`text-[10px] ${canSubmit ? 'text-emerald-400' : 'text-slate-400'}`}>
-                  {canSubmit ? 'Tests passed' : 'Pass all tests to submit'}
+                  {canSubmit ? 'Ready to assess' : 'Enter code to assess'}
                 </span>
               </div>
             </div>
