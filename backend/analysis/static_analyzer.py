@@ -190,8 +190,11 @@ def _is_tree_context(source: str) -> bool:
     # Exclude binary search patterns: "low", "right", "mid" together indicate array binary search, not trees
     if bool(re.search(r"\blow\b", src)) and bool(re.search(r"\bright\b", src)) and bool(re.search(r"\bmid\b", src)):
         return False
+    # ``left`` and ``right`` are common sliding-window and two-pointer names.
+    # Treating either identifier alone as tree evidence misclassifies those
+    # algorithms (including their auxiliary space) as tree traversals.
     tree_keywords = [
-        r"\btreenode\b", r"\bnode\s*\*", r"\broot\b", r"\bleft\b", r"\bright\b",
+        r"\btreenode\b", r"\bnode\s*\*", r"\broot\b",
         r"\bbst\b", r"\bbinarytree\b", r"\bheapify\b", r"\bbuildheap\b", r"\bheapsort\b",
         r"\bmorris\b", r"\blca\b", r"\blowestcommonancestor\b", r"\binorder\b",
         r"\bpreorder\b", r"\bpostorder\b", r"\blevelorder\b", r"\bmaxdepth\b", r"\bmindepth\b"
@@ -707,6 +710,28 @@ def analyze_cpp(source: str) -> ComplexityAnalysis:
 
     src = source.lower()
 
+    # Materializing every substring and then checking character pairs inside
+    # each saved substring costs O(n^4) time and O(n^3) stored characters.
+    # Detect this from the container/population/validation structure so the
+    # estimate does not depend on a particular problem or function name.
+    materialized_substrings = _materialized_substrings_brute_force(source)
+    if materialized_substrings:
+        return ComplexityAnalysis(
+            time_complexity="O(n^4)",
+            space_complexity="O(n^3)",
+            confidence=0.93,
+            method="ast",
+            status="ANALYZED",
+            signals=[
+                "structural:stores-all-substrings",
+                "structural:pairwise-character-validation-per-substring",
+            ],
+            explanation=(
+                "All substrings are stored, then each substring is checked "
+                "with a pairwise character scan."
+            ),
+        )
+
     depth = _loop_depth(source)
     has_recursion, branch_count = _detect_recursion(source)
     has_two_vars, loops_nested = _uses_two_loop_variables(source)
@@ -1012,6 +1037,55 @@ def analyze_cpp(source: str) -> ComplexityAnalysis:
     )
 
 
+def _materialized_substrings_brute_force(source: str) -> bool:
+    """Recognize stored substrings followed by a pairwise character scan."""
+    src = source.lower()
+    container = re.search(
+        r"\bvector\s*<\s*(?:std::)?string\s*>\s*(\w+)", src
+    )
+    if not container:
+        return False
+    name = re.escape(container.group(1))
+
+    # Collection gets a temporary string inside three nested loops. The
+    # innermost loop grows that string one input character at a time.
+    append = re.search(rf"\b{name}\s*\.\s*push_back\s*\(", src)
+    if not append:
+        return False
+    before_append = src[:append.start()]
+    active_braced_loops = list(re.finditer(
+        r"\b(?:for|while)\s*\([^)]*\)",
+        before_append,
+    ))
+    if len(active_braced_loops) < 3:
+        return False
+    if not re.search(
+        r"(?:string|std::string)\s+\w+", before_append
+    ) or not re.search(r"\w+\s*\+=\s*\w+\s*\[[^]]+\]", before_append):
+        return False
+
+    # Later, iterate the stored strings and compare two indexed characters
+    # while both inner-loop indices advance within the same saved string.
+    comparisons = re.search(
+        rf"\b{name}\s*\[\s*\w+\s*\]\s*\[\s*\w+\s*\]\s*==\s*"
+        rf"\b{name}\s*\[\s*\w+\s*\]\s*\[\s*\w+\s*\]",
+        src,
+    )
+    if not comparisons:
+        return False
+    collection_iteration = re.search(
+        rf"\bfor\s*\([^{{}}]*?\b{name}\s*\.\s*size\s*\(\)", src
+    )
+    if not collection_iteration or collection_iteration.start() >= comparisons.start():
+        return False
+    validation_prefix = src[collection_iteration.start():comparisons.start()]
+    validation_loops = re.findall(r"\b(?:for|while)\s*\([^)]*\)", validation_prefix)
+    return len(validation_loops) >= 3 and bool(re.search(
+        rf"\b{name}\s*\[\s*\w+\s*\]\s*\.\s*(?:length|size)\s*\(",
+        validation_prefix,
+    ))
+
+
 def _structural_fast_path(source: str) -> ComplexityAnalysis | None:
     """High-confidence rules based solely on syntax and data flow.
 
@@ -1135,6 +1209,28 @@ def analyze_source(
     mode: str = "legacy",
 ) -> ComplexityAnalysis:
     language_name = language.lower().strip()
+
+    # This pattern is highly specific structurally and must precede broad
+    # stdin/main-program shortcuts in the semantic path.
+    if (
+        language_name in {"cpp", "c++", "cc", "cxx"}
+        and _materialized_substrings_brute_force(source)
+    ):
+        return ComplexityAnalysis(
+            time_complexity="O(n^4)",
+            space_complexity="O(n^3)",
+            confidence=0.93,
+            method="ast",
+            status="ANALYZED",
+            signals=[
+                "structural:stores-all-substrings",
+                "structural:pairwise-character-validation-per-substring",
+            ],
+            explanation=(
+                "All substrings are stored, then each substring is checked "
+                "with a pairwise character scan."
+            ),
+        )
 
     strict_structural = mode == "structural"
     # Structural mode never invokes the legacy semantic/name shortcut table.

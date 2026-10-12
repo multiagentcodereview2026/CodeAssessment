@@ -15,6 +15,7 @@ def test_normalizes_common_big_o_spellings():
     assert normalize_complexity("O(nlogn)") == "O(n log n)"
     assert normalize_complexity("O(√n)") == "O(sqrt n)"
     assert normalize_complexity("O(n²)") == "O(n^2)"
+    assert normalize_complexity(r"O(|\Sigma|)") == "O(1)"
 
 
 def test_theta_is_not_silently_mixed_into_big_o_scoring():
@@ -65,6 +66,13 @@ def test_space_score_uses_the_same_rank_distance_rule():
     assessment = space_complexity_assessment("O(n)", "O(n^2)")
     assert assessment["space_score"] == 19.444
     assert assessment["score_percent"] == 77.776
+
+
+def test_fixed_character_alphabet_space_complexity_is_scoreable():
+    assessment = space_complexity_assessment("O(n)", r"O(|\Sigma|)")
+    assert assessment["student_space_complexity"] == "O(1)"
+    assert assessment["space_score"] == 25.0
+    assert assessment["status"] == "SCORED"
 
 
 def test_rank_is_one_based_and_better_than_target_is_flagged_for_review():

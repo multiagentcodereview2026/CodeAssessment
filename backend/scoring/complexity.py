@@ -72,6 +72,12 @@ def normalize_complexity(complexity: Optional[str]) -> Optional[str]:
     if normalized:
         return normalized
 
+    # The character alphabet in this platform's string problems is a fixed,
+    # finite domain. A solution bounded by |Sigma| therefore uses constant
+    # auxiliary space under the same asymptotic model as O(1).
+    if compact in {"o(|\\sigma|)", "o(|sigma|)", "o(σ)", "o(alphabet)"}:
+        return "O(1)"
+
     # Equivalent logarithmic bounds that use multiple input-size variables.
     # They remain logarithmic for the problem's input scale and can safely
     # enter the fixed ladder; other multi-variable expressions stay review-only.
