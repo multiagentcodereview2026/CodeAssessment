@@ -8,94 +8,46 @@ interface ScoreTrendProps {
 
 export const ScoreTrendLineChart: React.FC<ScoreTrendProps> = ({ data, height = 180 }) => {
   if (!data || data.length === 0) return null;
-
-  const padding = { top: 20, right: 20, bottom: 30, left: 35 };
-  const width = 450;
+  const width = 720;
+  const viewHeight = Math.max(180, height);
+  const padding = { top: 12, right: 14, bottom: 34, left: 42 };
   const graphWidth = width - padding.left - padding.right;
-  const graphHeight = height - padding.top - padding.bottom;
-
-  const minScore = 0;
-  const maxScore = 100;
-
-  const points = data.map((d, index) => {
-    const x = padding.left + (index / (data.length - 1)) * graphWidth;
-    const y = padding.top + graphHeight - ((d.score - minScore) / (maxScore - minScore)) * graphHeight;
-    return { x, y, ...d };
-  });
-
-  const pathD = points.reduce((acc, p, i) => {
-    if (i === 0) return `M ${p.x} ${p.y}`;
-    // smooth cubic bezier curve
-    const prev = points[i - 1];
-    const cx1 = prev.x + (p.x - prev.x) / 2;
-    const cy1 = prev.y;
-    const cx2 = prev.x + (p.x - prev.x) / 2;
-    const cy2 = p.y;
-    return `${acc} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${p.x} ${p.y}`;
-  }, '');
-
-  const areaD = `${pathD} L ${points[points.length - 1].x} ${padding.top + graphHeight} L ${points[0].x} ${padding.top + graphHeight} Z`;
+  const graphHeight = viewHeight - padding.top - padding.bottom;
+  const chartData = data.map((point, index) => ({
+    ...point,
+    label: `Attempt ${index + 1}`,
+    shortDate: Number.isNaN(Date.parse(point.date))
+      ? point.date
+      : new Date(point.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+  }));
+  const points = chartData.map((point, index) => ({
+    ...point,
+    x: padding.left + (chartData.length === 1 ? graphWidth / 2 : index / (chartData.length - 1) * graphWidth),
+    y: padding.top + (100 - Math.max(0, Math.min(100, point.score))) / 100 * graphHeight,
+  }));
+  const line = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+  const area = `${line} L ${points[points.length - 1].x} ${padding.top + graphHeight} L ${points[0].x} ${padding.top + graphHeight} Z`;
+  const tickEvery = Math.max(1, Math.ceil((points.length - 1) / 5));
+  const visibleTickIndices = new Set(points.map((_, index) => index).filter((index) => index % tickEvery === 0 || index === points.length - 1));
 
   return (
-    <div className="w-full overflow-x-auto">
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto select-none">
-        <defs>
-          <linearGradient id="scoreTrendGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#4f46e5" stopOpacity="0.0" />
-          </linearGradient>
-        </defs>
-
-        {/* Y Grid lines */}
-        {[0, 25, 50, 75, 100].map(val => {
-          const y = padding.top + graphHeight - (val / 100) * graphHeight;
-          return (
-            <g key={val}>
-              <line
-                x1={padding.left}
-                y1={y}
-                x2={width - padding.right}
-                y2={y}
-                stroke="#f1f5f9"
-                strokeWidth="1"
-                strokeDasharray={val === 0 ? 'none' : '3,3'}
-              />
-              <text
-                x={padding.left - 8}
-                y={y + 3.5}
-                fontSize="10"
-                textAnchor="end"
-                className="fill-slate-400 font-mono"
-              >
-                {val}
-              </text>
-            </g>
-          );
+    <div className="h-full w-full min-w-0" role="img" aria-label={`Score trend across ${data.length} assessed problems`}>
+      <svg viewBox={`0 0 ${width} ${viewHeight}`} className="block h-auto w-full" preserveAspectRatio="xMidYMid meet">
+        <defs><linearGradient id="assessmentScoreFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4f46e5" stopOpacity="0.14"/><stop offset="100%" stopColor="#4f46e5" stopOpacity="0.01"/></linearGradient></defs>
+        {[0, 25, 50, 75, 100].map((value) => {
+          const y = padding.top + (100 - value) / 100 * graphHeight;
+          return <g key={value}><line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#e8edf4" strokeDasharray={value === 0 ? undefined : '3 4'}/><text x={padding.left - 9} y={y + 4} textAnchor="end" fill="#94a3b8" fontSize="11">{value}</text></g>;
         })}
-
-        {/* Area fill */}
-        <path d={areaD} fill="url(#scoreTrendGradient)" />
-
-        {/* Line */}
-        <path d={pathD} fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" />
-
-        {/* Data points */}
-        {points.map((p, i) => (
-          <g key={i} className="group cursor-pointer">
-            <circle cx={p.x} cy={p.y} r="4" fill="#ffffff" stroke="#4f46e5" strokeWidth="2.5" />
-            <circle cx={p.x} cy={p.y} r="8" fill="transparent" className="hover:fill-indigo-500/10" />
-            {/* Label */}
-            <text
-              x={p.x}
-              y={padding.top + graphHeight + 18}
-              fontSize="10"
-              textAnchor="middle"
-              className="fill-slate-500 font-medium"
-            >
-              {p.date}
-            </text>
-          </g>
-        ))}
+        <path d={area} fill="url(#assessmentScoreFill)"/>
+        <path d={line} fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+        {points.map((point, index) => {
+          const exactDate = new Date(point.date);
+          const detail = Number.isNaN(exactDate.getTime()) ? point.date : exactDate.toLocaleString();
+          return <g key={`${point.date}-${index}`}>
+            <circle cx={point.x} cy={point.y} r="4" fill="white" stroke="#4f46e5" strokeWidth="2.5"><title>{`${point.label} · ${Number(point.score).toFixed(1)} / 100 · ${detail}`}</title></circle>
+            {visibleTickIndices.has(index) && <text x={point.x} y={viewHeight - 9} textAnchor="middle" fill="#64748b" fontSize="11">{point.shortDate}</text>}
+          </g>;
+        })}
       </svg>
     </div>
   );

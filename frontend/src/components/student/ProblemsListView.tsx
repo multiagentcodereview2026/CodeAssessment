@@ -60,9 +60,12 @@ export const ProblemsListView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [difficultyFilter, setDifficultyFilter] = useState<string>('all');
   const [selectedTag, setSelectedTag] = useState<string>('all');
+  const [languageFilter, setLanguageFilter] = useState<string>('all');
   const [isSkillsOpen, setIsSkillsOpen] = useState(false);
   const [practiceProblems, setPracticeProblems] = useState<Problem[]>(readCachedPracticeCatalogue);
   const [isPracticeLoading, setIsPracticeLoading] = useState(() => readCachedPracticeCatalogue().length === 0);
+  const [practiceLoadError, setPracticeLoadError] = useState('');
+  const [practiceReloadKey, setPracticeReloadKey] = useState(0);
   const [instructorProblems, setInstructorProblems] = useState<Problem[]>([]);
   const [isInstructorLoading, setIsInstructorLoading] = useState(true);
   const [instructorLoadError, setInstructorLoadError] = useState('');
@@ -78,6 +81,7 @@ export const ProblemsListView: React.FC = () => {
   useEffect(() => {
     if (isInstructor) return;
     let cancelled = false;
+    setPracticeLoadError('');
 
     const loadPracticeProblems = async () => {
       try {
@@ -98,7 +102,7 @@ export const ProblemsListView: React.FC = () => {
           examples: [],
           constraints: [],
           testCases: [],
-          starterCode: {},
+          starterCode: problem.starter_codes || {},
           solutionCode: {},
           optimalComplexity: { time: '—', space: '—' }
         }));
@@ -110,6 +114,7 @@ export const ProblemsListView: React.FC = () => {
         }
       } catch (error) {
         console.error('Unable to load the DSA practice catalogue:', error);
+        if (!cancelled) setPracticeLoadError('The problem bank could not be loaded. Check your connection and try again.');
       } finally {
         if (!cancelled) setIsPracticeLoading(false);
       }
@@ -117,7 +122,7 @@ export const ProblemsListView: React.FC = () => {
 
     void loadPracticeProblems();
     return () => { cancelled = true; };
-  }, [isInstructor]);
+  }, [isInstructor, practiceReloadKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,7 +191,7 @@ export const ProblemsListView: React.FC = () => {
   const [selectedProblemForAnalytics, setSelectedProblemForAnalytics] = useState<Problem | null>(null);
 
   const allTags = Array.from(new Set((isInstructor ? instructorProblems : problems).flatMap((p) => p.tags)));
-  const solvedSlugs = new Set(submissions.map(s => s.problemSlug || s.problemId));
+  const solvedSlugs = new Set(submissions.filter((submission) => submission.status.toLowerCase() === 'passed').map((submission) => submission.problemSlug || submission.problemId));
 
   const instructorCount = isInstructor ? instructorProblems.length : problems.filter(p => p.isInstructorAssigned).length;
   const practiceCount = problems.filter(p => !p.isInstructorAssigned).length;
@@ -205,10 +210,9 @@ export const ProblemsListView: React.FC = () => {
     return matchSearch && matchDiff && matchTag;
   });
 
-  const hasActiveFilters = search !== '' || difficultyFilter !== 'all' || selectedTag !== 'all';
+  const hasActiveFilters = search !== '' || difficultyFilter !== 'all' || selectedTag !== 'all' || languageFilter !== 'all';
   const selectedTabCount = activeTab === 'instructor' ? instructorCount : practiceCount;
   const completionCount = filtered.filter(p => solvedSlugs.has(p.slug) || solvedSlugs.has(p.id)).length;
-  const hiddenCaseCount = filtered.reduce((count, p) => count + p.testCases.filter(tc => tc.isHidden).length, 0);
   const focusLabel = activeTab === 'instructor'
     ? 'Questions saved here are linked to the selected course and its students.'
     : 'Use standard practice to reinforce topics the evaluator marks as weak.';
@@ -217,6 +221,7 @@ export const ProblemsListView: React.FC = () => {
     setSearch('');
     setDifficultyFilter('all');
     setSelectedTag('all');
+    setLanguageFilter('all');
   };
 
   const handleSolve = (probId: string) => {
@@ -297,7 +302,7 @@ export const ProblemsListView: React.FC = () => {
       return;
     }
     if (!formTestCases.length || formTestCases.some((tc) => !tc.input.trim() || !tc.output.trim()) || !formTestCases.some((tc) => !tc.isHidden)) {
-      setQuestionError('Add complete test cases and at least one public test case.');
+      setQuestionError('Add complete test cases and at least one example for sample runs.');
       return;
     }
 
@@ -361,11 +366,7 @@ export const ProblemsListView: React.FC = () => {
   // Students use a deliberately simple two-section bank.  The instructor's
   // authoring/dashboard page below stays independent from this presentation.
   const studentInstructorProblems = instructorProblems;
-  const studentPracticeProblems = practiceProblems.length > 0
-    ? practiceProblems
-    : isPracticeLoading
-      ? []
-      : problems.filter((problem) => !problem.isInstructorAssigned);
+  const studentPracticeProblems = practiceProblems;
   const questionOrder = (id: string) => {
     const match = id.match(/(\d+)$/);
     return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
@@ -374,12 +375,14 @@ export const ProblemsListView: React.FC = () => {
     .sort((left, right) => questionOrder(left.id) - questionOrder(right.id) || left.title.localeCompare(right.title));
   const normalizedStudentSearch = search.trim().toLowerCase();
   const studentPracticeTopics = Array.from(new Set(orderedPracticeProblems.flatMap((problem) => problem.tags))).sort();
+  const studentPracticeLanguages = Array.from(new Set(orderedPracticeProblems.flatMap((problem) => Object.keys(problem.starterCode || {}).map((language) => language.toLowerCase())))).sort();
   const visibleStudentPractice = orderedPracticeProblems.filter((problem, index) => {
     const matchesNumber = /^\d+$/.test(normalizedStudentSearch) && Number(normalizedStudentSearch) === index + 1;
     const matchesText = !normalizedStudentSearch || `${problem.title} ${problem.tags.join(' ')}`.toLowerCase().includes(normalizedStudentSearch);
     return (matchesNumber || matchesText) &&
       (difficultyFilter === 'all' || problem.difficulty.toLowerCase() === difficultyFilter) &&
-      (selectedTag === 'all' || problem.tags.includes(selectedTag));
+      (selectedTag === 'all' || problem.tags.includes(selectedTag)) &&
+      (languageFilter === 'all' || Object.keys(problem.starterCode || {}).some((language) => language.toLowerCase() === languageFilter));
   });
   const visibleStudentInstructor = studentInstructorProblems.filter((problem) => {
     const content = `${problem.title} ${problem.courseCode || ''} ${problem.tags.join(' ')}`.toLowerCase();
@@ -439,6 +442,10 @@ export const ProblemsListView: React.FC = () => {
           </section>
         ) : (
           <section className="space-y-5">
+            <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+              <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-indigo-700">Independent practice</p><h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Find a problem to solve</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Choose a topic and difficulty, then open a problem to write code, run examples, and submit for assessment.</p></div>
+              <span className="text-sm text-slate-500">{orderedPracticeProblems.length} {orderedPracticeProblems.length === 1 ? 'problem' : 'problems'} available</span>
+            </header>
             <div className="relative">
               <main className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row">
@@ -497,34 +504,37 @@ export const ProblemsListView: React.FC = () => {
                       </aside>
                     )}
                   </div>
-                  <select value={difficultyFilter} onChange={(event) => setDifficultyFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none focus:border-indigo-500">
+                  <select aria-label="Filter by difficulty" value={difficultyFilter} onChange={(event) => setDifficultyFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-indigo-500">
                     <option value="all">All difficulties</option>
                     <option value="easy">Easy</option>
                     <option value="medium">Medium</option>
                     <option value="hard">Hard</option>
                   </select>
+                  {studentPracticeLanguages.length > 0 && <select aria-label="Filter by supported language" value={languageFilter} onChange={(event) => setLanguageFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-indigo-500"><option value="all">All languages</option>{studentPracticeLanguages.map((language) => <option key={language} value={language}>{({ cpp: 'C++', c: 'C', java: 'Java', python: 'Python', javascript: 'JavaScript' } as Record<string, string>)[language] || language.toUpperCase()}</option>)}</select>}
                 </div>
 
                 {isPracticeLoading && orderedPracticeProblems.length === 0 ? (
                   <div className="flex min-h-56 items-center justify-center text-sm font-semibold text-slate-500">Loading DSA problems…</div>
+                ) : practiceLoadError && orderedPracticeProblems.length === 0 ? (
+                  <div className="flex min-h-56 flex-col items-center justify-center gap-2 p-6 text-center" role="alert"><p className="text-sm font-semibold text-slate-800">Problem bank unavailable</p><p className="max-w-md text-sm text-slate-500">{practiceLoadError}</p><button type="button" onClick={() => { setIsPracticeLoading(true); setPracticeReloadKey((key) => key + 1); }} className="mt-2 rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800">Try again</button></div>
                 ) : (
                   <div>
-                    <div className="grid grid-cols-[70px_minmax(0,1fr)_150px_90px] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">
-                      <span>No.</span><span>Question</span><span>DSA topic</span><span>Difficulty</span>
-                    </div>
+                    {practiceLoadError && orderedPracticeProblems.length > 0 && <div role="status" className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900">Showing the last saved problem list. The latest refresh failed. <button type="button" onClick={() => { setIsPracticeLoading(true); setPracticeReloadKey((key) => key + 1); }} className="ml-1 font-semibold underline">Retry</button></div>}
+                    <div className="grid gap-3 p-3 sm:grid-cols-2 sm:p-4">
                     {visibleStudentPractice.map((problem) => {
                       const number = orderedPracticeProblems.findIndex((item) => item.id === problem.id) + 1;
-                      const attempted = solvedSlugs.has(problem.slug) || solvedSlugs.has(problem.id);
+                      const solved = solvedSlugs.has(problem.slug) || solvedSlugs.has(problem.id);
                       return (
-                        <button key={problem.id} onClick={() => handleSolve(problem.id)} className="grid w-full grid-cols-[70px_minmax(0,1fr)_150px_90px] items-center gap-3 border-b border-slate-100 px-5 py-4 text-left transition-colors last:border-b-0 hover:bg-indigo-50/60">
-                          <span className={`font-mono text-sm font-bold ${attempted ? 'text-emerald-600' : 'text-slate-400'}`}>{attempted ? '✓' : `${number}.`}</span>
-                          <span className="truncate text-sm font-bold text-slate-900">{problem.title}</span>
-                          <span><span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600">{problem.tags[0] || 'Algorithms'}</span></span>
-                          <span className={`text-sm font-bold ${problem.difficulty === 'Easy' ? 'text-emerald-600' : problem.difficulty === 'Hard' ? 'text-rose-600' : 'text-amber-600'}`}>{problem.difficulty}</span>
-                        </button>
+                        <article key={problem.id} className="flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-indigo-200 hover:bg-indigo-50/20">
+                          <div className="flex items-start justify-between gap-3"><span className="min-w-0"><span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">Problem {number}</span><span className="mt-1 block truncate text-sm font-bold text-slate-900">{problem.title}</span></span><DifficultyBadge difficulty={problem.difficulty} /></div>
+                          <p className="mt-2 line-clamp-2 min-h-10 text-xs leading-5 text-slate-600">{problem.description.trim() || 'Open this problem to read the full statement and examples.'}</p>
+                          <div className="mt-3 flex flex-wrap items-center gap-2"><span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600">{problem.tags[0] || 'Algorithms'}</span>{solved && <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" />Solved</span>}</div>
+                          <button type="button" onClick={() => handleSolve(problem.id)} className="mt-4 inline-flex min-h-10 items-center justify-center gap-2 self-start rounded-lg bg-indigo-700 px-3.5 text-sm font-semibold text-white transition hover:bg-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">{solved ? 'Review solution' : 'Solve problem'}<ArrowRight className="h-4 w-4" /></button>
+                        </article>
                       );
                     })}
-                    {!visibleStudentPractice.length && <div className="p-10 text-center text-sm text-slate-500">No DSA problems match the selected filters.</div>}
+                    </div>
+                    {!visibleStudentPractice.length && <div className="p-10 text-center"><p className="text-sm font-semibold text-slate-800">{orderedPracticeProblems.length === 0 ? 'No practice problems are available yet' : 'No matching problems'}</p><p className="mt-1 text-sm text-slate-500">{orderedPracticeProblems.length === 0 ? 'The practice catalogue is empty. Try again later or open an instructor assignment.' : 'Try a different search or clear the selected filters.'}</p>{hasActiveFilters && <button type="button" onClick={handleClearFilters} className="mt-3 text-sm font-semibold text-indigo-700 hover:text-indigo-900">Clear filters</button>}</div>}
                   </div>
                 )}
               </main>
@@ -536,7 +546,7 @@ export const ProblemsListView: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 pb-12 animate-fadeIn">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 pb-12">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -554,14 +564,14 @@ export const ProblemsListView: React.FC = () => {
           {isInstructor && (
             <button
               onClick={handleOpenCreateModal}
-              className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-indigo-700 px-4 text-sm font-semibold text-white transition hover:bg-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
             >
               <Plus className="w-4 h-4" />
               <span>+ Add Question</span>
             </button>
           )}
 
-          <span className="text-xs font-semibold text-slate-600 bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200 shadow-xs">
+            <span className="rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-600">
             {isInstructor ? 'Course Questions' : 'Total Problems'}: <strong className="text-indigo-600 font-mono text-sm ml-1">{isInstructor ? instructorProblems.length : problems.length}</strong>
           </span>
         </div>
@@ -601,8 +611,8 @@ export const ProblemsListView: React.FC = () => {
       </div>}
 
       {/* Queue Intelligence */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500">Current Queue</span>
             <Layers className="w-4 h-4 text-indigo-500" />
@@ -614,7 +624,7 @@ export const ProblemsListView: React.FC = () => {
           <p className="mt-2 text-[11px] leading-relaxed text-slate-500">{focusLabel}</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500">{isInstructor ? 'Your Courses' : 'Visible Progress'}</span>
             <Check className="w-4 h-4 text-emerald-500" />
@@ -631,29 +641,27 @@ export const ProblemsListView: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">Assessment Coverage</span>
-            <ShieldAlert className="w-4 h-4 text-amber-500" />
+            <span className="text-xs font-bold text-slate-500">Assessment workflow</span>
+            <ShieldAlert className="w-4 h-4 text-indigo-600" />
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-extrabold text-slate-900 font-mono">{hiddenCaseCount}</span>
-            <span className="text-xs text-slate-500">hidden edge tests</span>
-          </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-            Cards expose complexity targets so students solve for quality, not just visible samples.
+          <p className="mt-3 text-sm font-semibold text-slate-800">Run first, then submit</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+            Run checks the sample cases. Submit requests the complete assessment.
           </p>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col lg:flex-row items-center justify-between gap-4">
+      <div className="flex flex-col items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 lg:flex-row">
         <div className="relative w-full lg:w-96">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search problems by title or topic"
             placeholder="Search problems, topics, algorithms..."
             className="w-full pl-10 pr-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
           />
@@ -713,7 +721,7 @@ export const ProblemsListView: React.FC = () => {
 
       {/* Problems Grid */}
       {filtered.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center space-y-3">
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-12 text-center">
           <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
             <Search className="w-6 h-6" />
           </div>
@@ -746,7 +754,7 @@ export const ProblemsListView: React.FC = () => {
             return (
               <div
                 key={prob.id}
-                className={`bg-white rounded-3xl border transition-all duration-200 p-6 flex flex-col justify-between group hover:shadow-lg card-hover relative overflow-hidden ${
+                className={`flex flex-col justify-between overflow-hidden rounded-xl border bg-white p-5 transition-colors group ${
                   prob.isInstructorAssigned
                     ? 'border-indigo-200/90 shadow-xs ring-1 ring-indigo-500/10'
                     : 'border-slate-200/80 shadow-xs'
@@ -778,7 +786,7 @@ export const ProblemsListView: React.FC = () => {
                       {isInstructor ? (
                         <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200/80">
                           <FileCheck2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>{prob.testCases.length} public tests configured</span>
+                          <span>{prob.testCases.length} test cases configured</span>
                         </span>
                       ) : isSolved ? (
                         <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2.5 py-1 rounded-xl shadow-xs">
@@ -798,11 +806,9 @@ export const ProblemsListView: React.FC = () => {
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 mb-3">
-                    <div className="rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-2">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Tests</span>
-                      <span className="text-[11px] font-mono font-bold text-slate-700">
-                        {prob.testCases.filter(tc => !tc.isHidden).length} visible / {prob.testCases.filter(tc => tc.isHidden).length} hidden
-                      </span>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      <span className="block text-[10px] font-bold uppercase text-slate-500">Test cases</span>
+                      <span className="text-[11px] font-medium text-slate-600">Run sample cases in workspace</span>
                     </div>
                     <div className="rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-2">
                       <span className="text-[10px] font-bold uppercase text-slate-400 block">Target</span>
@@ -1150,7 +1156,7 @@ export const ProblemsListView: React.FC = () => {
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><span className="block text-xs font-bold uppercase text-slate-500">Time target</span><span className="mt-1 block font-mono font-semibold">{selectedProblemForAnalytics.optimalComplexity.time}</span></div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><span className="block text-xs font-bold uppercase text-slate-500">Space target</span><span className="mt-1 block font-mono font-semibold">{selectedProblemForAnalytics.optimalComplexity.space}</span></div>
             </div>
-            <div className="rounded-xl border border-slate-200 p-4"><h3 className="font-bold">Public tests</h3><p className="mt-1 text-slate-600">{selectedProblemForAnalytics.testCases.filter(testCase => !testCase.isHidden).length} public test cases configured. Hidden cases stay private.</p></div>
+            <div className="rounded-xl border border-slate-200 p-4"><h3 className="font-bold">Test cases</h3><p className="mt-1 text-slate-600">Run sample cases in the workspace. Submit your solution for the complete assessment.</p></div>
             <div className="flex justify-end border-t border-slate-100 pt-3"><button onClick={() => setSelectedProblemForAnalytics(null)} className="rounded-xl px-4 py-2 font-bold text-slate-600 hover:bg-slate-100">Close</button></div>
           </div>
         </Modal>

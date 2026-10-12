@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation, Link } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/useAuth';
@@ -8,27 +8,26 @@ import StudentLayout from './layouts/StudentLayout';
 import SolverLayout from './layouts/SolverLayout';
 import InstructorLayout from './layouts/InstructorLayout';
 
-// Student Feature Components from git
-import { StudentDashboard } from './components/student/StudentDashboard';
-import { ProblemsListView } from './components/student/ProblemsListView';
-import { ProblemWorkspace } from './components/student/ProblemWorkspace';
-import { AssessmentResultView } from './components/student/AssessmentResultView';
-import { SubmissionsList } from './components/student/SubmissionsList';
-import { AnalyticsProgressView } from './components/student/AnalyticsProgressView';
-import { FeedbackRecommendationsView } from './components/student/FeedbackRecommendationsView';
-import { StudentProfileView } from './components/student/StudentProfileView';
-import { MyCoursesView } from './components/student/MyCoursesView';
+const lazyNamed = (load, name) => lazy(() => load().then((module) => ({ default: module[name] })));
 
-// Instructor Feature Components from git
-import { InstructorDashboard } from './components/instructor/InstructorDashboard';
-import { CoursesManagerView } from './components/instructor/CoursesManagerView';
-import { StudentRosterView } from './components/instructor/StudentRosterView';
-import { CourseDetailsView } from './components/instructor/CourseDetailsView';
-import { AssignmentsManagerView } from './components/instructor/AssignmentsManagerView';
-import { ClassAnalyticsView } from './components/instructor/ClassAnalyticsView';
-import { SimilarityReviewView } from './components/instructor/SimilarityReviewView';
-import { ReportsExportView } from './components/instructor/ReportsExportView';
-import { SettingsView } from './components/common/SettingsView';
+const StudentDashboard = lazyNamed(() => import('./components/student/StudentDashboard'), 'StudentDashboard');
+const ProblemsListView = lazyNamed(() => import('./components/student/ProblemsListView'), 'ProblemsListView');
+const ProblemWorkspace = lazyNamed(() => import('./components/student/ProblemWorkspace'), 'ProblemWorkspace');
+const AssessmentResultView = lazyNamed(() => import('./components/student/AssessmentResultView'), 'AssessmentResultView');
+const SubmissionsList = lazyNamed(() => import('./components/student/SubmissionsList'), 'SubmissionsList');
+const AnalyticsProgressView = lazyNamed(() => import('./components/student/AnalyticsProgressView'), 'AnalyticsProgressView');
+const FeedbackRecommendationsView = lazyNamed(() => import('./components/student/FeedbackRecommendationsView'), 'FeedbackRecommendationsView');
+const StudentProfileView = lazyNamed(() => import('./components/student/StudentProfileView'), 'StudentProfileView');
+const MyCoursesView = lazyNamed(() => import('./components/student/MyCoursesView'), 'MyCoursesView');
+const InstructorDashboard = lazyNamed(() => import('./components/instructor/InstructorDashboard'), 'InstructorDashboard');
+const CoursesManagerView = lazyNamed(() => import('./components/instructor/CoursesManagerView'), 'CoursesManagerView');
+const StudentRosterView = lazyNamed(() => import('./components/instructor/StudentRosterView'), 'StudentRosterView');
+const CourseDetailsView = lazyNamed(() => import('./components/instructor/CourseDetailsView'), 'CourseDetailsView');
+const AssignmentsManagerView = lazyNamed(() => import('./components/instructor/AssignmentsManagerView'), 'AssignmentsManagerView');
+const ClassAnalyticsView = lazyNamed(() => import('./components/instructor/ClassAnalyticsView'), 'ClassAnalyticsView');
+const SimilarityReviewView = lazyNamed(() => import('./components/instructor/SimilarityReviewView'), 'SimilarityReviewView');
+const ReportsExportView = lazyNamed(() => import('./components/instructor/ReportsExportView'), 'ReportsExportView');
+const SettingsView = lazyNamed(() => import('./components/common/SettingsView'), 'SettingsView');
 
 import { AnimatePresence } from 'framer-motion';
 
@@ -92,6 +91,7 @@ function AppRoutes() {
   return (
     <RouteErrorBoundary locationKey={location.pathname}>
     <AnimatePresence mode="wait">
+      <Suspense fallback={<main className="grid min-h-[50vh] place-items-center text-sm text-slate-500" aria-live="polite">Loading page…</main>}>
       <Routes location={location} key={location.pathname}>
         {/* Original Login Page */}
         <Route path="/login" element={<Login />} />
@@ -136,6 +136,7 @@ function AppRoutes() {
         
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </AnimatePresence>
     </RouteErrorBoundary>
   );

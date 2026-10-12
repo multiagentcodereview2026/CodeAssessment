@@ -57,7 +57,7 @@ export const SubmissionsList: React.FC = () => {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
@@ -97,7 +97,7 @@ export const SubmissionsList: React.FC = () => {
       </div>
 
       {/* Submissions Table */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
@@ -115,18 +115,14 @@ export const SubmissionsList: React.FC = () => {
             <tbody className="divide-y divide-slate-100 font-sans">
               {filtered.length > 0 ? (
                 filtered.map((sub) => (
-                  <tr 
-                    key={sub.id} 
-                    onClick={() => handleOpenReport(sub.id)}
-                    className="hover:bg-indigo-50/30 transition-colors group cursor-pointer"
-                  >
+                  <tr key={sub.id} className="transition-colors hover:bg-slate-50 group">
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-2.5">
                         <FileCode className="w-4 h-4 text-indigo-500 flex-shrink-0" />
                         <div>
-                          <span className="font-bold text-slate-900 block group-hover:text-indigo-600 transition-colors">
+                          <button type="button" onClick={() => handleOpenReport(sub.id)} className="block text-left font-semibold text-slate-900 transition-colors hover:text-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
                             {sub.problemTitle}
-                          </span>
+                          </button>
                           <span className="text-[11px] text-slate-400 font-mono">
                             ID: {sub.id}
                           </span>

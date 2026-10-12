@@ -60,7 +60,7 @@ const CodeEditor = () => {
     return () => {
       isMounted = false;
     };
-  }, [problemId]);
+  }, [authFetch, problemId]);
 
   const handleLanguageChange = (newLang) => {
     setLanguage(newLang);
@@ -365,7 +365,7 @@ const CodeEditor = () => {
             className="flex-1 py-2.5 bg-[#404040] hover:bg-[#4a4a4a] text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center disabled:opacity-50 cursor-pointer"
           >
             <Play className={`w-4 h-4 mr-2 ${isRunning ? 'text-slate-400 animate-pulse' : 'text-emerald-400'}`} />
-            {isRunning ? 'Running Tests...' : 'Run Public Tests'}
+            {isRunning ? 'Running Tests...' : 'Run Tests'}
           </button>
           <button 
             onClick={handleSubmit}

@@ -69,13 +69,13 @@ const InstructorLayout = () => {
         initial={{ x: -100, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ duration: 0.3 }}
-        className="hidden md:flex w-64 bg-white border-r border-slate-200 fixed h-full flex-col z-20"
+        className="fixed z-20 hidden h-full w-64 flex-col border-r border-slate-200 bg-white md:flex"
       >
         <div className="h-16 flex items-center px-6 border-b border-slate-200">
-          <div className="bg-emerald-600 p-1.5 rounded-lg mr-2 shadow-sm shadow-emerald-500/30">
+          <div className="mr-2 rounded-lg bg-indigo-700 p-1.5">
             <GraduationCap className="w-5 h-5 text-white" />
           </div>
-          <span className="text-xl font-bold text-slate-800 tracking-tight">Kod<span className="text-emerald-600">acharya</span></span>
+          <span className="text-xl font-bold tracking-tight text-slate-800">Kod<span className="text-indigo-700">acharya</span></span>
         </div>
         
         <div className="flex-1 py-4 px-4 space-y-1 overflow-y-auto custom-scrollbar">
@@ -92,7 +92,7 @@ const InstructorLayout = () => {
                   to={item.path}
                   className={`flex items-center px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 ${
                     isActive 
-                      ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/25' 
+                      ? 'bg-indigo-700 text-white shadow-sm'
                       : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
                 >
@@ -116,8 +116,8 @@ const InstructorLayout = () => {
       </motion.nav>
 
       {/* Main Content Area */}
-      <div className="md:ml-64 flex-1 flex flex-col min-h-screen">
-        <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 md:px-8 sticky top-0 z-30 glass">
+      <div className="md:ml-64 flex min-w-0 flex-1 flex-col min-h-screen">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 md:px-8">
           <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -131,6 +131,8 @@ const InstructorLayout = () => {
             <div className="relative" ref={notifRef}>
               <button 
                 onClick={() => setNotifOpen(!notifOpen)}
+                aria-label={`Notifications${notificationCount ? `, ${notificationCount} unread` : ''}`}
+                aria-expanded={notifOpen}
                 className="relative p-2 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
               >
                 <Bell className="w-5 h-5" />
@@ -146,7 +148,7 @@ const InstructorLayout = () => {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-3xl shadow-2xl border border-slate-200/90 p-4 z-50 space-y-3"
+                    className="absolute right-0 z-50 mt-2 w-80 space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-lg sm:w-96"
                   >
                     <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                       <div className="flex items-center gap-2">
@@ -176,9 +178,13 @@ const InstructorLayout = () => {
 
             {/* Profile Dropdown */}
             <div className="relative" ref={profileRef}>
-              <div 
+              <button
+                type="button"
                 onClick={() => setProfileOpen(!profileOpen)}
-                className="flex items-center cursor-pointer group p-1.5 rounded-2xl hover:bg-slate-100/80 transition-colors"
+                aria-label="Open account menu"
+                aria-expanded={profileOpen}
+                aria-haspopup="true"
+                className="flex items-center cursor-pointer group p-1.5 rounded-2xl hover:bg-slate-100/80 transition-colors text-left"
               >
                 <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-sm shadow-inner mr-2.5 group-hover:bg-emerald-200 transition-colors">
                   {displayName.charAt(0).toUpperCase()}
@@ -188,7 +194,7 @@ const InstructorLayout = () => {
                   <span className="text-[10px] font-medium text-slate-400">Faculty Portal</span>
                 </div>
                 <ChevronDown className={`w-4 h-4 ml-2 text-slate-400 group-hover:text-emerald-600 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
-              </div>
+              </button>
 
               <AnimatePresence>
                 {profileOpen && (
@@ -197,7 +203,7 @@ const InstructorLayout = () => {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute right-0 mt-2 w-64 bg-white rounded-3xl shadow-2xl border border-slate-200/90 p-3 z-50 space-y-2 text-xs"
+                    className="absolute right-0 z-50 mt-2 w-64 space-y-2 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-lg"
                   >
                     <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-0.5">
                       <span className="font-bold text-slate-900 block">{displayName}</span>
@@ -258,7 +264,7 @@ const InstructorLayout = () => {
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-8 pb-24 overflow-y-auto relative custom-scrollbar">
+        <main className="relative min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 pb-24 custom-scrollbar md:p-8">
           <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-emerald-50/50 to-transparent -z-10 pointer-events-none"></div>
           <AnimatePresence mode="wait">
             <motion.div
@@ -267,7 +273,7 @@ const InstructorLayout = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -15 }}
               transition={{ duration: 0.2 }}
-              className="h-full max-w-7xl mx-auto"
+              className="mx-auto h-full w-full min-w-0 max-w-7xl"
             >
               <Outlet />
             </motion.div>
@@ -275,7 +281,7 @@ const InstructorLayout = () => {
         </main>
       </div>
 
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur border-t border-slate-200 px-2 py-2 grid grid-cols-5 gap-1">
+      <nav aria-label="Instructor navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur border-t border-slate-200 px-2 py-2 grid grid-cols-5 gap-1">
         {navItems.slice(0, 5).map((item) => {
           const isActive = location.pathname === item.path || (item.path !== '/instructor/dashboard' && location.pathname.startsWith(item.path));
           return (
@@ -291,7 +297,7 @@ const InstructorLayout = () => {
             </Link>
           );
         })}
-      </div>
+      </nav>
     </div>
   );
 };

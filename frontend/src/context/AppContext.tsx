@@ -75,6 +75,8 @@ interface AppContextType {
   activeAssessment: AssessmentResult;
   setActiveAssessment: (result: AssessmentResult) => void;
   submissions: SubmissionItem[];
+  submissionsLoadState: 'loading' | 'ready' | 'error';
+  submissionsOwnerId: string | null;
   addSubmission: (submission: SubmissionItem, assessment: AssessmentResult) => void;
   studentProgress: StudentProgress;
   courses: CourseItem[];
@@ -124,6 +126,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [selectedProblemId, setSelectedProblemId] = useState<string>('prob-1');
   const [activeAssessment, setActiveAssessment] = useState<AssessmentResult>(MOCK_DEFAULT_ASSESSMENT);
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
+  const [submissionsLoadState, setSubmissionsLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [submissionsOwnerId, setSubmissionsOwnerId] = useState<string | null>(null);
   const [studentProgress, setStudentProgress] = useState<StudentProgress>(EMPTY_STUDENT_PROGRESS);
   const [courses, setCourses] = useState<CourseItem[]>([]);
   const [studentRoster, setStudentRoster] = useState<StudentRosterItem[]>([]);
@@ -141,6 +145,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setAssignments([]);
       setStudentRoster([]);
       setSubmissions([]);
+      setSubmissionsLoadState('ready');
+      setSubmissionsOwnerId(null);
       setInstructorStats(EMPTY_INSTRUCTOR_STATS);
       return;
     }
@@ -252,15 +258,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     if (!auth?.user || auth.user.role !== 'student') {
       setSubmissions([]);
+      setSubmissionsLoadState('ready');
+      setSubmissionsOwnerId(null);
       return () => { cancelled = true; };
     }
+    setSubmissionsLoadState('loading');
+    setSubmissionsOwnerId(auth.user.id);
 
     const loadSavedSubmissions = async () => {
       try {
         const response = await auth.authFetch('/api/submissions', { cache: 'no-store' });
         if (!response.ok) throw new Error('Could not load saved submissions.');
         const records = await response.json();
-        if (!Array.isArray(records) || cancelled) return;
+        if (!Array.isArray(records)) throw new Error('Submission history returned an unexpected response.');
+        if (cancelled) return;
 
         const problemIds = [...new Set(records.map((record: any) => record.problem_id).filter(Boolean))];
         const titles = new Map<string, string>();
@@ -300,8 +311,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             totalTestCases: total
           };
         }));
+        setSubmissionsLoadState('ready');
       } catch (error) {
         console.error('Unable to restore submission history:', error);
+        if (!cancelled) setSubmissionsLoadState('error');
       }
     };
 
@@ -429,6 +442,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const addSubmission = (newSub: SubmissionItem, newAssessment: AssessmentResult) => {
     setSubmissions(prev => [{ ...newSub, evaluationStatus: newSub.evaluationStatus || 'EVALUATED' }, ...prev]);
+    setSubmissionsLoadState('ready');
+    setSubmissionsOwnerId(currentUser.id);
     setActiveAssessment(newAssessment);
     
     // update student progress
@@ -616,6 +631,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         activeAssessment,
         setActiveAssessment,
         submissions,
+        submissionsLoadState,
+        submissionsOwnerId,
         addSubmission,
         studentProgress,
         courses,

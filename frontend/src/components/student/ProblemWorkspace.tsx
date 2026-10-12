@@ -157,10 +157,9 @@ export const ProblemWorkspace: React.FC = () => {
   } | null>(null);
   const [verifiedRunKey, setVerifiedRunKey] = useState<string | null>(null);
   const currentRunKey = JSON.stringify([workspaceProblemId, language, code]);
-  // A final assessment must be able to report incorrect, compiling-failed,
-  // and runtime-failed code. The backend judge is the authority; public-run
-  // success is useful feedback, not an authorization gate.
-  const canSubmit = Boolean(code.trim() && remoteProblem);
+  // Require a successful sample run for the exact current code and language
+  // before enabling the full assessment submission.
+  const canSubmit = Boolean(code.trim() && remoteProblem && verifiedRunKey === currentRunKey);
 
   const revealHint = async () => {
     setHintError('');
@@ -741,7 +740,7 @@ export const ProblemWorkspace: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4 pb-12">
+    <div className="mx-auto w-full min-w-0 max-w-[1800px] space-y-4 pb-12">
       {/* Top Breadcrumb & Action bar */}
       <div className="flex items-center justify-between">
         <button
@@ -755,7 +754,7 @@ export const ProblemWorkspace: React.FC = () => {
         </button>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">Auto-saved to Sandbox</span>
+          <span className="text-xs text-slate-500">Draft saved in this browser</span>
           <span className="w-2 h-2 rounded-full bg-emerald-500" />
         </div>
       </div>
@@ -763,7 +762,7 @@ export const ProblemWorkspace: React.FC = () => {
       {/* Main Split Grid */}
       <div className="grid min-w-0 grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(390px,1fr)_minmax(500px,1.2fr)] xl:grid-cols-[minmax(450px,1fr)_minmax(660px,1.2fr)]">
         {/* LEFT PANEL: Problem Details & Constraints (Col span 5) */}
-        <div className="min-w-0 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col overflow-hidden lg:h-[900px]">
+        <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:flex lg:h-[900px] lg:flex-col">
           {/* Header */}
           <div className="p-5 border-b border-slate-100">
             <div className="flex items-center gap-2.5 mb-2">
@@ -779,7 +778,7 @@ export const ProblemWorkspace: React.FC = () => {
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex border-b border-slate-100 bg-slate-50/70 px-4 text-xs font-semibold">
+          <div className="flex border-b border-slate-200 bg-white px-4 text-sm font-medium">
             <button
               onClick={() => setActiveLeftTab('statement')}
               className={`py-3 px-3 border-b-2 transition-all ${
@@ -916,7 +915,7 @@ export const ProblemWorkspace: React.FC = () => {
 
         {/* RIGHT PANEL: Code Editor & Execution Sandbox (Col span 7) */}
         <div className="min-w-0 flex flex-col space-y-4">
-          <div className={`${isEditorFullscreen ? 'fixed inset-4 z-50 h-[calc(100vh-2rem)]' : 'lg:h-[900px]'} w-full self-start bg-slate-900 rounded-2xl border border-slate-800 shadow-xl overflow-hidden flex flex-col relative`}>
+          <div className={`${isEditorFullscreen ? 'fixed inset-4 z-50 h-[calc(100vh-2rem)]' : 'lg:h-[900px]'} relative flex w-full min-w-0 self-start flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-sm`}>
             {/* Editor Toolbar (Matches diagram step 4) */}
             <div className="flex flex-wrap items-center justify-between px-4 py-3 bg-slate-950 border-b border-slate-800 gap-2">
               <div className="flex items-center gap-3">
@@ -966,14 +965,14 @@ export const ProblemWorkspace: React.FC = () => {
                 <button
                   onClick={handleSubmitCode}
                   disabled={isRunning || isSubmitting || isProblemLoading || !canSubmit}
-                  title={canSubmit ? 'Submit this code for a full assessment.' : 'Enter code to submit it for assessment.'}
-                  className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold shadow-md shadow-indigo-600/30 flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  title={canSubmit ? 'Submit this code for a full assessment.' : 'Run this code and pass all sample cases to enable submission.'}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-slate-900 active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>Submit Code</span>
                 </button>
                 <span className={`text-[10px] ${canSubmit ? 'text-emerald-400' : 'text-slate-400'}`}>
-                  {canSubmit ? 'Ready to assess' : 'Enter code to assess'}
+                  {canSubmit ? 'Examples passed · ready to submit' : code.trim() ? 'Run code and pass examples to submit' : 'Enter code to begin'}
                 </span>
               </div>
             </div>

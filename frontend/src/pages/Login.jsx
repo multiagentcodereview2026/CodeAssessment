@@ -362,17 +362,8 @@ const Login = () => {
             transition={{ delay: 0.6, duration: 0.6 }}
             className="relative z-10 bg-white/10 border border-white/20 p-6 rounded-2xl backdrop-blur-sm"
           >
-            <div className="flex items-center space-x-4 mb-4">
-              <div className="flex -space-x-2">
-                {[1,2,3].map(i => (
-                  <div key={i} className="w-8 h-8 rounded-full border-2 border-transparent bg-white/20 flex items-center justify-center text-xs font-bold">
-                    User
-                  </div>
-                ))}
-              </div>
-              <span className="text-sm font-medium text-white/90">Trusted by KMIT Faculty</span>
-            </div>
-            <p className="text-sm text-white/70 italic">"The multi-agent feedback is phenomenally accurate and genuinely helps students improve."</p>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-white/70">{role === 'student' ? 'Your practice loop' : 'Your teaching workflow'}</p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-white">{role === 'student' ? 'Choose a problem · Run examples · Submit · Review feedback' : 'Create assignments · Review submissions · Track class progress'}</p>
           </motion.div>
         </div>
       </motion.div>

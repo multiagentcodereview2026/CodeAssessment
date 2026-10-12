@@ -30,6 +30,20 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+button, input, select, textarea {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+::selection {
+  color: #1e1b4b;
+  background: #e0e7ff;
+}
+
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-poppins);
 }
@@ -38,7 +52,7 @@ code, pre, .font-mono {
   font-family: var(--font-mono);
 }
 
-/* Animations */
+/* Small page transitions; honor users who disable motion. */
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -175,4 +189,13 @@ code, pre, .font-mono {
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
