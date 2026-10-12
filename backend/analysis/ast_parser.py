@@ -18,6 +18,20 @@ except Exception:
     Language = type('Language', (), {})
 
 
+def _source_loop_depth(source: str) -> int:
+    """Recover explicit C-style nested loop bodies without guessing siblings."""
+    loop = r"\b(?:for|while)\s*\([^)]*\)"
+    # Require the inner loop to occur before the outer body's first closing
+    # brace.  Sequential loops and unbraced single-statement loops are left to
+    # Tree-sitter, avoiding false depth inflation.
+    double_nested = bool(re.search(
+        rf"{loop}\s*\{{[^{{}}]*{loop}", source, re.IGNORECASE | re.DOTALL
+    ))
+    if double_nested:
+        return 2
+    return 1 if re.search(loop, source, re.IGNORECASE) else 0
+
+
 
 
 def parse_cpp_ast(source: str):
@@ -34,9 +48,16 @@ class ASTComplexityAnalyzer:
     Falls back to regex analysis when tree-sitter is unavailable.
     """
 
-    def __init__(self, source_code: str, language: str = 'cpp'):
+    def __init__(
+        self,
+        source_code: str,
+        language: str = 'cpp',
+        *,
+        strict_structural: bool = False,
+    ):
         self.source = source_code
         self.language = language.lower()
+        self.strict_structural = strict_structural
         self.parser = None
         self.tree = None
         self.use_ast = AST_AVAILABLE
@@ -712,6 +733,14 @@ class ASTComplexityAnalyzer:
                 # Allow 0 or more spaces between > and variable name, and allow ( or ; or {}
                 pattern = rf'{keyword}[^>]+>\s*\w+\s*[\(;{{]'
                 if re.search(pattern, function_body):
+                    # A container with a literal-only constructor size is a
+                    # fixed-size table, not input-sized auxiliary storage.
+                    # Keep this structural: expressions involving an input,
+                    # parameter, or unknown value remain dynamic.
+                    if self.strict_structural:
+                        fixed_ctor = rf'{keyword}[^>]+>\s*\w+\s*\(\s*\d+(?:\s*,[^)]*)?\)'
+                        if re.search(fixed_ctor, function_body):
+                            continue
                     return True
 
         # Check for DP/memoization pattern (vector<int>& dp parameter)
@@ -742,6 +771,19 @@ class ASTComplexityAnalyzer:
         # Check array declarations
         for pattern in array_allocation_patterns:
             if re.search(pattern, function_body):
+                if self.strict_structural:
+                    # Numeric dimensions are constant storage (e.g. counts[26]);
+                    # symbolic or expression dimensions scale with input/state.
+                    fixed_array = re.search(
+                        r'\b(?:int|float|double|char)\s+\w+\s*\[\s*\d+\s*\]',
+                        function_body,
+                    )
+                    variable_array = re.search(
+                        r'\b(?:int|float|double|char)\s+\w+\s*\[\s*[^\]\d][^\]]*\]',
+                        function_body,
+                    )
+                    if fixed_array and not variable_array:
+                        continue
                 return True
 
         return False
@@ -911,15 +953,25 @@ class ASTComplexityAnalyzer:
                     loop.depth = max(loop.depth, 2)
                     break
 
+        # C++ range-for nodes can be exposed through stale parent wrappers.
+        # Brace nesting is a safe structural fallback for C-family/Java code
+        # and distinguishes ``for {... for {...}}`` from sequential loops.
+        if self.language in {"c", "cpp", "c++", "java"}:
+            loop.depth = max(loop.depth, _source_loop_depth(self.source))
+
         # Check if loops are sequential vs nested
         top_level_loops = [loop_nodes[i] for i, anc in enumerate(loop_ancestor_counts)
                            if anc == 0 and loop_nodes[i].start_byte not in constant_loop_ids]
-        if max_depth == 1 and len(top_level_loops) > 1:
-            loop.structure = "sequential"
-        elif max_depth == 2:
-            loop.structure = "nested"
-        elif max_depth >= 3:
+        # Use the effective depth after the source-range containment fallback
+        # above.  Some Tree-sitter C++ wrappers expose nested range-for nodes
+        # as siblings during parent walking; in that case ``max_depth`` is
+        # stale but ``loop.depth`` has already been recovered correctly.
+        if loop.depth >= 3:
             loop.structure = "triple_nested"
+        elif loop.depth == 2:
+            loop.structure = "nested"
+        elif max_depth == 1 and len(top_level_loops) > 1:
+            loop.structure = "sequential"
         else:
             loop.structure = "single"
 

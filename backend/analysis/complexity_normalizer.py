@@ -44,6 +44,11 @@ COMPLEXITY_RANKS = {
     "O(mn)":            6,
     "O(m*n)":           6,
     "O(n*m)":           6,
+    "O((m+n) log(m+n))": 6,
+    "O(N log N)":        5,
+    "O(N)":              4,
+    "O(L)":              4,
+    "O(min(n,m))":       4,
     "O(nk)":            6,
     "O(n*k)":           6,
     "O(m*k)":           6,
@@ -71,6 +76,12 @@ COMPLEXITY_RANKS = {
     "O(n!)":            10,
     "O(N!)":            10,
     "O(V!)":            10,
+    "O(4^n*n)":         10,
+    "O(4^n/sqrt(n))":    10,
+    "O(2^(2n)*n)":      10,
+    "O(n!*n)":           10,
+    "O(n^(t/m))":        10,
+    "O(t/m)":             4,
 }
 
 
@@ -156,6 +167,15 @@ def normalize_complexity(value: str | None) -> str | None:
 
     if text in {"o(m+n)", "o(n+m)", "o(m)+o(n)"}:
         return "O(m+n)"
+
+    if text in {"o((m+n)log(m+n))", "o((m+n)*log(m+n))", "o((n+m)log(n+m))", "o((n+m)*log(n+m))"}:
+        return "O((m+n) log(m+n))"
+    if text in {"o(n)", "o(n)"}:
+        return "O(n)"
+    if text in {"o(l)"}:
+        return "O(L)"
+    if text in {"o(min(n,m))", "o(min(m,n))"}:
+        return "O(min(n,m))"
 
     if text in {"o(max(m,n))", "o(max(n,m))", "o(max(m+n))"}:
         return "O(max(m,n))"
@@ -272,6 +292,20 @@ def normalize_complexity(value: str | None) -> str | None:
 
     if text in {"o(n!)"}:
         return "O(n!)"
+
+    # Backtracking/output materialisation forms used by reviewed corpora.
+    if text in {"o(4^n*n)", "o(4^n*n)", "o(4^n*n)"}:
+        return "O(4^n*n)"
+    if text in {"o(4^n/sqrt(n))", "o(4^n/sqrtn)"}:
+        return "O(4^n/sqrt(n))"
+    if text in {"o(2^(2n)*n)", "o(2^(2*n)*n)", "o(2^2n*n)"}:
+        return "O(2^(2n)*n)"
+    if text in {"o(n!*n)", "o(n!*n)"}:
+        return "O(n!*n)"
+    if text in {"o(n^(t/m))", "o(n^t/m)", "o(n**(t/m))"}:
+        return "O(n^(t/m))"
+    if text in {"o(t/m)", "o(t/m)"}:
+        return "O(t/m)"
 
     # ── Pass-through for any recognised O(...) form not matched above ──────
     if text.startswith("o(") and text.endswith(")"):

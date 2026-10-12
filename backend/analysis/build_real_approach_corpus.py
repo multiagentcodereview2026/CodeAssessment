@@ -16,6 +16,7 @@ from typing import Any, Iterable
 
 LANGUAGES = ("c", "cpp", "java", "javascript", "python")
 APPROACHES = ("brute", "better", "optimal")
+REVIEWED_SOURCES = {"human_reviewed", "expert_reviewed", "mentor_reviewed", "reviewed"}
 REQUIRED = {
     "problem_id", "solution_id", "language", "approach", "source",
     "snippet_time_complexity", "snippet_space_complexity",
@@ -37,15 +38,24 @@ def _read(path: Path) -> Iterable[dict[str, Any]]:
         yield row
 
 
-def build(inputs: list[Path], output: Path, limit: int = 200) -> dict[str, Any]:
+def build(
+    inputs: list[Path],
+    output: Path,
+    limit: int = 200,
+    require_reviewed: bool = False,
+) -> dict[str, Any]:
     groups: dict[str, dict[tuple[str, str], dict[str, Any]]] = defaultdict(dict)
     duplicate_keys: list[str] = []
     invalid_rows = 0
+    unreviewed_rows = 0
     for path in inputs:
         for row in _read(path):
             missing = REQUIRED - set(row)
             if missing or not all(str(row.get(k) or "").strip() for k in REQUIRED):
                 invalid_rows += 1
+                continue
+            if require_reviewed and row.get("ground_truth_source") not in REVIEWED_SOURCES:
+                unreviewed_rows += 1
                 continue
             language = str(row["language"]).strip().lower()
             approach = str(row["approach"]).strip().lower()
@@ -85,10 +95,12 @@ def build(inputs: list[Path], output: Path, limit: int = 200) -> dict[str, Any]:
         "languages_per_problem": len(LANGUAGES),
         "approaches_per_problem": len(APPROACHES),
         "invalid_rows": invalid_rows,
+        "unreviewed_rows_excluded": unreviewed_rows,
+        "require_reviewed": require_reviewed,
         "duplicate_rows_ignored": len(duplicate_keys),
         "duplicate_examples": duplicate_keys[:20],
         "missing_or_unselected_groups": missing,
-        "valid": len(selected) == limit,
+        "valid": len(selected) == limit and (not require_reviewed or unreviewed_rows == 0),
     }
 
 
@@ -98,10 +110,11 @@ def main() -> None:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--problems", type=int, default=200)
+    parser.add_argument("--require-reviewed", action="store_true")
     args = parser.parse_args()
     if args.problems < 1:
         parser.error("--problems must be positive")
-    report = build(args.inputs, args.output, args.problems)
+    report = build(args.inputs, args.output, args.problems, args.require_reviewed)
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

@@ -4,7 +4,11 @@ from .complexity_ir import ComplexityIR
 from .models import ComplexityAnalysis
 from .complexity_normalizer import normalize_complexity
 
-def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
+def infer_complexity_from_ir(
+    ir: ComplexityIR,
+    *,
+    strict_structural: bool = False,
+) -> ComplexityAnalysis:
     # Keep a normalized source copy available to every inference branch.
     # It must be initialized before recursion/graph handling as well as the
     # later space-allocation fallback.
@@ -18,7 +22,7 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
     loop = ir.loop
     recursion = ir.recursion
     graph = ir.graph
-    linked_list_merge = bool(
+    linked_list_merge = not strict_structural and bool(
         re.search(r"\bwhile\s*\([^\n)]*\)", source_lower)
         and len(re.findall(r"(?:->|\.)next\b", source_lower)) >= 2
         and bool(re.search(r"\b(?:listnode|list_node|node)\b", source_lower))
@@ -71,7 +75,7 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
     # Canonical insertion sort remains identifiable when a compact source
     # body is flattened by the parser: an outer for plus a backward j scan.
     compact_source = re.sub(r'\s+', '', source_lower)
-    is_insertion_sort = bool(re.search(
+    is_insertion_sort = not strict_structural and bool(re.search(
         r'\bfor\s*\([^)]*\)\s*\{.*?\bwhile\s*\(\s*j\s*>=\s*0\s*&&.*?\bj\s*--',
         source_lower, re.DOTALL,
     )) or ('while(j>=0&&' in compact_source and 'j--' in compact_source)
@@ -82,7 +86,7 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
 
     # Canonical C++ bipartite BFS uses an adjacency-list parameter, a color
     # vector, and a queue; the color vector is O(V) auxiliary space.
-    is_bipartite_bfs = bool(
+    is_bipartite_bfs = not strict_structural and bool(
         re.search(r'vector\s*<\s*vector\s*<', source_lower) and
         re.search(r'\bqueue\s*<', source_lower) and
         re.search(r'\b(?:c|color|colour)\s*\(', source_lower) and
@@ -99,11 +103,21 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
     # ``while``; it is only amortized linear when the pointer window is the
     # top-level scan, not when repeated for every outer item.
     loop_tokens = re.findall(r"\b(?:for|while)\b", source_lower)
-    hash_scan = bool(re.search(
-        r"\b(?:unordered_set|unordered_map|hash_set|hash_map|set|dict)\b"
-        r"|\b(?:seen|visited|freq|frequency|count|lookup|table)\s*\[",
+    # Strict mode may use standard-library operations, but never casual
+    # identifiers such as ``seen`` or ``freq`` as algorithm evidence.
+    hash_scan_pattern = (
+        r"\b(?:unordered_set|unordered_map|hash_set|hash_map)\b"
+        if strict_structural
+        else r"\b(?:unordered_set|unordered_map|hash_set|hash_map|set|dict)\b"
+        r"|\b(?:seen|visited|freq|frequency|count|lookup|table)\s*\["
+    )
+    hash_scan = bool(re.search(hash_scan_pattern, source_lower)) and len(loop_tokens) >= 2
+    explicit_nested_loops = bool(re.search(
+        r"\b(?:for|while)\s*\([^)]*\)\s*\{[^{}]*"
+        r"\b(?:for|while)\s*\(",
         source_lower,
-    )) and len(loop_tokens) >= 2
+        re.DOTALL,
+    ))
     outer_pointer_scan = (
         len(re.findall(r"\bfor\b", source_lower)) >= 1
         and len(re.findall(r"\bwhile\b", source_lower)) >= 1
@@ -119,11 +133,11 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
     # that evidence instead of treating every pointer pair as a repeated
     # quadratic scan.  ThreeSum-style scans do not carry a window state and
     # remain nested.
-    amortized_window_hint = bool(re.search(
+    amortized_window_hint = not strict_structural and bool(re.search(
         r"\b(?:seen|window|freq|frequency|count|cnt|last_seen|distinct|characters?)\b",
         source_lower,
     )) and bool(re.search(r"\bwhile\b", source_lower))
-    if hash_scan or outer_pointer_scan:
+    if hash_scan or (outer_pointer_scan and not strict_structural):
         if amortized_window_hint and outer_pointer_scan:
             # A single top-level sliding window is exposed by several
             # grammars as sibling ``for``/``while`` nodes.  The pointers move
@@ -133,7 +147,10 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
             # the window-state evidence and remain depth two.
             loop.depth = max(loop.depth, 1)
             loop.structure = "sliding-window"
-        else:
+        # The parser has authoritative parent/child evidence.  Never turn
+        # explicitly sequential loops into nested loops merely because a hash
+        # container and two loop tokens occur in the same function.
+        elif loop.structure != "sequential" or explicit_nested_loops:
             loop.depth = max(loop.depth, 2)
             loop.structure = "nested"
             loop.is_sliding_window = False
@@ -143,6 +160,8 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
     # window: four-sum is O(n^3), three-sum is O(n^2).  Suppress the generic
     # sliding-window hint when there is no frequency/window state.
     if (
+        not strict_structural
+        and
         loop.is_sliding_window
         and loop.has_sort
         and re.search(r"\bfor\s*\(|\bfor\s+", source_lower)
@@ -185,7 +204,7 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
 
         # 1a. Graph DFS / BFS (recursive traversal on graph)
         if divide_recursion_hint and recursion.branch_factor <= 2:
-            time_complexity = "O(log(m+n))" if re.search(
+            time_complexity = "O(log(m+n))" if not strict_structural and re.search(
                 r"\b(?:nums1|nums2|a|b|m|n|findkth|median)\b", source_lower
             ) else "O(log n)"
             space_complexity = time_complexity
@@ -456,10 +475,11 @@ def infer_complexity_from_ir(ir: ComplexityIR) -> ComplexityAnalysis:
             else:
                 time_complexity = "O(n log n)"
 
+        # Sort space: O(log n) for stack depth, plus O(n) if dynamic allocation
         if ir.has_dynamic_allocation:
             space_complexity = "O(n)"
         else:
-            space_complexity = "O(1)"
+            space_complexity = "O(log n)"  # Sort's stack depth
 
     # 9. LOOP-BASED ALGORITHMS
     elif loop.depth > 0:

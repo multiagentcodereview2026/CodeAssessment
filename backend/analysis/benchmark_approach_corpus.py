@@ -56,6 +56,12 @@ def _canonical(value: Any) -> str | None:
     text = text.replace("o(n*m)", "o(m*n)")
     text = text.replace("o(nm)", "o(m*n)")
     text = text.replace("o(n*k)", "o(nk)")
+    # For a single linked list, reviewed sources use both L (list length) and
+    # n (generic input length).  Treat only the exact unary forms as aliases;
+    # do not rewrite L inside multi-parameter expressions where it may denote
+    # a genuinely different quantity.
+    if text == "o(l)":
+        text = "o(n)"
     return text
 
 
@@ -69,7 +75,7 @@ def _expected(row: dict[str, Any], dimension: str) -> Any:
     )
 
 
-def classify_row(row: dict[str, Any]) -> dict[str, Any]:
+def classify_row(row: dict[str, Any], mode: str = "legacy") -> dict[str, Any]:
     source = row.get("source") or row.get("reference_source") or ""
     language = str(row.get("language", "")).lower().strip()
     expected_time = _expected(row, "time")
@@ -87,7 +93,7 @@ def classify_row(row: dict[str, Any]) -> dict[str, Any]:
     if not source or not language or expected_time is None or expected_space is None:
         return {**base, "status": "MISSING_SNIPPET_TRUTH", "predicted_time": None, "predicted_space": None}
 
-    result = analyze_source(source, language)
+    result = analyze_source(source, language, mode=mode)
     predicted_time = result.time_complexity
     predicted_space = result.space_complexity
     base.update(
@@ -119,11 +125,29 @@ def classify_row(row: dict[str, Any]) -> dict[str, Any]:
     return base
 
 
-def run(path: str) -> dict[str, Any]:
-    records = [classify_row(row) for row in _rows(path)]
+def run(path: str, mode: str = "legacy") -> dict[str, Any]:
+    records = [classify_row(row, mode=mode) for row in _rows(path)]
     counts = Counter(record["status"] for record in records)
     eligible = [record for record in records if record["status"] in {"AST_CORRECT", "AST_PARTIAL", "AST_WRONG"}]
     correct = sum(record["status"] == "AST_CORRECT" for record in eligible)
+    time_correct = sum(
+        _equal(record.get("predicted_time"), record.get("expected_time"))
+        for record in eligible
+    )
+    space_correct = sum(
+        _equal(record.get("predicted_space"), record.get("expected_space"))
+        for record in eligible
+    )
+    partial_breakdown = Counter()
+    for record in eligible:
+        time_ok = _equal(record.get("predicted_time"), record.get("expected_time"))
+        space_ok = _equal(record.get("predicted_space"), record.get("expected_space"))
+        if time_ok and not space_ok:
+            partial_breakdown["TIME_CORRECT_SPACE_MISMATCH"] += 1
+        elif space_ok and not time_ok:
+            partial_breakdown["SPACE_CORRECT_TIME_MISMATCH"] += 1
+        elif not time_ok and not space_ok:
+            partial_breakdown["BOTH_MISMATCH"] += 1
     by_approach: dict[str, dict[str, int]] = defaultdict(lambda: Counter())
     by_language: dict[str, dict[str, int]] = defaultdict(lambda: Counter())
     for record in records:
@@ -131,10 +155,16 @@ def run(path: str) -> dict[str, Any]:
         by_language[str(record.get("language") or "unknown")][record["status"]] += 1
     return {
         "benchmark": "snippet_complexity_truth",
+        "mode": mode,
         "total": len(records),
         "eligible": len(eligible),
         "correct": correct,
         "accuracy": round(correct / len(eligible), 4) if eligible else None,
+        "time_correct": time_correct,
+        "time_accuracy": round(time_correct / len(eligible), 4) if eligible else None,
+        "space_correct": space_correct,
+        "space_accuracy": round(space_correct / len(eligible), 4) if eligible else None,
+        "partial_breakdown": dict(partial_breakdown),
         "status_counts": dict(counts),
         "by_approach": {key: dict(value) for key, value in by_approach.items()},
         "by_language": {key: dict(value) for key, value in by_language.items()},
@@ -146,10 +176,20 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument(
+        "--mode",
+        choices=("legacy", "structural"),
+        default="legacy",
+        help="legacy includes existing semantic shortcuts; structural uses generic AST evidence only",
+    )
     args = parser.parse_args()
-    report = run(args.dataset)
+    report = run(args.dataset, mode=args.mode)
     Path(args.output).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({key: report[key] for key in ("benchmark", "total", "eligible", "correct", "accuracy", "status_counts")}, indent=2))
+    print(json.dumps({key: report[key] for key in (
+        "benchmark", "mode", "total", "eligible", "correct", "accuracy",
+        "time_correct", "time_accuracy", "space_correct", "space_accuracy",
+        "partial_breakdown", "status_counts",
+    )}, indent=2))
 
 
 if __name__ == "__main__":

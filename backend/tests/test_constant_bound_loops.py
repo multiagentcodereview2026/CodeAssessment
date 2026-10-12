@@ -34,3 +34,47 @@ def test_variable_inner_loop_still_multiplies():
         "cpp",
     )
     assert result.time_complexity in {"O(n*m)", "O(m*n)", "O(n^2)"}
+
+
+def test_cpp_only_literal_bound_is_constant():
+    result = analyze_source(
+        "int f() { int total=0; for (int i=0; i<2; ++i) total += i; return total; }",
+        "cpp",
+    )
+    assert result.time_complexity == "O(1)"
+    assert result.space_complexity == "O(1)"
+
+
+def test_python_only_literal_bound_is_constant():
+    result = analyze_source(
+        "def f():\n"
+        "    total = 0\n"
+        "    for i in range(2):\n"
+        "        total += i\n"
+        "    return total\n",
+        "python",
+    )
+    assert result.time_complexity == "O(1)"
+    assert result.space_complexity == "O(1)"
+
+
+def test_named_literal_bound_is_constant():
+    result = analyze_source(
+        "int f() { int n=10; int total=0; "
+        "for (int i=0; i<n; ++i) total += i; return total; }",
+        "cpp",
+    )
+    assert result.time_complexity == "O(1)"
+    assert result.space_complexity == "O(1)"
+
+
+def test_literal_loop_does_not_hide_input_sized_allocation():
+    result = analyze_source(
+        "int f(int n) { vector<int> values(n); "
+        "for (int i=0; i<2; ++i) values[i] = i; return values[0]; }",
+        "cpp",
+    )
+    # Constructing vector<int>(n) itself is linear; the literal loop does not
+    # add another asymptotic factor.
+    assert result.time_complexity == "O(n)"
+    assert result.space_complexity == "O(n)"
