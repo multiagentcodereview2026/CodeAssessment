@@ -27,10 +27,14 @@ def _has_multiple_dimensions(value: str) -> bool:
 
 def _kind(record: dict[str, Any]) -> tuple[str, str, str]:
     """Return (cluster, triage_status, recommended_action)."""
-    time_mismatch = not record.get("time_equivalent", record.get("target_time") == record.get("detected_time"))
-    space_mismatch = not record.get("space_equivalent", record.get("target_space") == record.get("detected_space"))
-    target = " ".join(str(record.get(key) or "") for key in ("target_time", "target_space"))
-    detected = " ".join(str(record.get(key) or "") for key in ("detected_time", "detected_space"))
+    target_time = record.get("target_time") or record.get("expected_time")
+    target_space = record.get("target_space") or record.get("expected_space")
+    detected_time = record.get("detected_time") or record.get("predicted_time")
+    detected_space = record.get("detected_space") or record.get("predicted_space")
+    time_mismatch = not record.get("time_equivalent", target_time == detected_time)
+    space_mismatch = not record.get("space_equivalent", target_space == detected_space)
+    target = " ".join(str(value or "") for value in (target_time, target_space))
+    detected = " ".join(str(value or "") for value in (detected_time, detected_space))
     signals = set(record.get("signals") or [])
     category = str(record.get("category") or "").lower()
 
@@ -58,6 +62,9 @@ def build(report_path: Path, corpus_path: Path, output_path: Path, summary_path:
         if not line.strip():
             continue
         row = json.loads(line)
+        direct_source = row.get("reference_source") or row.get("source") or row.get("code") or ""
+        if direct_source:
+            sources[(str(row.get("problem_id")), str(row.get("language", "")).lower())] = direct_source
         for language, source in (row.get("reference_solution_sources") or {}).items():
             sources[(str(row.get("problem_id")), str(language).lower())] = source
 
@@ -65,7 +72,19 @@ def build(report_path: Path, corpus_path: Path, output_path: Path, summary_path:
     statuses: Counter[str] = Counter()
     rows = []
     for record in report.get("records", []):
-        if record.get("equivalent_to_target"):
+        # Support both the original benchmark schema and the Stage 0 audit
+        # schema.  Stage 0 marks exact matches with cause="agreement" and
+        # explicit time/space equivalence fields.
+        equivalent = (
+            record.get("equivalent_to_target")
+            or record.get("cause") == "agreement"
+            or record.get("status") == "AST_CORRECT"
+            or (
+                record.get("time_equivalent") is True
+                and record.get("space_equivalent") is True
+            )
+        )
+        if equivalent:
             continue
         cluster, status, action = _kind(record)
         item = {
@@ -73,10 +92,10 @@ def build(report_path: Path, corpus_path: Path, output_path: Path, summary_path:
             "title": record.get("title"),
             "category": record.get("category"),
             "language": record.get("language"),
-            "target_time": record.get("target_time"),
-            "detected_time": record.get("detected_time"),
-            "target_space": record.get("target_space"),
-            "detected_space": record.get("detected_space"),
+            "target_time": record.get("target_time") or record.get("expected_time"),
+            "detected_time": record.get("detected_time") or record.get("predicted_time"),
+            "target_space": record.get("target_space") or record.get("expected_space"),
+            "detected_space": record.get("detected_space") or record.get("predicted_space"),
             "signals": record.get("signals") or [],
             "confidence": record.get("confidence"),
             "cluster": cluster,

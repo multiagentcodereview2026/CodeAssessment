@@ -4,7 +4,7 @@ import { BookOpen, Calendar, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
 import { DoubleConfirmDialog } from '../common/DoubleConfirmDialog';
 
-type Course = { id: number; course_code: string; title: string; term: string | null; assignments_count: number };
+type Course = { id: number; course_code: string; title: string; term: string | null; assignments_count: number; instructor_name: string; average_score: number | null; completed_questions: number; pending_questions: number; progress_percent: number | null };
 type Assignment = { id: number; title: string; description: string | null; course_id: number; course_title: string; due_date: string | null; status: string; problems: string[]; problem_titles: string[] };
 type Submission = { assignment_id: number | null; problem_id: string };
 type AvailableCourse = { id: number; course_code: string; title: string; term: string | null; description: string | null; instructor_name: string; enrollment_status: 'ENROLLED' | 'PENDING' | 'AVAILABLE'; request_id: number | null };
@@ -138,6 +138,8 @@ export const MyCoursesView: React.FC = () => {
                 <span className="font-mono text-xs font-bold text-indigo-700">{course.course_code}</span>
                 <span className="mt-1 block font-semibold text-slate-900">{course.title}</span>
                 <span className="mt-1 block text-xs text-slate-500">{course.term || 'No term'} · {course.assignments_count} assignments</span>
+                <span className="mt-1 block text-xs text-slate-500">Instructor: {course.instructor_name}</span>
+                <span className="mt-2 block text-xs font-semibold text-slate-700">Progress: {course.progress_percent == null ? 'No questions assigned' : `${course.progress_percent}%`} · {course.completed_questions} completed · {course.pending_questions} pending</span>
               </button>
             ))}
           </nav>
@@ -146,7 +148,8 @@ export const MyCoursesView: React.FC = () => {
             <div className="mb-4 flex items-end justify-between border-b border-slate-200 pb-3">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">{selectedCourse?.title}</h2>
-                <p className="text-xs text-slate-500">Assignments available to your enrollment</p>
+                <p className="text-xs text-slate-500">{selectedCourse?.course_code} · {selectedCourse?.term || 'No term'} · Instructor: {selectedCourse?.instructor_name}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-700">Course progress: {selectedCourse?.progress_percent == null ? 'No assigned questions yet' : `${selectedCourse.progress_percent}%`} · Average assessed score: {selectedCourse?.average_score == null ? 'Not yet assessed' : `${selectedCourse.average_score}%`}</p>
               </div>
               {selectedCourse && <button onClick={() => setLeaveTarget(selectedCourse)} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50">Leave course</button>}
             </div>

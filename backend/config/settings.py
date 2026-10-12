@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     # Groq Configuration
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "openai/gpt-oss-120b"
+    GROQ_TIMEOUT_SECONDS: int = 20
+    GROQ_MAX_RETRIES: int = 0
 
     # Execution constraints
     DOCKER_EXECUTION_TIMEOUT: int = 5

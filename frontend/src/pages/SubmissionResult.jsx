@@ -128,7 +128,6 @@ const SubmissionResult = () => {
               <ScoreBar label="Complexity Agent" score={complexity} maxScore={100} colorClass="bg-blue-500" />
               <ScoreBar label="Style & Structure" score={style} maxScore={100} colorClass="bg-purple-500" />
               <ScoreBar label="Originality Agent" score={originality} maxScore={100} colorClass="bg-indigo-500" />
-              <ScoreBar label="Execution Agent" score={100} maxScore={100} colorClass="bg-amber-500" />
 
               <div className="mt-8 border-t border-slate-100 pt-6">
                 <h3 className="font-semibold text-slate-800 mb-3 text-sm">Explainable Mentor Feedback</h3>

@@ -11,9 +11,9 @@ import {
   X
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/useAuth';
 import { DifficultyBadge } from '../common/Badge';
 import { Difficulty } from '../../types';
-import { useAuth } from '../../context/useAuth';
 
 type PracticeProblem = { id: string; title: string; difficulty: string; category: string };
 type TopicProgress = { name: string; averageScore: number | null; attempts: number; color: string; nextAction: string };

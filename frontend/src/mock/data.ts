@@ -657,6 +657,7 @@ export const MOCK_RECENT_SUBMISSIONS: SubmissionItem[] = [
     date: '01 May, 10:30 AM',
     passedTestCases: 3,
     totalTestCases: 3,
+    source: 'Independent Practice',
     feedbackSummary: 'Good use of HashMap. Consider better variable names.'
   },
   {
@@ -669,6 +670,7 @@ export const MOCK_RECENT_SUBMISSIONS: SubmissionItem[] = [
     date: '01 May, 09:15 AM',
     passedTestCases: 3,
     totalTestCases: 3,
+    source: 'Independent Practice',
     feedbackSummary: 'Logic is correct. Try to handle edge cases clearly.'
   },
   {
@@ -681,6 +683,7 @@ export const MOCK_RECENT_SUBMISSIONS: SubmissionItem[] = [
     date: '30 Apr, 05:40 PM',
     passedTestCases: 1,
     totalTestCases: 2,
+    source: 'Independent Practice',
     feedbackSummary: 'Check null conditions while reversing the list.'
   },
   {
@@ -693,6 +696,7 @@ export const MOCK_RECENT_SUBMISSIONS: SubmissionItem[] = [
     date: '30 Apr, 07:20 PM',
     passedTestCases: 1,
     totalTestCases: 1,
+    source: 'Independent Practice',
     feedbackSummary: 'Efficient solution! Good recursive approach.'
   },
   {
@@ -705,6 +709,7 @@ export const MOCK_RECENT_SUBMISSIONS: SubmissionItem[] = [
     date: '29 Apr, 02:10 PM',
     passedTestCases: 1,
     totalTestCases: 1,
+    source: 'Independent Practice',
     feedbackSummary: 'Stack implemented properly. Consider early exit.'
   }
 ];

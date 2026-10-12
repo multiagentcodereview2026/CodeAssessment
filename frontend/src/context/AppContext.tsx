@@ -293,6 +293,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             feedbackSummary: typeof feedback.summary === 'string' ? feedback.summary : '',
             status: passedAll ? 'Passed' : passed > 0 ? 'Partial' : 'Failed',
             language: record.language || '—',
+            source: record.source === 'INSTRUCTOR_ASSIGNED' || record.assignment_id != null ? 'Instructor Assigned' : 'Independent Practice',
             date: record.created_at ? new Date(record.created_at).toLocaleString() : 'Saved submission',
             executionTime: `${execution.runtime_ms || 0} ms`,
             passedTestCases: passed,

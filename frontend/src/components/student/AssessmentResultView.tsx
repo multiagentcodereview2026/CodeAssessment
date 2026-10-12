@@ -64,8 +64,7 @@ export const AssessmentResultView: React.FC = () => {
       { name: 'Time', score: time, max: num(complexity.time_score_max) ?? (time == null ? 25 : 25), color: 'bg-cyan-500', detail: [str(complexity.time_complexity), str(complexity.time_classification)].filter(Boolean).join(' · ') || 'Time analysis unavailable.' },
       { name: 'Space', score: space, max: num(complexity.space_score_max) ?? (space == null ? 25 : 25), color: 'bg-amber-500', detail: [str(complexity.space_complexity), str(complexity.space_classification)].filter(Boolean).join(' · ') || 'Space analysis unavailable.' },
       { name: 'Style', score: num(submission.style_score) == null ? null : submission.style_score! * .2, max: 20, color: 'bg-violet-500', detail: 'Code style assessment' },
-      { name: 'Originality', score: num(submission.similarity_score) == null ? null : (100 - submission.similarity_score!) * .1, max: 10, color: 'bg-emerald-500', detail: submission.similarity_score == null ? 'Similarity analysis unavailable.' : `${submission.similarity_score.toFixed(1)}% similarity risk` },
-      { name: 'Execution', score: typeof execution.compile_status === 'string' ? (execution.compile_status.toLowerCase() === 'success' ? 10 : 0) : null, max: 10, color: 'bg-indigo-500', detail: str(execution.compile_status) || 'Build status unavailable.' }
+      { name: 'Originality', score: num(submission.similarity_score) == null ? null : (100 - submission.similarity_score!) * .2, max: 20, color: 'bg-emerald-500', detail: submission.similarity_score == null ? 'Similarity analysis unavailable.' : `${submission.similarity_score.toFixed(1)}% similarity risk` }
     ];
     const projected = num(projection.projected_score);
     const gain = num(projection.score_improvement_delta) ?? num(projection.expected_improvement) ?? (projected != null && submission.overall_score != null ? Math.max(0, projected - submission.overall_score) : null);

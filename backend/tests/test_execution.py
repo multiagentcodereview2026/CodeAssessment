@@ -148,6 +148,32 @@ async def run_job_processing_flow():
         ]
 
     finally:
+        # This test may run against the development database.  Remove every
+        # row created by the test so its fixture cannot appear as a real
+        # problem in the instructor/student problem list.
+        try:
+            db.rollback()
+            db.query(models.Submission).filter(
+                models.Submission.submission_id == sub_id
+            ).delete(synchronize_session=False)
+            db.query(models.ProblemTestCase).filter(
+                models.ProblemTestCase.problem_id == p_id
+            ).delete(synchronize_session=False)
+            db.query(models.AssignmentProblem).filter(
+                models.AssignmentProblem.problem_id == p_id
+            ).delete(synchronize_session=False)
+            db.query(models.Problem).filter(
+                models.Problem.id == p_id
+            ).delete(synchronize_session=False)
+            db.query(models.Student).filter(
+                models.Student.student_id == student_name
+            ).delete(synchronize_session=False)
+            db.query(models.User).filter(
+                models.User.username == student_name
+            ).delete(synchronize_session=False)
+            db.commit()
+        except Exception:
+            db.rollback()
         db.close()
 
 if __name__ == "__main__":

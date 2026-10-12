@@ -8,6 +8,7 @@ import re
 COMPLEXITY_RANKS = {
     "O(1)":             1,
     "O(log n)":         2,
+    "O(log(m+n))":       2,
     "O(log N)":         2,
     "O(log m)":         2,
     "O(log V)":         2,
@@ -18,15 +19,20 @@ COMPLEXITY_RANKS = {
     "O(N)":             4,
     "O(m)":             4,
     "O(k)":             4,
+    "O(|Σ|)":           4,
     "O(K)":             4,
     "O(W)":             4,
     "O(V)":             4,
     "O(E)":             4,
     "O(m+n)":           4,
+    "O(max(m,n))":       4,
     "O(V+E)":           4,
     "O(H + K)":         4,
     "O(H+K)":           4,
     "O(n log n)":       5,
+    "O(log^2 n)":       3,
+    "O(n log^2 n)":     6,
+    "O(n^2 log^2 n)":   8,
     "O(N log N)":       5,
     "O(n log m)":       5,
     "O(m log n)":       5,
@@ -38,10 +44,17 @@ COMPLEXITY_RANKS = {
     "O(mn)":            6,
     "O(m*n)":           6,
     "O(n*m)":           6,
+    "O((m+n) log(m+n))": 6,
+    "O(N log N)":        5,
+    "O(N)":              4,
+    "O(L)":              4,
+    "O(min(n,m))":       4,
     "O(nk)":            6,
     "O(n*k)":           6,
+    "O(m*k)":           6,
     "O(nW)":            6,
     "O(n^2)":           6,
+    "O((n-m+1)*m)":     6,
     "O(N^2)":           6,
     "O(VE)":            6,
     "O(V^2)":           6,
@@ -63,6 +76,12 @@ COMPLEXITY_RANKS = {
     "O(n!)":            10,
     "O(N!)":            10,
     "O(V!)":            10,
+    "O(4^n*n)":         10,
+    "O(4^n/sqrt(n))":    10,
+    "O(2^(2n)*n)":      10,
+    "O(n!*n)":           10,
+    "O(n^(t/m))":        10,
+    "O(t/m)":             4,
 }
 
 
@@ -110,6 +129,9 @@ def normalize_complexity(value: str | None) -> str | None:
     if text in {"o(logm)", "o(log(m))"}:
         return "O(log m)"
 
+    if text in {"o(log(m+n))", "o(log(n+m))", "o(logm+n)"}:
+        return "O(log(m+n))"
+
     if text in {"o(logv)", "o(log(v))", "o(lgv)", "o(lg(v))"}:
         return "O(log V)"
 
@@ -137,11 +159,26 @@ def normalize_complexity(value: str | None) -> str | None:
     if text in {"o(n)"}:
         return "O(n)"
 
+    if text in {"o(|σ|)", "o(|sigma|)", "o(alphabet)"}:
+        return "O(|Σ|)"
+
     if text in {"o(m)"}:
         return "O(m)"
 
     if text in {"o(m+n)", "o(n+m)", "o(m)+o(n)"}:
         return "O(m+n)"
+
+    if text in {"o((m+n)log(m+n))", "o((m+n)*log(m+n))", "o((n+m)log(n+m))", "o((n+m)*log(n+m))"}:
+        return "O((m+n) log(m+n))"
+    if text in {"o(n)", "o(n)"}:
+        return "O(n)"
+    if text in {"o(l)"}:
+        return "O(L)"
+    if text in {"o(min(n,m))", "o(min(m,n))"}:
+        return "O(min(n,m))"
+
+    if text in {"o(max(m,n))", "o(max(n,m))", "o(max(m+n))"}:
+        return "O(max(m,n))"
 
     # ── Linear x Logarithmic Complexities ─────────────────────────────────
     if text in {
@@ -165,6 +202,18 @@ def normalize_complexity(value: str | None) -> str | None:
     }:
         return "O(n log n)"
 
+    # Product notation is commonly written with an explicit multiplication
+    # sign in reviewed labels (O(n * log k)); the canonical engine omits it.
+    if text in {"o(nlogk)", "o(n*logk)", "o(nlog(k))", "o(n*log(k))"}:
+        return "O(n log k)"
+
+    if text in {"o(log^2n)", "o(log^2(n))", "o(logn^2)", "o(log(n)^2)"}:
+        return "O(log^2 n)"
+    if text in {"o(nlog^2n)", "o(n*log^2n)", "o(nlog^2(n))"}:
+        return "O(n log^2 n)"
+    if text in {"o(n^2log^2n)", "o(n^2*log^2n)"}:
+        return "O(n^2 log^2 n)"
+
     if text in {
         "o(nlogm)", "o(nlog(m))", "o(n*logm)", "o(n*log(m))",
         "o(nlog2m)", "o(nlog10m)"
@@ -184,10 +233,11 @@ def normalize_complexity(value: str | None) -> str | None:
     if text in {"o(v^2)", "o(v*v)", "o(v²)", "o(v2)"}:
         return "O(V^2)"
 
-    if text in {"o(mn)", "o(m*n)"}:
+    # Multiplication is commutative for asymptotic products.  Keep one
+    # canonical spelling so O(m*n), O(n*m), and source labels using an
+    # explicit multiplication sign compare identically.
+    if text in {"o(mn)", "o(m*n)", "o(nm)", "o(n*m)"}:
         return "O(m*n)"
-    if text in {"o(nm)", "o(n*m)"}:
-        return "O(n*m)"
 
     if text in {"o(n^2)", "o(n*n)", "o(n²)", "o(n2)"}:
         return "O(n^2)"
@@ -243,6 +293,20 @@ def normalize_complexity(value: str | None) -> str | None:
     if text in {"o(n!)"}:
         return "O(n!)"
 
+    # Backtracking/output materialisation forms used by reviewed corpora.
+    if text in {"o(4^n*n)", "o(4^n*n)", "o(4^n*n)"}:
+        return "O(4^n*n)"
+    if text in {"o(4^n/sqrt(n))", "o(4^n/sqrtn)"}:
+        return "O(4^n/sqrt(n))"
+    if text in {"o(2^(2n)*n)", "o(2^(2*n)*n)", "o(2^2n*n)"}:
+        return "O(2^(2n)*n)"
+    if text in {"o(n!*n)", "o(n!*n)"}:
+        return "O(n!*n)"
+    if text in {"o(n^(t/m))", "o(n^t/m)", "o(n**(t/m))"}:
+        return "O(n^(t/m))"
+    if text in {"o(t/m)", "o(t/m)"}:
+        return "O(t/m)"
+
     # ── Pass-through for any recognised O(...) form not matched above ──────
     if text.startswith("o(") and text.endswith(")"):
         return value.strip()
@@ -267,6 +331,58 @@ def complexity_rank(value: str | None) -> int | None:
         elif deg == 1:
             return 4
     return None
+
+
+def compose_sequential(*terms: str | None) -> str | None:
+    """Compose sequential regions using asymptotic maximum.
+
+    Sequential work adds, so the dominant normalized term wins. Unknown
+    terms are ignored rather than guessed; callers can preserve an explicit
+    unknown result when no term is recognized.
+    """
+    normalized = [normalize_complexity(term) for term in terms]
+    normalized = [term for term in normalized if term]
+    if not normalized:
+        return None
+    return max(normalized, key=lambda term: (complexity_rank(term) or -1, len(term)))
+
+
+def compose_nested(outer: str | None, inner: str | None) -> str | None:
+    """Compose a common nested-loop pair conservatively.
+
+    This covers the algebraic products needed by Stage 2 without attempting
+    symbolic theorem proving. Unsupported products return the dominant
+    recognized term instead of inventing a more expensive bound.
+    """
+    left = normalize_complexity(outer)
+    right = normalize_complexity(inner)
+    if not left or not right:
+        return left or right
+    pair = {left, right}
+    if pair == {"O(1)"}:
+        return "O(1)"
+    if "O(1)" in pair:
+        return right if left == "O(1)" else left
+    if pair == {"O(n)", "O(log n)"}:
+        return "O(n log n)"
+    if pair == {"O(n)", "O(n log n)"}:
+        return "O(n^2 log n)"
+    if pair == {"O(n)", "O(n)"}:
+        return "O(n^2)"
+    if pair == {"O(log n)"}:
+        return "O(log^2 n)"
+    if pair == {"O(log n)", "O(n log n)"}:
+        return "O(n log^2 n)"
+    # Preserve a known product already represented in the IR.
+    if left == right:
+        rank = complexity_rank(left)
+        if left == "O(n^2)":
+            return "O(n^4)"
+        if left == "O(n log n)":
+            return "O(n^2 log^2 n)"
+        if rank is not None and rank <= 4:
+            return left
+    return left if (complexity_rank(left) or -1) >= (complexity_rank(right) or -1) else right
 
 
 def rank_distance(student: str | None, optimal: str | None) -> int | None:

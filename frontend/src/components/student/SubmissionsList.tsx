@@ -17,11 +17,13 @@ export const SubmissionsList: React.FC = () => {
   const { submissions, openAssessmentResult, openProblemWorkspace } = useApp();
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterSource, setFilterSource] = useState<string>('all');
 
   const filtered = submissions.filter((sub) => {
     const matchesSearch = sub.problemTitle.toLowerCase().includes(search.toLowerCase()) || sub.language.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = filterStatus === 'all' || sub.status.toLowerCase() === filterStatus.toLowerCase();
-    return matchesSearch && matchesStatus;
+    const matchesSource = filterSource === 'all' || sub.source === filterSource;
+    return matchesSearch && matchesStatus && matchesSource;
   });
 
   const handleOpenReport = (subId: string) => {
@@ -85,6 +87,12 @@ export const SubmissionsList: React.FC = () => {
             <option value="partial">Partial</option>
             <option value="failed">Failed</option>
           </select>
+          <span className="ml-2 text-xs font-semibold text-slate-600">Source:</span>
+          <select value={filterSource} onChange={(e) => setFilterSource(e.target.value)} className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 font-medium text-slate-700 focus:outline-none focus:border-indigo-500 cursor-pointer">
+            <option value="all">All Sources</option>
+            <option value="Independent Practice">Independent Practice</option>
+            <option value="Instructor Assigned">Instructor Assigned</option>
+          </select>
         </div>
       </div>
 
@@ -97,6 +105,7 @@ export const SubmissionsList: React.FC = () => {
                 <th className="py-4 px-6">Problem</th>
                 <th className="py-4 px-6">Score</th>
                 <th className="py-4 px-6">Status</th>
+                <th className="py-4 px-6">Source</th>
                 <th className="py-4 px-6">Language</th>
                 <th className="py-4 px-6">Test Cases</th>
                 <th className="py-4 px-6">Date</th>
@@ -139,6 +148,7 @@ export const SubmissionsList: React.FC = () => {
                     <td className="py-4 px-6">
                       <StatusBadge status={sub.status} />
                     </td>
+                    <td className="py-4 px-6"><span className={`rounded-lg px-2 py-1 text-[10px] font-bold ${sub.source === 'Instructor Assigned' ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>{sub.source}</span></td>
 
                     <td className="py-4 px-6 font-mono font-medium text-slate-700">
                       {sub.language}
@@ -176,7 +186,7 @@ export const SubmissionsList: React.FC = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-slate-400">
+                  <td colSpan={8} className="text-center py-12 text-slate-400">
                     No submissions found matching criteria.
                   </td>
                 </tr>

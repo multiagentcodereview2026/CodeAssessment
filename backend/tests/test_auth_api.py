@@ -37,6 +37,7 @@ from main import (
     get_student_assignment_for_problem,
     get_student_course_assignments,
     get_student_courses,
+    build_student_analytics,
     create_assignment,
     create_instructor_problem,
     list_instructor_problems,
@@ -952,3 +953,26 @@ def test_student_latest_problem_attempts_collapse_across_assignments():
     )
     assert len(latest_assessed_attempts([old_attempt, new_attempt])) == 2
     assert latest_assessed_attempts([old_attempt, new_attempt], preserve_assignment=False) == [new_attempt]
+
+
+def test_practice_analytics_excludes_instructor_assigned_submissions(db_session):
+    user = add_account(db_session, username="student-1", role="student", password="student-password")
+    instructor = add_account(db_session, username="instructor-1", role="instructor", password="instructor-password")
+    practice = models.Problem(id="practice", title="Practice", description="x", examples=[], constraints=[], starter_codes={}, test_cases=[])
+    assigned = models.Problem(id="assigned", title="Assigned", description="x", examples=[], constraints=[], starter_codes={}, test_cases=[])
+    course = models.Course(course_code="CSE-1", title="Course", instructor_id=instructor.instructor_profile.id)
+    db_session.add_all([practice, assigned, course]); db_session.flush()
+    assignment = models.Assignment(title="Work", course_id=course.id, status="ACTIVE")
+    db_session.add(assignment); db_session.flush()
+    db_session.add_all([
+        models.Submission(submission_id="practice-attempt", student_id=user.student_profile.student_id, problem_id=practice.id, language="python", code="", status="EVALUATED", overall_score=80),
+        models.Submission(submission_id="assignment-attempt", student_id=user.student_profile.student_id, problem_id=assigned.id, assignment_id=assignment.id, language="python", code="", status="EVALUATED", overall_score=20),
+    ])
+    db_session.commit()
+
+    dashboard = build_student_analytics(db_session, user.student_profile, independent_only=False)
+    practice_only = build_student_analytics(db_session, user.student_profile, independent_only=True)
+
+    assert dashboard.overall_score == 50
+    assert practice_only.overall_score == 80
+    assert len(practice_only.score_trend) == 1

@@ -143,6 +143,10 @@ def _equivalent_complexity(left: str | None, right: str | None, category: str) -
         # Bounded parameter product alias (nk, nd → n)
         if expr in {"nk", "n*k", "nd", "n*d"}:
             return "o(n)"
+        # Multi-variable log alias: log(m+n) → logn, log(v+e) → logn
+        expr = re.sub(r'log\s*\(\s*[a-z]\s*\+\s*[a-z]\s*\)', 'logn', expr)
+        # Product ordering: m*n → mn
+        expr = re.sub(r'([a-z])\s*\*\s*([a-z])', r'\1\2', expr)
         return f"o({expr})"
 
     # ── direct / canonical string comparison ──────────────────────────────

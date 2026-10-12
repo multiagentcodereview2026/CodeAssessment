@@ -141,4 +141,5 @@ def test_aggregation_does_not_replace_a_zero_score_with_a_default(monkeypatch):
         )
     )
 
-    assert result["overall_score"] == 32.5
+    assert result["overall_score"] == 42.5
+    assert "execution" not in result["score_breakdown"]
