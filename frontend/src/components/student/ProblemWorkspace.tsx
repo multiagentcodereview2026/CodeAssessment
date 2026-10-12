@@ -21,6 +21,7 @@ import {
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/useAuth';
+import { CompilerFeedback } from './CompilerFeedback';
 import { DifficultyBadge } from '../common/Badge';
 import { DoubleConfirmDialog } from '../common/DoubleConfirmDialog';
 import { AssessmentResult, SubmissionItem, TestCaseResult } from '../../types';
@@ -1054,9 +1055,8 @@ export const ProblemWorkspace: React.FC = () => {
               {runOutput.status === 'error' && <p className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">Reason: {runOutput.reason}</p>}
 
               {runOutput.compileError && (
-                <div className="mb-3 overflow-x-auto rounded-xl border border-rose-200 bg-slate-950 p-4">
-                  <p className="mb-2 text-xs font-semibold text-rose-300">Compiler output</p>
-                  <pre className="whitespace-pre-wrap font-mono text-xs leading-5 text-rose-100">{runOutput.compileError}</pre>
+                <div className="mb-3">
+                  <CompilerFeedback diagnostics={runOutput.compileError} />
                 </div>
               )}
 
