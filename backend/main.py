@@ -359,7 +359,7 @@ FAILED_CASE_REASONS = {
 }
 
 
-def redact_hidden_execution(execution_result):
+def redact_hidden_execution(execution_result, *, student_view=False):
     """Keep hidden judge data out of API responses and persisted submissions.
 
     The execution engine needs the input and expected output to judge a case,
@@ -372,10 +372,38 @@ def redact_hidden_execution(execution_result):
     safe_result = copy.deepcopy(execution_result)
     results = safe_result.get("results")
     if isinstance(results, list):
-        for case_result in results:
-            if isinstance(case_result, dict) and case_result.get("is_hidden"):
+        first_private_failure = None
+        public_results = []
+        for ordinal, case_result in enumerate(results, start=1):
+            if not isinstance(case_result, dict):
+                continue
+            if case_result.get("is_hidden"):
+                if first_private_failure is None and str(case_result.get("status", "")).lower() != "accepted":
+                    status = str(case_result.get("status") or "SYSTEM_ERROR").upper()
+                    first_private_failure = {
+                        "ordinal": ordinal,
+                        "status": status,
+                        "reason": FAILED_CASE_REASONS.get(status, "This test did not pass."),
+                    }
                 for field in ("input", "expected_output", "actual_output", "stderr", "error_message"):
                     case_result.pop(field, None)
+            else:
+                public_results.append(case_result)
+
+        if student_view:
+            public_passed = sum(
+                str(case.get("status", "")).lower() == "accepted"
+                for case in public_results
+            )
+            safe_result["results"] = public_results
+            safe_result.pop("last_failed_case", None)
+            safe_result["first_private_failure"] = (
+                first_private_failure
+                if len(public_results) == 3
+                and public_passed == 3
+                else None
+            )
+            return safe_result
 
     # The execution layer deliberately provides only fixed metadata for the
     # final failed hidden test. Keep the stored/API shape allowlisted even if
@@ -396,6 +424,20 @@ def redact_hidden_execution(execution_result):
             }
 
     return safe_result
+
+
+def student_submission_details(submission):
+    """Build a submission response with private tests reduced to one safe note."""
+    payload = {
+        field_name: getattr(submission, field_name)
+        for field_name in SubmissionDetails.model_fields
+        if hasattr(submission, field_name)
+    }
+    payload["execution_result"] = redact_hidden_execution(
+        submission.execution_result,
+        student_view=True,
+    )
+    return SubmissionDetails(**payload)
 
 app = FastAPI(
     title="Explainable Multi-Agent AI Code Evaluator (Production API)",
@@ -1108,7 +1150,10 @@ async def submit_and_evaluate_code(
 
     # 3. Execute LangGraph Multi-Agent Engine
     final_state = await evaluation_graph.ainvoke(initial_state)
-    safe_execution_result = redact_hidden_execution(final_state.get("execution_result"))
+    safe_execution_result = redact_hidden_execution(
+        final_state.get("execution_result"),
+        student_view=True,
+    )
 
     # 4. Save into Database
     submission_id = f"SUB-{uuid4().hex[:8].upper()}"
@@ -1180,7 +1225,7 @@ def get_submission(
     ).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
-    return submission
+    return student_submission_details(submission)
 
 @app.get("/api/submissions", response_model=List[SubmissionDetails])
 def list_submissions(
@@ -1191,7 +1236,10 @@ def list_submissions(
     if student_id is not None and student_id != student.student_id:
         raise HTTPException(status_code=403, detail="Cannot access another student's submissions")
     query = db.query(models.Submission).filter(models.Submission.student_id == student.student_id)
-    return query.order_by(models.Submission.created_at.desc()).all()
+    return [
+        student_submission_details(submission)
+        for submission in query.order_by(models.Submission.created_at.desc()).all()
+    ]
 
 # ==========================================
 # Student & Instructor Analytics Endpoints
