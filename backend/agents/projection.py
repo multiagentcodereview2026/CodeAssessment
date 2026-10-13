@@ -14,8 +14,9 @@ class ScoreProjectionOutput(BaseModel):
 
 async def score_projection_node(state: EvaluationState) -> Dict[str, Any]:
     prompt = load_prompt("projection")
-    current_score = state.get("overall_score") or 85.0
-    projected_score = min(100.0, current_score + 7.0)
+    current_score = state.get("overall_score")
+    if current_score is None:
+        current_score = 0.0
 
     payload = {
         "current_score": current_score,
@@ -25,20 +26,21 @@ async def score_projection_node(state: EvaluationState) -> Dict[str, Any]:
     }
 
     fallback = {
-        "projected_score": projected_score,
+        # An invented fixed gain is misleading. Hide the projection unless it
+        # was actually produced from this submission's evidence.
+        "projected_score": None,
         "current_score": current_score,
-        "confidence": 0.92,
-        "expected_improvement": 7.0,
-        "improvement_breakdown": {
-            "correctness_gain": 0.0,
-            "complexity_gain": 3.0,
-            "style_gain": 4.0
-        },
-        "timeline": "1 week of targeted practice",
-        "motivational_message": "You are within the top 12% of programmers! A quick pass on clean naming will push your score into the 90s."
+        "confidence": 0.0,
+        "expected_improvement": None,
+        "improvement_breakdown": {},
+        "timeline": "Unavailable",
+        "motivational_message": "A personalized score projection is unavailable for this assessment."
     }
 
     result = await invoke_agent(prompt, payload, ScoreProjectionOutput, fallback)
+    used_fallback = result is fallback
+    result = dict(result)
+    result["available"] = not used_fallback
     return {
         "projected_score": result,
         "status": "complete"

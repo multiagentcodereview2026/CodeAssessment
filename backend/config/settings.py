@@ -10,8 +10,10 @@ class Settings(BaseSettings):
     # Groq Configuration
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "openai/gpt-oss-120b"
-    GROQ_TIMEOUT_SECONDS: int = 20
-    GROQ_MAX_RETRIES: int = 0
+    # Rewrites can be large (the response includes the full source file), so
+    # allow enough time for generation and retry transient provider failures.
+    GROQ_TIMEOUT_SECONDS: int = 90
+    GROQ_MAX_RETRIES: int = 2
 
     # Execution constraints
     DOCKER_EXECUTION_TIMEOUT: int = 5

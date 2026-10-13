@@ -123,6 +123,18 @@ def test_complexity_response_excludes_private_target_data():
     assert scored["assessment_flags"] == {"benchmark_review_required": False}
 
 
+def test_complexity_explanations_do_not_reveal_private_benchmark_use():
+    scored = score_complexity_analysis(
+        {"time_complexity": "O(n)", "space_complexity": "O(1)"},
+        {"time": "O(n)", "space": "O(1)"},
+    )
+
+    serialized = str(scored["complexity_details"]).lower()
+    assert "private benchmark" not in serialized
+    assert "compared with" not in serialized
+    assert scored["complexity_details"]["scoring_reason"] == "Time complexity was assessed from the submitted code."
+
+
 def test_student_aggregation_does_not_replace_a_zero_score_with_a_default():
     result = asyncio.run(
         aggregation.aggregation_node(

@@ -107,6 +107,7 @@ class Student(Base):
     email = Column(String(200), nullable=True)
     institution = Column(String(200), default="Keshav Memorial Institute of Technology")
     department = Column(String(100), default="Computer Science & Engineering")
+    year = Column(String(50), nullable=True)
     xp = Column(Integer, default=150)
     streak_days = Column(Integer, default=7)
     created_at = Column(DateTime, default=datetime.utcnow)

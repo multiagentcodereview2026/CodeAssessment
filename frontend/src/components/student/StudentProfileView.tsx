@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   User,
   Mail,
@@ -12,28 +12,49 @@ import {
   Award
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/useAuth';
 import { Modal } from '../common/Modal';
 
 export const StudentProfileView: React.FC = () => {
   const { currentUser } = useApp();
+  const { user, updateAccount } = useAuth();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [name, setName] = useState(currentUser.name);
   const [institution, setInstitution] = useState(currentUser.institution);
   const [department, setDepartment] = useState(currentUser.department);
   const [year, setYear] = useState(currentUser.year);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
-  const handleSave = (e: React.FormEvent) => {
+  useEffect(() => {
+    setName(currentUser.name);
+    setInstitution(currentUser.institution);
+    setDepartment(currentUser.department);
+    setYear(currentUser.year);
+  }, [currentUser.name, currentUser.institution, currentUser.department, currentUser.year]);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    currentUser.name = name;
-    currentUser.institution = institution;
-    currentUser.department = department;
-    currentUser.year = year;
-    setSavedSuccess(true);
-    setTimeout(() => {
-      setSavedSuccess(false);
-      setIsEditOpen(false);
-    }, 1000);
+    setSaving(true);
+    setSaveError('');
+    try {
+      await updateAccount({
+        full_name: name,
+        institution,
+        department,
+        year
+      });
+      setSavedSuccess(true);
+      window.setTimeout(() => {
+        setSavedSuccess(false);
+        setIsEditOpen(false);
+      }, 800);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Unable to save your profile. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -89,7 +110,7 @@ export const StudentProfileView: React.FC = () => {
 
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-500 font-mono bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-                Roll: <strong className="text-slate-800">{currentUser.rollNumber}</strong>
+                Roll: <strong className="text-slate-800">{user?.username || currentUser.rollNumber}</strong>
               </span>
             </div>
           </div>
@@ -105,7 +126,7 @@ export const StudentProfileView: React.FC = () => {
                   Roll Number
                 </span>
                 <span className="text-sm font-extrabold text-slate-800 font-mono mt-0.5 block">
-                  {currentUser.rollNumber}
+                  {user?.username || currentUser.rollNumber}
                 </span>
               </div>
             </div>
@@ -185,6 +206,8 @@ export const StudentProfileView: React.FC = () => {
             />
           </div>
 
+          {saveError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{saveError}</p>}
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block font-bold text-slate-700 mb-1">Department</label>
@@ -218,10 +241,11 @@ export const StudentProfileView: React.FC = () => {
             </button>
             <button
               type="submit"
+              disabled={saving}
               className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md shadow-indigo-600/20 flex items-center gap-1.5 transition-all"
             >
               {savedSuccess ? <Check className="w-4 h-4 text-emerald-300" /> : null}
-              <span>{savedSuccess ? 'Saved!' : 'Save Changes'}</span>
+              <span>{saving ? 'Saving…' : savedSuccess ? 'Saved!' : 'Save Changes'}</span>
             </button>
           </div>
         </form>
