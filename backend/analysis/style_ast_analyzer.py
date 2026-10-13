@@ -45,6 +45,70 @@ def _deduplicate_findings(groups: tuple[list[dict[str, Any]], ...]) -> tuple[lis
     return tuple(result)
 
 
+def _without_comments(source: str, language: str) -> str:
+    """Remove comment text before style checks while retaining line numbers."""
+    python_comments = language.lower() in {"python", "py"}
+    chars = list(source)
+    result: list[str] = []
+    quote: str | None = None
+    escaped = False
+    index = 0
+
+    while index < len(chars):
+        current = chars[index]
+        following = chars[index + 1] if index + 1 < len(chars) else ""
+
+        if quote:
+            if escaped:
+                result.append(current)
+                escaped = False
+            elif current == "\\":
+                result.append(current)
+                escaped = True
+            elif source.startswith(quote, index):
+                result.extend(quote)
+                index += len(quote)
+                quote = None
+                continue
+            else:
+                result.append(current)
+            index += 1
+            continue
+
+        if current in {"'", '"', "`"}:
+            quote = source[index:index + 3] if python_comments and source.startswith(current * 3, index) else current
+            result.extend(quote)
+            index += len(quote)
+            continue
+
+        if current == "/" and following == "/":
+            while index < len(chars) and chars[index] != "\n":
+                result.append(" ")
+                index += 1
+            continue
+        if current == "/" and following == "*":
+            result.extend((" ", " "))
+            index += 2
+            while index < len(chars):
+                if chars[index] == "*" and index + 1 < len(chars) and chars[index + 1] == "/":
+                    result.extend((" ", " "))
+                    index += 2
+                    break
+                result.append("\n" if chars[index] == "\n" else " ")
+                index += 1
+            continue
+        if python_comments and current == "#":
+            while index < len(chars) and chars[index] != "\n":
+                result.append(" ")
+                index += 1
+            continue
+
+        result.append(current)
+        index += 1
+
+    return "".join(result)
+
+
 def _python_metrics(source: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     naming: list[dict[str, Any]] = []
     readability: list[dict[str, Any]] = []
@@ -122,8 +186,6 @@ def _python_metrics(source: str) -> tuple[list[dict[str, Any]], list[dict[str, A
     if any(len(line) > 120 for line in lines):
         line = next((i for i, text in enumerate(lines, 1) if len(text) > 120), None)
         readability.append(_finding("readability", "One or more lines exceed 120 characters.", "minor", 1, line))
-    if source.strip() and not re.search(r"(^|\n)\s*#", source):
-        readability.append(_finding("readability", "No explanatory comments were found.", "minor", 1, 1))
     if tree is not None and sum(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) for n in ast.walk(tree)) == 1:
         functions = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
         if functions and (getattr(functions[0], "end_lineno", 0) - functions[0].lineno) > 40:
@@ -207,19 +269,10 @@ def _generic_metrics(source: str, language: str = "") -> tuple[list[dict[str, An
     if any(len(line) > 120 for line in lines):
         line = next((i for i, text in enumerate(lines, 1) if len(text) > 120), None)
         readability.append(_finding("readability", "One or more lines exceed 120 characters.", "minor", 3, line))
-    comment_matches = re.findall(r"(?:^|\n)\s*(?://|/\*+|\*+)(.*)", source)
-    meaningful_comment = any(len(re.findall(r"[A-Za-z]{3,}", text)) >= 4 for text in comment_matches)
-    control_count = len(re.findall(r"\b(?:for|while|if|switch|try|catch)\b", source))
-    complex_logic = control_count >= 3 or bool(re.search(r"(?:\?[^:]+:|&&.*&&|\|\|.*\|\|)", source))
-    if complex_logic and not meaningful_comment:
-        readability.append(_finding("readability", "No useful explanation was found for non-obvious logic.", "minor", 3, 1))
-    elif meaningful_comment:
-        comment_line = next((i for i, text in enumerate(lines, 1) if re.search(r"//|/\*|\*", text)), 1)
-        readability.append(_finding("readability", "Useful explanatory comment detected.", "info", 0, comment_line, credit=2))
-    depth = max(((len(line) - len(line.lstrip(" \t"))) // 4 for line in source.splitlines()), default=0)
+    nonempty_lines = [line for line in source.splitlines() if line.strip()]
+    depth = max(((len(line) - len(line.lstrip(" \t"))) // 4 for line in nonempty_lines), default=0)
     if depth >= 5:
         readability.append(_finding("readability", "Control flow appears deeply nested.", "moderate", 5, 1))
-    nonempty_lines = [line for line in source.splitlines() if line.strip()]
     packed_statement_lines = [
         line for line in nonempty_lines
         if (len(line) > 120 and line.count(";") >= 2)
@@ -236,7 +289,7 @@ def _generic_metrics(source: str, language: str = "") -> tuple[list[dict[str, An
     function_count = len(re.findall(r"\b(?:void|int|bool|string|auto|[A-Za-z_]\w*(?:<[^>]+>)?)\s+\w+\s*\([^)]*\)", source))
     if function_count >= 2 and len(nonempty_lines) >= 3 and not packed_statement_lines:
         modularity.append(_finding("modularity", "Multiple named functions provide reusable decomposition.", "info", 0, 1, credit=3))
-    if function_count == 1 and source.count("\n") > 60:
+    if function_count == 1 and len(nonempty_lines) > 60:
         modularity.append(_finding("modularity", "A large implementation could be decomposed into helpers.", "minor", 1, 1))
     normalized_lines = [re.sub(r"\s+", " ", line.strip()) for line in nonempty_lines]
     repeated = {line for line in normalized_lines if len(line) >= 12 and normalized_lines.count(line) >= 2}
@@ -253,6 +306,7 @@ def _generic_metrics(source: str, language: str = "") -> tuple[list[dict[str, An
 def analyze_style(source: str, language: str) -> dict[str, Any]:
     source = source or ""
     normalized_language = (language or "").lower().strip()
+    source = _without_comments(source, normalized_language)
     if normalized_language in {"python", "py"}:
         groups = _python_metrics(source)
     elif normalized_language in {"cpp", "c++", "c", "java", "javascript", "js"}:

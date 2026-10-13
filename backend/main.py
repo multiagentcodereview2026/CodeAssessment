@@ -76,6 +76,7 @@ from schemas import (
 from docker_runner.executor import execute_code_sandboxed
 from agents.complexity import analyze_student_complexity, unavailable_analysis
 from agents.base import llm, extract_clean_json
+from agents.revision import revision_node
 from workflow.graph import evaluation_graph
 from workflow.state import EvaluationState
 from instructor_repository import (
@@ -1292,6 +1293,50 @@ def get_submission(
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
     return student_submission_details(submission)
+
+
+@app.post("/api/submissions/{submission_id}/revision")
+async def regenerate_submission_revision(
+    submission_id: str,
+    db: Session = Depends(get_db),
+    student: models.Student = Depends(get_current_student),
+):
+    """Generate and persist a missing task-specific rewrite for a saved attempt."""
+    submission = db.query(models.Submission).filter(
+        models.Submission.submission_id == submission_id,
+        models.Submission.student_id == student.student_id,
+    ).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    problem = db.query(models.Problem).filter(
+        models.Problem.id == submission.problem_id,
+    ).first()
+    if not problem:
+        raise HTTPException(status_code=404, detail="Problem not found")
+
+    state: EvaluationState = {
+        "problem": {
+            "title": problem.title,
+            "statement": problem.description,
+            "constraints": problem.constraints or [],
+        },
+        "submission": {"source_code": submission.code, "language": submission.language},
+        "execution_result": redact_hidden_execution(submission.execution_result or {}, student_view=True),
+        "feedback": submission.feedback,
+        "complexity_details": submission.complexity_details,
+        "style_details": (submission.feedback or {}).get("style_details") if isinstance(submission.feedback, dict) else None,
+    }
+    revision = (await revision_node(state)).get("improved_code") or {}
+    if revision.get("revision_source") != "ai" or not revision.get("improved_code"):
+        raise HTTPException(
+            status_code=503,
+            detail="A task-specific rewrite could not be generated right now. Check the AI provider connection and try again.",
+        )
+
+    submission.improved_code = revision
+    db.commit()
+    return {"improved_code": revision}
 
 @app.get("/api/submissions", response_model=List[SubmissionDetails])
 def list_submissions(

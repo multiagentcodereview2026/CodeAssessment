@@ -26,6 +26,22 @@ class ComplexityOutput(BaseModel):
     reasoning: str = "No complexity analysis was available."
 
 
+def _student_complexity_reason(status: Optional[str], dimension: str) -> str:
+    """Return student-facing text without exposing internal scoring targets."""
+    label = "Time" if dimension == "time" else "Space"
+    if status == "SCORED":
+        return f"{label} complexity was assessed from the submitted code."
+    if status == "ANALYSIS_UNAVAILABLE":
+        return f"{label} complexity could not be estimated with enough confidence to score."
+    if status == "TARGET_NOT_CONFIGURED":
+        return f"A problem-specific {dimension}-complexity score is unavailable for this assessment."
+    if status == "NOT_SCORED_COMPILATION_FAILED":
+        return f"{label} complexity was not scored because the submission did not compile."
+    if status == "NOT_AWARDED_NO_CORRECT_CASES":
+        return f"{label} complexity marks were not awarded because no public test cases passed."
+    return f"{label} complexity needs a problem-specific review before it can be scored."
+
+
 def public_problem_context(problem: Dict[str, Any]) -> Dict[str, Any]:
     """Select the problem data that may safely be sent to the AI service."""
     constraints = problem.get("constraints") or []
@@ -170,8 +186,8 @@ def score_complexity_analysis(
         # Kept for compatibility with the existing result UI.
         "classification": time_assessment.get("classification"),
         "analysis_status": time_assessment.get("status"),
-        "scoring_reason": time_assessment.get("reason"),
-        "space_scoring_reason": space_assessment.get("reason"),
+        "scoring_reason": _student_complexity_reason(time_assessment.get("status"), "time"),
+        "space_scoring_reason": _student_complexity_reason(space_assessment.get("status"), "space"),
         "bottlenecks": analysis.get("bottlenecks") or [],
         "optimization_suggestion": analysis.get("optimization_suggestion") or "",
         "reasoning": analysis.get("reasoning") or "",
