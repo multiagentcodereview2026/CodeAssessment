@@ -24,12 +24,24 @@ class RegisterRequest(BaseModel):
     full_name: Optional[str] = None
     role: Literal["student"] = "student"
 
+
+class AccountUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
+    institution: Optional[str] = None
+    department: Optional[str] = None
+    year: Optional[str] = None
+
 class AuthUser(BaseModel):
     id: str
     username: str
     name: str
     role: str
     email: Optional[str] = None
+    institution: Optional[str] = None
+    department: Optional[str] = None
+    year: Optional[str] = None
     access_token: Optional[str] = None
     token_type: Optional[str] = None
 

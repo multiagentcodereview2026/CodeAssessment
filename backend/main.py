@@ -14,6 +14,7 @@ from typing import Any, List, Optional
 from fastapi import FastAPI, Depends, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, or_, text
 from analysis.analyzer_service import analyze_submission_complexity
 
@@ -29,12 +30,14 @@ from auth import (
 from database import (
     SessionLocal,
     ensure_submission_assignment_column,
+    ensure_student_profile_columns,
     engine,
     get_db,
 )
 from schemas import (
     LoginRequest,
     RegisterRequest,
+    AccountUpdateRequest,
     AuthUser,
     StudentCreateByInstructor,
     ProblemListItem,
@@ -461,6 +464,7 @@ def seed_instructor_assignments():
     # submissions.  Apply the idempotent schema migration before any request
     # can persist a submission.
     ensure_submission_assignment_column()
+    ensure_student_profile_columns()
     db = SessionLocal()
     try:
         created = provision_instructor_problems(db)
@@ -483,6 +487,9 @@ def _auth_response(user: models.User, access_token: Optional[str] = None) -> Aut
         name=user.full_name,
         role=user.role,
         email=user.email,
+        institution=student.institution if student else instructor.institution,
+        department=student.department if student else instructor.department,
+        year=student.year if student else None,
         access_token=access_token,
         token_type="bearer" if access_token else None,
     )
@@ -558,6 +565,65 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 @app.get("/api/auth/me", response_model=AuthUser)
 def get_authenticated_user(current_user: models.User = Depends(get_current_user)):
     return _auth_response(current_user)
+
+
+@app.patch("/api/auth/account", response_model=AuthUser)
+def update_account(
+    payload: AccountUpdateRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Persist editable account details and rotate the active session token."""
+    full_name = payload.full_name.strip() if payload.full_name is not None else None
+    institution = payload.institution.strip() if payload.institution is not None else None
+    department = payload.department.strip() if payload.department is not None else None
+    year = payload.year.strip() if payload.year is not None else None
+    new_password = payload.new_password
+
+    if full_name is not None and not full_name:
+        raise HTTPException(status_code=422, detail="Name cannot be empty")
+    if any(value == "" for value in (institution, department, year)):
+        raise HTTPException(status_code=422, detail="Academic profile fields cannot be empty")
+    if new_password is not None:
+        if not payload.current_password or not verify_password(payload.current_password, current_user.hashed_password):
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+        if len(new_password) < 12:
+            raise HTTPException(status_code=422, detail="New password must be at least 12 characters")
+    elif payload.current_password:
+        raise HTTPException(status_code=422, detail="Enter a new password to change your password")
+
+    if all(value is None for value in (full_name, new_password, institution, department, year)):
+        raise HTTPException(status_code=422, detail="Make at least one account change")
+
+    student = current_user.student_profile
+    try:
+        if full_name is not None:
+            current_user.full_name = full_name
+            if student:
+                student.name = full_name
+        if any(value is not None for value in (institution, department, year)):
+            if student is None:
+                raise HTTPException(status_code=403, detail="Academic profile updates are available for student accounts")
+            if institution is not None:
+                student.institution = institution
+            if department is not None:
+                student.department = department
+            if year is not None:
+                student.year = year
+        if new_password is not None:
+            current_user.hashed_password = hash_password(new_password)
+
+        current_user.token_version += 1
+        db.commit()
+        db.refresh(current_user)
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Unable to save these account changes. Please review your profile details and try again.") from error
+    except Exception:
+        db.rollback()
+        raise
+
+    return _auth_response(current_user, _issue_access_token(current_user))
 
 
 @app.post("/api/auth/logout", status_code=status.HTTP_204_NO_CONTENT)

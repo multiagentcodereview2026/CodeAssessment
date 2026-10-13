@@ -162,10 +162,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       email: auth.user.email || profileBase.email,
       role,
       avatar: profileBase.avatar,
-      rollNumber: profileBase.rollNumber,
-      institution: profileBase.institution,
-      department: role === 'instructor' ? 'Computer Science' : profileBase.department,
-      year: profileBase.year
+      rollNumber: auth.user.username || profileBase.rollNumber,
+      institution: auth.user.institution || profileBase.institution,
+      department: auth.user.department || (role === 'instructor' ? 'Computer Science' : profileBase.department),
+      year: auth.user.year || profileBase.year
     });
     if (role === 'instructor') {
       let cancelled = false;

@@ -19,7 +19,10 @@ export const AuthProvider = ({ children }) => {
           username: userData.username || userData.id,
           name: userData.name,
           email: userData.email,
-          role: userData.role
+          role: userData.role,
+          institution: userData.institution,
+          department: userData.department,
+          year: userData.year
         };
         setToken(storedToken);
         setUser(userObj);
@@ -98,7 +101,10 @@ export const AuthProvider = ({ children }) => {
       username: userData.username || userData.id,
       name: userData.name || userData.id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
       email: userData.email,
-      role: userData.role || selectedRole || 'student'
+      role: userData.role || selectedRole || 'student',
+      institution: userData.institution,
+      department: userData.department,
+      year: userData.year
     };
     if (!userData.access_token) throw new Error('Authentication response did not include a session token');
     setUser(userObj);
@@ -113,6 +119,38 @@ export const AuthProvider = ({ children }) => {
     const updatedUser = { ...user, role: newRole };
     setUser(updatedUser);
     localStorage.setItem('evaluator_user', JSON.stringify(updatedUser));
+  };
+
+  const updateAccount = async (changes) => {
+    const currentToken = token || localStorage.getItem('evaluator_token');
+    if (!currentToken) throw new Error('Please sign in again before changing account details');
+    const response = await fetch('/api/auth/account', {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${currentToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(changes)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || 'Unable to save account changes');
+    if (!data.access_token) throw new Error('Account was updated, but the session could not be refreshed. Please sign in again.');
+
+    const updatedUser = {
+      id: data.id,
+      username: data.username || data.id,
+      name: data.name || data.username || data.id,
+      email: data.email,
+      role: data.role || user?.role || 'student',
+      institution: data.institution,
+      department: data.department,
+      year: data.year
+    };
+    setUser(updatedUser);
+    setToken(data.access_token);
+    localStorage.setItem('evaluator_token', data.access_token);
+    localStorage.setItem('evaluator_user', JSON.stringify(updatedUser));
+    return updatedUser;
   };
 
   const logout = async () => {
@@ -133,7 +171,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, switchRole, loading, authFetch }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout, switchRole, updateAccount, loading, authFetch }}>
       {!loading && children}
     </AuthContext.Provider>
   );

@@ -95,6 +95,17 @@ def ensure_submission_assignment_column():
             ))
 
 
+def ensure_student_profile_columns() -> None:
+    """Add persisted academic profile fields to existing student databases."""
+    inspector = inspect(engine)
+    if "students" not in inspector.get_table_names():
+        return
+    existing = {column["name"] for column in inspector.get_columns("students")}
+    if "year" not in existing:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE students ADD COLUMN year VARCHAR(50)"))
+
+
 def get_db():
     db = SessionLocal()
 

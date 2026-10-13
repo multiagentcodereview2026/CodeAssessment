@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/useAuth';
-import { CheckCircle2, Code2, Cpu, Database, LockKeyhole, Monitor, Settings2, UserRound } from 'lucide-react';
+import { CheckCircle2, Code2, Cpu, Database, Eye, EyeOff, LockKeyhole, Monitor, Settings2, UserRound } from 'lucide-react';
 
 type SettingsTab = 'profile' | 'preferences' | 'engine';
 
@@ -9,12 +9,41 @@ const tabClass = (active: boolean) => `inline-flex min-h-10 items-center gap-2 b
 
 export const SettingsView: React.FC = () => {
   const { currentUser, currentRole } = useApp();
-  const { user } = useAuth();
+  const { user, updateAccount } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const accountName = user?.name || user?.username || currentUser.name || '—';
   const accountEmail = user?.email || currentUser.email || '—';
   const accountId = user?.id || currentUser.id || '—';
   const roleLabel = currentRole === 'instructor' ? 'Instructor' : 'Student';
+
+  const savePassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setPasswordMessage(null);
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage({ type: 'error', text: 'The new passwords do not match.' });
+      return;
+    }
+    setBusy(true);
+    try {
+      await updateAccount({ current_password: currentPassword, new_password: newPassword });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordMessage({ type: 'success', text: 'Password changed and saved securely.' });
+    } catch (error) {
+      setPasswordMessage({ type: 'error', text: error instanceof Error ? error.message : 'Unable to change password.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const messageClass = (type: 'success' | 'error') => `mt-3 rounded-lg px-3 py-2 text-sm ${type === 'success' ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-700'}`;
 
   return (
     <main className="mx-auto w-full min-w-0 max-w-7xl space-y-6 pb-12">
@@ -33,6 +62,7 @@ export const SettingsView: React.FC = () => {
       </div>
 
       {activeTab === 'profile' && <section role="tabpanel" className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-5">
         <article className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
           <div className="flex items-start gap-3 border-b border-slate-100 pb-4"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100"><UserRound className="h-5 w-5 text-slate-700"/></span><div><h2 className="font-semibold text-slate-900">Signed-in account</h2><p className="mt-1 text-sm text-slate-500">These details come from your authenticated account.</p></div></div>
           <dl className="mt-5 grid gap-x-6 gap-y-5 sm:grid-cols-2">
@@ -42,7 +72,18 @@ export const SettingsView: React.FC = () => {
             <div><dt className="text-xs font-semibold text-slate-500">Account ID</dt><dd className="mt-1.5 break-all font-mono text-sm text-slate-700">{accountId}</dd></div>
           </dl>
         </article>
-        <aside className="rounded-xl border border-slate-200 bg-slate-50 p-5"><div className="flex items-center gap-2 text-sm font-semibold text-slate-900"><LockKeyhole className="h-4 w-4 text-slate-600"/>Managed account details</div><p className="mt-2 text-sm leading-6 text-slate-600">Name and email are controlled by your account record. Editing and institution details will appear here when profile updates are supported by the service.</p></aside>
+        </div>
+        <aside className="rounded-xl border border-slate-200 bg-slate-50 p-5"><div className="flex items-center gap-2 text-sm font-semibold text-slate-900"><LockKeyhole className="h-4 w-4 text-slate-600"/>Account security</div><p className="mt-2 text-sm leading-6 text-slate-600">Password changes are verified with your current password and stored as a secure hash.</p></aside>
+      </section>}
+
+      {activeTab === 'profile' && <section className="mt-5 rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+        <div className="flex items-start gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50"><LockKeyhole className="h-5 w-5 text-amber-700"/></span><div><h2 className="font-semibold text-slate-900">Change password</h2><p className="mt-1 text-sm text-slate-500">Choose a new password with at least 12 characters.</p></div></div>
+        <form className="mt-5 grid gap-4 md:grid-cols-3" onSubmit={savePassword}>
+          <label className="text-sm font-medium text-slate-700">Current password<input required type="password" autoComplete="current-password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} className="mt-1.5 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" /></label>
+          <label className="text-sm font-medium text-slate-700">New password<div className="relative mt-1.5"><input required minLength={12} type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={newPassword} onChange={event => setNewPassword(event.target.value)} className="block w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-10 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" /><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide new password' : 'Show new password'} className="absolute inset-y-0 right-2 flex items-center text-slate-500">{showPassword ? <EyeOff className="h-4 w-4"/> : <Eye className="h-4 w-4"/>}</button></div></label>
+          <label className="text-sm font-medium text-slate-700">Confirm new password<input required minLength={12} type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} className="mt-1.5 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" /></label>
+          <div className="md:col-span-3"><button disabled={busy} className="min-h-10 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">Update password</button>{passwordMessage && <p role="status" className={messageClass(passwordMessage.type)}>{passwordMessage.text}</p>}</div>
+        </form>
       </section>}
 
       {activeTab === 'preferences' && <section role="tabpanel" className="space-y-4">
