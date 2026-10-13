@@ -117,13 +117,6 @@ export interface MultiDimensionalScore {
     structureScore: number;
     notes: string;
   };
-  similarity: {
-    score: number;
-    max: number;
-    originalityPercent: number;
-    plagiarismRisk: 'Low' | 'Medium' | 'High';
-    notes: string;
-  };
   overallScore: number;
 }
 

@@ -160,7 +160,6 @@ class SubmissionResponse(BaseModel):
     complexity_score: Optional[float] = None
     complexity_details: Optional[Dict[str, Any]] = None
     style_score: Optional[float] = None
-    similarity_score: Optional[float] = None
     execution_result: Optional[Dict[str, Any]] = None
     feedback: Optional[Dict[str, Any]] = None
     recommendations: Optional[Dict[str, Any]] = None

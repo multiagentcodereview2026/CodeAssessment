@@ -100,7 +100,7 @@ export const ScoresAnalytics: React.FC = () => {
                 <PieChartIcon className="w-4 h-4 text-indigo-600" />
                 <h3 className="text-base font-bold text-slate-900">Category Wise Scores</h3>
               </div>
-              <span className="text-xs text-indigo-600 font-semibold">5D Weighting</span>
+              <span className="text-xs text-indigo-600 font-semibold">Student rubric</span>
             </div>
 
             <CategoryDonutChart categories={studentProgress.categoryWiseScores} />
@@ -108,7 +108,7 @@ export const ScoresAnalytics: React.FC = () => {
 
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 flex items-center gap-2">
             <Target className="w-4 h-4 text-indigo-600 flex-shrink-0" />
-            <span>High correctness & code quality weights drive 56.3% of cumulative rating.</span>
+            <span>Correctness 20% · Time 30% · Space 30% · Style 20%.</span>
           </div>
         </div>
       </div>
@@ -116,7 +116,7 @@ export const ScoresAnalytics: React.FC = () => {
       {/* Detailed Rubric Dimension Matrix */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4">
         <h3 className="text-base font-bold text-slate-900">Multi-Agent Rubric Diagnostic</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {studentProgress.categoryWiseScores.map((cat, i) => (
             <div key={i} className="p-4 rounded-xl border border-slate-100 bg-slate-50/60 space-y-2">
               <div className="flex items-center justify-between">
@@ -128,8 +128,7 @@ export const ScoresAnalytics: React.FC = () => {
                 {cat.name === 'Correctness' && 'Sandbox assertions pass rate'}
                 {cat.name === 'Time Complexity' && 'Asymptotic Big-O runtime profile'}
                 {cat.name === 'Space Complexity' && 'Auxiliary memory & bucket alloc'}
-                {cat.name === 'Code Quality' && 'Clean architecture & syntax style'}
-                {cat.name === 'Similarity (Originality)' && 'AST uniqueness vs cohort code'}
+                {cat.name === 'Code Quality & Style' && 'Readability, maintainability, and code style'}
               </p>
             </div>
           ))}

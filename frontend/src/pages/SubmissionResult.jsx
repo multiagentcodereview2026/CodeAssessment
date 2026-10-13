@@ -55,8 +55,6 @@ const SubmissionResult = () => {
   const correctness = data?.correctness_score ?? 100;
   const complexity = data?.complexity_score ?? 85;
   const style = data?.style_score ?? 90;
-  const similarity = data?.similarity_score ?? 15;
-  const originality = Math.max(0, 100 - similarity);
 
   const feedback = data?.feedback ?? {
     mentor_feedback: "Great job! Your solution demonstrates a solid grasp of optimal algorithmic complexity.",
@@ -102,7 +100,7 @@ const SubmissionResult = () => {
                 <h2 className="text-xl font-bold">Evaluation Complete</h2>
               </div>
 
-              <p className="text-slate-500 text-sm mb-4">Evaluated across 10 dimensions by LangGraph Agents via Groq</p>
+              <p className="text-slate-500 text-sm mb-4">Evaluated using the student rubric: correctness, time, space, and style.</p>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 <div>
@@ -127,7 +125,6 @@ const SubmissionResult = () => {
               <ScoreBar label="Correctness Agent" score={correctness} maxScore={100} colorClass="bg-emerald-500" />
               <ScoreBar label="Complexity Agent" score={complexity} maxScore={100} colorClass="bg-blue-500" />
               <ScoreBar label="Style & Structure" score={style} maxScore={100} colorClass="bg-purple-500" />
-              <ScoreBar label="Originality Agent" score={originality} maxScore={100} colorClass="bg-indigo-500" />
 
               <div className="mt-8 border-t border-slate-100 pt-6">
                 <h3 className="font-semibold text-slate-800 mb-3 text-sm">Explainable Mentor Feedback</h3>

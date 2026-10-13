@@ -513,20 +513,20 @@ public:
   memory: '5.2 MB',
   multiScores: {
     correctness: {
-      score: 20,
-      max: 25,
+      score: 16,
+      max: 20,
       notes: 'All test cases passed. Edge case with duplicate negative keys passed without memory corruption.'
     },
     timeComplexity: {
-      score: 18,
-      max: 25,
+      score: 22,
+      max: 30,
       detected: 'O(N)',
       optimal: 'O(N)',
       notes: 'Optimal single-pass linear time lookup achieved with Hash Table.'
     },
     spaceComplexity: {
-      score: 12,
-      max: 15,
+      score: 24,
+      max: 30,
       detected: 'O(N)',
       optimal: 'O(N)',
       notes: 'Standard auxiliary hash map. Could pre-allocate capacity with mp.reserve() for large inputs.'
@@ -537,13 +537,6 @@ public:
       styleScore: 9,
       structureScore: 9,
       notes: 'Clean structure. Short variable names ("mp", "rem") could be improved for enterprise style.'
-    },
-    similarity: {
-      score: 17,
-      max: 20,
-      originalityPercent: 92,
-      plagiarismRisk: 'Low',
-      notes: 'High semantic originality. No direct duplication detected in peer cohort.'
     },
     overallScore: 85
   },
@@ -726,11 +719,10 @@ export const MOCK_STUDENT_PROGRESS: StudentProgress = {
   hoursSpent: '18 h 45 m',
   weakTopics: ['Dynamic Programming', 'Graphs', 'Trees'],
   categoryWiseScores: [
-    { name: 'Correctness', percentage: 28.5, color: '#3b82f6', scoreDisplay: '28.5%' },
-    { name: 'Time Complexity', percentage: 18.7, color: '#06b6d4', scoreDisplay: '18.7%' },
-    { name: 'Space Complexity', percentage: 14.5, color: '#f59e0b', scoreDisplay: '14.5%' },
-    { name: 'Code Quality', percentage: 27.8, color: '#8b5cf6', scoreDisplay: '27.8%' },
-    { name: 'Similarity (Originality)', percentage: 10.6, color: '#10b981', scoreDisplay: '10.6%' }
+    { name: 'Correctness', percentage: 80, color: '#3b82f6', scoreDisplay: '80%' },
+    { name: 'Time Complexity', percentage: 73, color: '#06b6d4', scoreDisplay: '73%' },
+    { name: 'Space Complexity', percentage: 80, color: '#f59e0b', scoreDisplay: '80%' },
+    { name: 'Code Quality & Style', percentage: 90, color: '#8b5cf6', scoreDisplay: '90%' }
   ],
   scoreTrend: [
     { date: 'Apr 1', score: 65 },

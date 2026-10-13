@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, text
 from analysis.analyzer_service import analyze_submission_complexity
+from scoring.rubric import complexity_dimension_percent
 
 import models
 from auth import (
@@ -202,6 +203,10 @@ def latest_assessed_attempts(
 
 def average_score(submissions: List[models.Submission], field: str = "overall_score") -> Optional[float]:
     values = [getattr(submission, field) for submission in submissions if getattr(submission, field) is not None]
+    return round(sum(values) / len(values), 1) if values else None
+
+
+def average_values(values: List[float]) -> Optional[float]:
     return round(sum(values) / len(values), 1) if values else None
 
 
@@ -1205,7 +1210,6 @@ async def submit_and_evaluate_code(
         complexity_score=new_submission.complexity_score,
         complexity_details=final_state.get("complexity_details"),
         style_score=new_submission.style_score,
-        similarity_score=new_submission.similarity_score,
         execution_result=new_submission.execution_result,
         feedback=new_submission.feedback,
         recommendations=new_submission.recommendations,
@@ -1290,9 +1294,9 @@ def build_student_analytics(
     latest = latest_assessed_attempts(submissions, preserve_assignment=False)
     avg_overall = average_score(latest)
     avg_correctness = average_score(latest, "correctness_score")
-    avg_complexity = average_score(latest, "complexity_score")
     avg_style = average_score(latest, "style_score")
-    avg_similarity = average_score(latest, "similarity_score")
+    time_scores = [complexity_dimension_percent(submission.complexity_details, "time") for submission in latest]
+    space_scores = [complexity_dimension_percent(submission.complexity_details, "space") for submission in latest]
     total_problems = db.query(models.Problem).filter(models.Problem.is_public_practice == True).count()
     unique_solved = len({submission.problem_id for submission in latest if submission.overall_score >= 70})
 
@@ -1316,9 +1320,9 @@ def build_student_analytics(
 
     category_breakdown = [
         {"name": "Correctness", "value": avg_correctness, "color": "#10b981"},
-        {"name": "Time & Space Complexity", "value": avg_complexity, "color": "#3b82f6"},
+        {"name": "Time Complexity", "value": average_values([value for value in time_scores if value is not None]), "color": "#06b6d4"},
+        {"name": "Space Complexity", "value": average_values([value for value in space_scores if value is not None]), "color": "#f59e0b"},
         {"name": "Code Quality & Style", "value": avg_style, "color": "#8b5cf6"},
-        {"name": "Originality", "value": round(100 - avg_similarity, 1) if avg_similarity is not None else None, "color": "#ec4899"},
     ]
     category_breakdown = [category for category in category_breakdown if category["value"] is not None]
 

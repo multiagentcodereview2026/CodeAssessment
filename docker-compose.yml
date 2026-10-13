@@ -1,18 +1,4 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: codeassessment
-      POSTGRES_USER: codeassessment
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-before-production}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U codeassessment -d codeassessment"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   frontend:
     build:
       context: ./frontend
@@ -35,17 +21,15 @@ services:
       - path: ./backend/.env
         required: false
     environment:
-      - DATABASE_URL=postgresql+psycopg://codeassessment:${POSTGRES_PASSWORD:-change-this-before-production}@postgres:5432/codeassessment
+      - DATABASE_URL=${DATABASE_URL}
       - DOCKER_ENGINE_URL=http://execution-engine:8001/execute
-      - JWT_SECRET_KEY=codeassessment-jwt-secret-key-minimum-32-chars-long-12345
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-98ec009d3bdfd8076694e80e194a8f9c15bf28328faecb4578e0ea5225828236}
       - EXECUTION_CPU_LIMIT=1.0
       - EXECUTION_MEMORY_LIMIT=256m
       - EXECUTION_TIMEOUT_SECONDS=5
       - PUBLIC_ONLY_EXECUTION=${PUBLIC_ONLY_EXECUTION:-false}
       - DOCKER_ENGINE_REQUEST_TIMEOUT_SECONDS=120
     depends_on:
-      postgres:
-        condition: service_healthy
       execution-engine:
         condition: service_healthy
 
@@ -55,13 +39,10 @@ services:
       dockerfile: Dockerfile
     profiles: ["tools"]
     environment:
-      - DATABASE_URL=postgresql+psycopg://codeassessment:${POSTGRES_PASSWORD:-change-this-before-production}@postgres:5432/codeassessment
+      - DATABASE_URL=${DATABASE_URL}
     volumes:
       - ../datasets/apps:/datasets:ro
     command: ["python", "-m", "dataset.import_apps", "--dataset-path", "/datasets/apps-first-100", "--limit", "100"]
-    depends_on:
-      postgres:
-        condition: service_healthy
 
   dataset-processor:
     build:
@@ -78,13 +59,10 @@ services:
       dockerfile: Dockerfile
     profiles: ["tools"]
     environment:
-      - DATABASE_URL=postgresql+psycopg://codeassessment:${POSTGRES_PASSWORD:-change-this-before-production}@postgres:5432/codeassessment
+      - DATABASE_URL=${DATABASE_URL}
     volumes:
       - ../datasets/code_assessment_1000:/codecontests:ro
     command: ["python", "-m", "dataset.import_codecontests", "--dataset-path", "/codecontests/dataset.jsonl"]
-    depends_on:
-      postgres:
-        condition: service_healthy
 
   newfacade-importer:
     build:
@@ -92,13 +70,10 @@ services:
       dockerfile: Dockerfile
     profiles: ["tools"]
     environment:
-      - DATABASE_URL=postgresql+psycopg://codeassessment:${POSTGRES_PASSWORD:-change-this-before-production}@postgres:5432/codeassessment
+      - DATABASE_URL=${DATABASE_URL}
     volumes:
       - ../datasets/newfacade-staging:/newfacade:ro
     command: ["python", "-m", "dataset.import_newfacade", "--dataset-path", "/newfacade/normalized-newfacade-stdio-complexity.jsonl", "--require-complexity"]
-    depends_on:
-      postgres:
-        condition: service_healthy
 
   newfacade-tag-curator:
     build:
@@ -149,13 +124,10 @@ services:
       dockerfile: Dockerfile
     profiles: ["tools"]
     environment:
-      - DATABASE_URL=postgresql+psycopg://codeassessment:${POSTGRES_PASSWORD:-change-this-before-production}@postgres:5432/codeassessment
+      - DATABASE_URL=${DATABASE_URL}
     volumes:
       - ../datasets/newfacade-staging:/newfacade:ro
     command: ["python", "-m", "dataset.migrate_problem_complexities", "--dataset-path", "/newfacade/normalized-newfacade-stdio-complexity.jsonl"]
-    depends_on:
-      postgres:
-        condition: service_healthy
 
   execution-engine:
     build:
@@ -216,4 +188,3 @@ services:
 volumes:
   execution-work:
     name: ${EXECUTION_SANDBOX_VOLUME:-codeassessment_execution-work}
-  postgres-data:

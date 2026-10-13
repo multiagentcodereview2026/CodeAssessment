@@ -11,8 +11,7 @@ export const RUBRIC_AGENTS = [
   { key: 'correctness', label: 'Correctness Agent', contractField: 'multiScores.correctness', backendOwner: 'sandbox test runner' },
   { key: 'timeComplexity', label: 'Time Complexity Agent', contractField: 'multiScores.timeComplexity', backendOwner: 'AST complexity profiler' },
   { key: 'spaceComplexity', label: 'Space Complexity Agent', contractField: 'multiScores.spaceComplexity', backendOwner: 'memory allocation analyzer' },
-  { key: 'codeQuality', label: 'Code Quality Agent', contractField: 'multiScores.codeQuality', backendOwner: 'style and modularity reviewer' },
-  { key: 'similarity', label: 'Originality Agent', contractField: 'multiScores.similarity', backendOwner: 'AST similarity service' }
+  { key: 'codeQuality', label: 'Code Quality Agent', contractField: 'multiScores.codeQuality', backendOwner: 'style and modularity reviewer' }
 ];
 
 export const COHORT_WEAKNESS_STATS = [

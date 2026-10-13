@@ -6,7 +6,9 @@ Synthesize the multi-dimensional scores into a balanced composite grade using th
 - Originality: 10%
 - Execution Telemetry: 10%
 
-Formula: overall_score = (0.40 * correctness) + (0.20 * complexity) + (0.20 * style) + (0.10 * originality) + (0.10 * execution)
+Student score policy is deterministic and implemented in `scoring/rubric.py`:
+20% correctness + 30% time complexity + 30% space complexity + 20% style.
+Similarity and execution status are not student-score dimensions.
 
 Return ONLY this JSON without markdown formatting:
 {

@@ -582,23 +582,23 @@ export const ProblemWorkspace: React.FC = () => {
         memory: '5.2 MB',
         multiScores: {
           correctness: {
-            score: Math.round(((data.correctness_score ?? 0) / 100) * 25),
-            max: 25,
+            score: Math.round(((data.correctness_score ?? 0) / 100) * 20),
+            max: 20,
             notes: accepted
               ? `Accepted: ${passedCases}/${totalCases} test cases passed.`
               : `Judge result: ${passedCases}/${totalCases} tests passed. Review the last failed test below.`
           },
           timeComplexity: {
-            score: timeMarks ?? 0,
-            max: timeMarks === null ? 0 : 25,
+            score: timeMarks === null ? 0 : Math.round((timeMarks / 25) * 30),
+            max: timeMarks === null ? 0 : 30,
             detected: timeComplexity,
             notes: timeMarks === null
               ? `${complexityClassification}: complexity was recorded but is awaiting a private benchmark or problem-specific review.`
               : `${complexityClassification}: detected complexity was compared against the private benchmark.`
           },
           spaceComplexity: {
-            score: spaceMarks ?? 0,
-            max: spaceMarks === null ? 0 : 25,
+            score: spaceMarks === null ? 0 : Math.round((spaceMarks / 25) * 30),
+            max: spaceMarks === null ? 0 : 30,
             detected: spaceComplexity,
             notes: spaceMarks === null
               ? `${spaceClassification}: space complexity is awaiting a private benchmark or problem-specific review.`
@@ -610,13 +610,6 @@ export const ProblemWorkspace: React.FC = () => {
             styleScore: 9,
             structureScore: 9,
             notes: 'Clean idiomatic code and modular structure.'
-          },
-          similarity: {
-            score: Math.round(((data.similarity_score ?? 90) / 100) * 20),
-            max: 20,
-            originalityPercent: 92,
-            plagiarismRisk: 'Low',
-            notes: 'Original logic pattern. Low semantic overlap.'
           },
           overallScore: Math.round(data.overall_score ?? 85)
         },
@@ -1024,7 +1017,7 @@ export const ProblemWorkspace: React.FC = () => {
                   Multi-Agent AI Assessment in Progress
                 </h3>
                 <p className="text-xs text-slate-400 max-w-sm mt-1 mb-6">Running the secure judge and assessment workflow. This service returns one final report, so individual agent stages cannot be shown as completed until the result is saved.</p>
-                <div className="w-full max-w-md bg-slate-900 rounded-2xl p-4 border border-slate-800 text-left text-xs text-slate-300"><div className="flex items-center gap-2.5"><div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" /><span className="font-semibold">Secure execution and assessment are running</span></div><p className="mt-2 text-slate-400">The report will show execution status, correctness, complexity availability, style, and similarity when the server completes.</p></div>
+                <div className="w-full max-w-md bg-slate-900 rounded-2xl p-4 border border-slate-800 text-left text-xs text-slate-300"><div className="flex items-center gap-2.5"><div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" /><span className="font-semibold">Secure execution and assessment are running</span></div><p className="mt-2 text-slate-400">The report will show execution status, correctness, time and space complexity, and code style when the server completes.</p></div>
               </div>
             )}
           </div>

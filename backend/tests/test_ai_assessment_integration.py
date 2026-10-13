@@ -123,12 +123,7 @@ def test_complexity_response_excludes_private_target_data():
     assert scored["assessment_flags"] == {"benchmark_review_required": False}
 
 
-def test_aggregation_does_not_replace_a_zero_score_with_a_default(monkeypatch):
-    async def use_deterministic_fallback(_prompt, _payload, _schema, fallback):
-        return fallback
-
-    monkeypatch.setattr(aggregation, "invoke_agent", use_deterministic_fallback)
-
+def test_student_aggregation_does_not_replace_a_zero_score_with_a_default():
     result = asyncio.run(
         aggregation.aggregation_node(
             {
@@ -141,5 +136,8 @@ def test_aggregation_does_not_replace_a_zero_score_with_a_default(monkeypatch):
         )
     )
 
-    assert result["overall_score"] == 42.5
+    # Only correctness (20%) and style (20%) are available. Similarity never
+    # participates in a student score, so the available rubric is normalized.
+    assert result["overall_score"] == 45.0
     assert "execution" not in result["score_breakdown"]
+    assert "originality" not in result["score_breakdown"]

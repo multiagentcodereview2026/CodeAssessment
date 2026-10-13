@@ -12,7 +12,6 @@ const categoryScores = [
   { name: 'Time Complexity', value: 20.0, color: '#3b82f6' },
   { name: 'Space Complexity', value: 15.0, color: '#f59e0b' },
   { name: 'Code Quality', value: 20.0, color: '#8b5cf6' },
-  { name: 'Originality', value: 10.0, color: '#ec4899' }
 ];
 
 const StudentAnalytics = () => {

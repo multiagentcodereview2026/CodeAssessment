@@ -23,6 +23,7 @@ const InstructorLayout = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { notifications, unreadCount, notificationError, markRead, markAllRead } = useNotifications();
+  const notificationCount = unreadCount;
   
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
