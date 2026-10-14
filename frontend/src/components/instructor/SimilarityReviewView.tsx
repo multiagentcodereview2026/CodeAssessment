@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, ChevronDown, Code2, LoaderCircle, RefreshCw, ShieldAlert, Users } from 'lucide-react';
+import { Check, ChevronDown, Code2, LoaderCircle, RefreshCw, Users } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
 
 type StudentSubmission = {
@@ -21,6 +21,7 @@ type ApproachGroup = {
 };
 type Course = { id: number; title: string; course_code?: string };
 type CaseResponse = { cases: SimilarityCase[]; clusters: SimilarityCluster[]; approach_groups?: ApproachGroup[] };
+type ReviewItem = { id: string; kind: 'code-overlap' | 'approach'; problemTitle: string; members: StudentSubmission[]; detail: SimilarityCluster | ApproachGroup };
 
 const score = (value?: number | null) => value === null || value === undefined ? '—' : `${Math.round(value)}%`;
 
@@ -37,6 +38,15 @@ export const SimilarityReviewView: React.FC = () => {
   const [error, setError] = useState('');
 
   const selectedCluster = clusters.find((cluster) => cluster.id === selectedClusterId);
+  const selectedApproach = approachGroups.find((group) => group.id === selectedApproachId);
+  const reviewItems = useMemo<ReviewItem[]>(() => {
+    const overlapProblemKeys = new Set(clusters.map((cluster) => `${cluster.courseId}:${cluster.problemId}`));
+    const directOverlap = clusters.map((cluster) => ({ id: cluster.id, kind: 'code-overlap' as const, problemTitle: cluster.problemTitle, members: cluster.members, detail: cluster }));
+    const approachOnly = approachGroups
+      .filter((group) => !overlapProblemKeys.has(`${group.courseId}:${group.problemId}`))
+      .map((group) => ({ id: group.id, kind: 'approach' as const, problemTitle: group.problemTitle, members: group.members, detail: group }));
+    return [...directOverlap, ...approachOnly].sort((left, right) => left.problemTitle.localeCompare(right.problemTitle));
+  }, [clusters, approachGroups]);
   const codesBySubmission = useMemo(() => {
     const result = new Map<string, string>();
     for (const item of cases) {
@@ -69,7 +79,7 @@ export const SimilarityReviewView: React.FC = () => {
   useEffect(() => { void loadCases(); }, [loadCases]);
   useEffect(() => {
     const refreshOnFocus = () => { void loadCases(); };
-    const intervalId = window.setInterval(refreshOnFocus, 15_000);
+    const intervalId = window.setInterval(refreshOnFocus, 5 * 60_000);
     window.addEventListener('focus', refreshOnFocus);
     return () => {
       window.clearInterval(intervalId);
@@ -100,27 +110,16 @@ export const SimilarityReviewView: React.FC = () => {
           </select>
         </label>
         <button type="button" onClick={() => void loadCases()} disabled={loading} className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />Refresh</button>
-        <span className="flex items-center gap-1.5 whitespace-nowrap rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700"><ShieldAlert className="h-4 w-4" />{clusters.length} group{clusters.length === 1 ? '' : 's'}</span>
       </div>
     </div>
 
     {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}<button onClick={() => void loadCases()} className="ml-3 font-bold underline">Retry</button></div>}
     {loading ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-slate-500"><LoaderCircle className="mx-auto mb-3 h-6 w-6 animate-spin" />Loading evaluated submissions…</div>
-      : clusters.length === 0 && approachGroups.length === 0 ? <div className="space-y-3 rounded-3xl border border-slate-200 bg-white p-12 text-center"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600"><Check className="h-6 w-6" /></div><h2 className="text-base font-bold text-slate-800">No review groups found</h2><p className="mx-auto max-w-lg text-sm text-slate-500">There are no same-problem submission groups needing review in this scope.</p></div>
+      : reviewItems.length === 0 ? <div className="space-y-3 rounded-3xl border border-slate-200 bg-white p-12 text-center"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600"><Check className="h-6 w-6" /></div><h2 className="text-base font-bold text-slate-800">No review groups found</h2><p className="mx-auto max-w-lg text-sm text-slate-500">There are no same-problem submission groups needing review in this scope.</p></div>
       : <>
-        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {clusters.length === 0 && <div className="rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-500 md:col-span-2 xl:col-span-3">No direct code-overlap groups were found. Approach groups below are informational only.</div>}
-          {clusters.map((cluster, index) => {
-            const isOpen = selectedClusterId === cluster.id;
-            return <button key={cluster.id} type="button" onClick={() => setSelectedClusterId(isOpen ? '' : cluster.id)} className={`rounded-2xl border p-4 text-left transition ${isOpen ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-slate-50'}`}>
-              <div className="flex items-start justify-between gap-2"><div><p className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600">Group {index + 1}</p><h2 className="mt-1 text-sm font-bold text-slate-900">{cluster.problemTitle}</h2></div><ChevronDown className={`mt-1 h-4 w-4 shrink-0 text-slate-500 transition ${isOpen ? 'rotate-180' : ''}`} /></div>
-              <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-600"><Users className="h-3.5 w-3.5" />{cluster.members.length} student{cluster.members.length === 1 ? '' : 's'} · {cluster.pairCount} matching pair{cluster.pairCount === 1 ? '' : 's'}</p>
-              <p className="mt-2 truncate font-mono text-[11px] text-slate-500">{cluster.members.map((member) => member.id).join(' · ')}</p>
-            </button>;
-          })}
-        </section>
+        <section className="space-y-3">{reviewItems.map((item) => { const open = item.kind === 'code-overlap' ? selectedClusterId === item.id : selectedApproachId === item.id; return <button key={item.id} type="button" onClick={() => { if (item.kind === 'code-overlap') { setSelectedClusterId(open ? '' : item.id); setSelectedApproachId(''); } else { setSelectedApproachId(open ? '' : item.id); setSelectedClusterId(''); } }} className={`flex w-full flex-col gap-3 rounded-2xl border p-4 text-left transition sm:flex-row sm:items-center sm:justify-between ${open ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-slate-50'}`}><div><h2 className="text-sm font-bold text-slate-900">{item.problemTitle}</h2><p className="mt-2 flex items-center gap-1.5 text-xs text-slate-600"><Users className="h-3.5 w-3.5" />{item.members.length} student{item.members.length === 1 ? '' : 's'} · {item.kind === 'code-overlap' ? 'code-overlap review' : `same ${(item.detail as ApproachGroup).approachLabel} approach`}</p><p className="mt-2 font-mono text-[11px] text-slate-500">{item.members.map((member) => member.id).join(' · ')}</p></div><ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition ${open ? 'rotate-180' : ''}`} /></button>; })}</section>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6"><div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] font-extrabold uppercase tracking-wider text-sky-700">Algorithm approach groups</p><h2 className="mt-1 text-base font-extrabold text-slate-900">Same technique, different code</h2><p className="mt-1 text-xs text-slate-500">Informational AST classifications only. These do not indicate code overlap or misconduct.</p></div><span className="text-xs font-bold text-slate-500">{approachGroups.length} group{approachGroups.length === 1 ? '' : 's'}</span></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{approachGroups.map((group) => { const open = selectedApproachId === group.id; return <button key={group.id} type="button" onClick={() => setSelectedApproachId(open ? '' : group.id)} className={`rounded-2xl border p-4 text-left transition ${open ? 'border-sky-400 bg-sky-50' : 'border-slate-200 hover:border-sky-300'}`}><p className="text-sm font-extrabold text-slate-900">{group.problemTitle}</p><p className="mt-2 inline-block rounded-full bg-sky-100 px-2 py-1 text-[10px] font-bold text-sky-800">{group.approachLabel}</p><p className="mt-3 font-mono text-[11px] text-slate-500">{group.members.length} students · {group.members.map((member) => member.id).join(' · ')}</p></button>; })}</div>{selectedApproachId && (() => { const group = approachGroups.find((item) => item.id === selectedApproachId); return group && <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4"><p className="text-sm font-extrabold text-sky-950">{group.problemTitle} · {group.approachLabel}</p><p className="mt-2 text-xs leading-relaxed text-sky-900">{group.explanation}</p><p className="mt-3 font-mono text-xs text-sky-800">Student IDs: {group.members.map((member) => member.id).join(' · ')}</p></div>; })()}</section>
+        {selectedApproach && <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4"><p className="text-sm font-extrabold text-sky-950">{selectedApproach.problemTitle} · {selectedApproach.approachLabel}</p><p className="mt-2 text-xs leading-relaxed text-sky-900">{selectedApproach.explanation}</p><p className="mt-3 font-mono text-xs text-sky-800">Student IDs: {selectedApproach.members.map((member) => member.id).join(' · ')}</p></section>}
 
         {selectedCluster && (() => {
           // All members are structurally similar. Show the highest-ranked
