@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, or_, text
 from analysis.analyzer_service import analyze_submission_complexity
 from scoring.rubric import complexity_dimension_percent
+from similarity_clustering import build_similarity_clusters
 
 import models
 from auth import (
@@ -2659,6 +2660,21 @@ def instructor_similarity_cases(db: Session, instructor_id: int, course_id: Opti
         submission, _assignment, course, _student, _problem = row
         grouped.setdefault((course.id, submission.problem_id), []).append(row)
 
+    def student_payload(student: models.Student, submission: models.Submission) -> dict[str, Any]:
+        """Return only the assessment facts an instructor needs for a cluster."""
+        return {
+            "id": student.student_id,
+            "name": student.name,
+            "rollNumber": student.student_id,
+            "submissionId": submission.submission_id,
+            "language": submission.language,
+            "overallScore": round(submission.overall_score, 1) if submission.overall_score is not None else None,
+            "correctnessScore": round(submission.correctness_score, 1) if submission.correctness_score is not None else None,
+            "timeScore": complexity_dimension_percent(submission.complexity_details, "time"),
+            "spaceScore": complexity_dimension_percent(submission.complexity_details, "space"),
+            "styleScore": round(submission.style_score, 1) if submission.style_score is not None else None,
+        }
+
     alerts = []
     for submissions in grouped.values():
         for left, right in combinations(submissions, 2):
@@ -2684,8 +2700,8 @@ def instructor_similarity_cases(db: Session, instructor_id: int, course_id: Opti
                 "problemTitle": problem_a.title,
                 "courseId": course_a.id,
                 "courseTitle": course_a.title,
-                "studentA": {"id": student_a.student_id, "name": student_a.name, "rollNumber": student_a.student_id, "submissionId": sub_a.submission_id},
-                "studentB": {"id": student_b.student_id, "name": student_b.name, "rollNumber": student_b.student_id, "submissionId": sub_b.submission_id},
+                "studentA": student_payload(student_a, sub_a),
+                "studentB": student_payload(student_b, sub_b),
                 "similarityPercentage": percentage,
                 "riskLevel": "High" if percentage >= 85 else "Medium",
                 "matchedLinesCount": len(tokens_a & tokens_b),
@@ -2707,7 +2723,13 @@ def list_instructor_similarity_cases(
     if course_id is not None:
         get_owned_course(db, instructor.id, course_id)
     cases = instructor_similarity_cases(db, instructor.id, course_id)
-    return {"cases": cases, "total_cases": len(cases)}
+    clusters = build_similarity_clusters(cases)
+    return {
+        "cases": cases,
+        "total_cases": len(cases),
+        "clusters": clusters,
+        "total_clusters": len(clusters),
+    }
 
 
 @app.post("/api/instructor/similarity/{case_id}/{action}")
