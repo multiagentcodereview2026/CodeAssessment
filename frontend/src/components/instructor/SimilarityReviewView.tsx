@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, ChevronDown, Code2, LoaderCircle, ShieldAlert, Users } from 'lucide-react';
+import { Check, ChevronDown, Code2, LoaderCircle, RefreshCw, ShieldAlert, Users } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
 
 type StudentSubmission = {
@@ -68,6 +68,15 @@ export const SimilarityReviewView: React.FC = () => {
 
   useEffect(() => { void loadCases(); }, [loadCases]);
   useEffect(() => {
+    const refreshOnFocus = () => { void loadCases(); };
+    const intervalId = window.setInterval(refreshOnFocus, 15_000);
+    window.addEventListener('focus', refreshOnFocus);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshOnFocus);
+    };
+  }, [loadCases]);
+  useEffect(() => {
     let cancelled = false;
     authFetch('/api/instructor/courses', { cache: 'no-store' }).then(async (response) => {
       if (!response.ok) return;
@@ -83,13 +92,14 @@ export const SimilarityReviewView: React.FC = () => {
         <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Code Similarity Review</h1>
         <p className="mt-1 text-xs sm:text-sm text-slate-500">Review same-problem groups. These are instructor-only leads, never student scores or misconduct findings.</p>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <label className="text-xs font-semibold text-slate-600">Course:
           <select value={courseId} onChange={(event) => setCourseId(event.target.value)} className="ml-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
             <option value="all">All courses</option>
             {courses.map((course) => <option key={course.id} value={String(course.id)}>{course.course_code ? `${course.course_code} · ` : ''}{course.title}</option>)}
           </select>
         </label>
+        <button type="button" onClick={() => void loadCases()} disabled={loading} className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />Refresh</button>
         <span className="flex items-center gap-1.5 whitespace-nowrap rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700"><ShieldAlert className="h-4 w-4" />{clusters.length} group{clusters.length === 1 ? '' : 's'}</span>
       </div>
     </div>
