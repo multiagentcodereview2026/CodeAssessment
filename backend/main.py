@@ -18,7 +18,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, or_, text
 from analysis.analyzer_service import analyze_submission_complexity
 from scoring.rubric import complexity_dimension_percent
-from similarity_clustering import build_similarity_clusters
+from similarity_analysis import approach_label, approach_summary, structural_explanation, structural_fingerprint, structural_overlap
+from similarity_clustering import build_approach_groups, build_similarity_clusters
 
 import models
 from auth import (
@@ -2640,6 +2641,22 @@ def similarity_tokens(code: str) -> set[tuple[str, ...]]:
     return {tuple(tokens[index:index + 5]) for index in range(max(0, len(tokens) - 4))}
 
 
+def _similarity_student_payload(student: models.Student, submission: models.Submission) -> dict[str, Any]:
+    """Assessment context shown only after an instructor opens a group."""
+    return {
+        "id": student.student_id,
+        "name": student.name,
+        "rollNumber": student.student_id,
+        "submissionId": submission.submission_id,
+        "language": submission.language,
+        "overallScore": round(submission.overall_score, 1) if submission.overall_score is not None else None,
+        "correctnessScore": round(submission.correctness_score, 1) if submission.correctness_score is not None else None,
+        "timeScore": complexity_dimension_percent(submission.complexity_details, "time"),
+        "spaceScore": complexity_dimension_percent(submission.complexity_details, "space"),
+        "styleScore": round(submission.style_score, 1) if submission.style_score is not None else None,
+    }
+
+
 def instructor_similarity_cases(db: Session, instructor_id: int, course_id: Optional[int] = None) -> list[dict[str, Any]]:
     rows = db.query(models.Submission, models.Assignment, models.Course, models.Student, models.Problem).join(
         models.Assignment, models.Assignment.id == models.Submission.assignment_id
@@ -2660,20 +2677,10 @@ def instructor_similarity_cases(db: Session, instructor_id: int, course_id: Opti
         submission, _assignment, course, _student, _problem = row
         grouped.setdefault((course.id, submission.problem_id), []).append(row)
 
-    def student_payload(student: models.Student, submission: models.Submission) -> dict[str, Any]:
-        """Return only the assessment facts an instructor needs for a cluster."""
-        return {
-            "id": student.student_id,
-            "name": student.name,
-            "rollNumber": student.student_id,
-            "submissionId": submission.submission_id,
-            "language": submission.language,
-            "overallScore": round(submission.overall_score, 1) if submission.overall_score is not None else None,
-            "correctnessScore": round(submission.correctness_score, 1) if submission.correctness_score is not None else None,
-            "timeScore": complexity_dimension_percent(submission.complexity_details, "time"),
-            "spaceScore": complexity_dimension_percent(submission.complexity_details, "space"),
-            "styleScore": round(submission.style_score, 1) if submission.style_score is not None else None,
-        }
+    fingerprints = {
+        submission.submission_id: structural_fingerprint(submission.code, submission.language)
+        for submission, _assignment, _course, _student, _problem in latest.values()
+    }
 
     alerts = []
     for submissions in grouped.values():
@@ -2689,6 +2696,9 @@ def instructor_similarity_cases(db: Session, instructor_id: int, course_id: Opti
             percentage = round(overlap * 100)
             if percentage < 72:
                 continue
+            fingerprint_a = fingerprints[sub_a.submission_id]
+            fingerprint_b = fingerprints[sub_b.submission_id]
+            ast_overlap = structural_overlap(fingerprint_a, fingerprint_b)
             pair_id = ":".join(sorted((sub_a.submission_id, sub_b.submission_id)))
             review_status = (sub_a.assessment_flags or {}).get("similarity_reviews", {}).get(pair_id, "open")
             if review_status == "dismissed":
@@ -2700,18 +2710,52 @@ def instructor_similarity_cases(db: Session, instructor_id: int, course_id: Opti
                 "problemTitle": problem_a.title,
                 "courseId": course_a.id,
                 "courseTitle": course_a.title,
-                "studentA": student_payload(student_a, sub_a),
-                "studentB": student_payload(student_b, sub_b),
+                "studentA": _similarity_student_payload(student_a, sub_a),
+                "studentB": _similarity_student_payload(student_b, sub_b),
                 "similarityPercentage": percentage,
                 "riskLevel": "High" if percentage >= 85 else "Medium",
                 "matchedLinesCount": len(tokens_a & tokens_b),
                 "timestamp": utc_isoformat(created_at) if created_at else "Unknown",
                 "studentACodeSnippet": sub_a.code[:12000],
                 "studentBCodeSnippet": sub_b.code[:12000],
-                "aiAuditNotes": "Automated normalized token-shingle overlap screening. Shared boilerplate and common solution patterns can produce matches; this is a review lead, not a finding of misconduct.",
+                "astOverlap": round(ast_overlap * 100),
+                "evidenceExplanation": structural_explanation(fingerprint_a, fingerprint_b, ast_overlap),
+                "aiAuditNotes": "Automated normalized token and AST-structure screening. Shared boilerplate and common solution patterns can produce matches; this is a review lead, not a finding of misconduct.",
                 "reviewStatus": review_status,
             })
     return sorted(alerts, key=lambda alert: (alert["similarityPercentage"], alert["timestamp"]), reverse=True)[:100]
+
+
+def instructor_approach_groups(db: Session, instructor_id: int, course_id: Optional[int] = None) -> list[dict[str, Any]]:
+    """Return same-problem algorithm groups separately from overlap candidates."""
+    rows = db.query(models.Submission, models.Assignment, models.Course, models.Student, models.Problem).join(
+        models.Assignment, models.Assignment.id == models.Submission.assignment_id
+    ).join(models.Course, models.Course.id == models.Assignment.course_id).join(
+        models.Student, models.Student.student_id == models.Submission.student_id
+    ).join(models.Problem, models.Problem.id == models.Submission.problem_id).filter(
+        models.Course.instructor_id == instructor_id,
+        models.Course.is_active == True,
+        models.Submission.status == "EVALUATED",
+        *([models.Course.id == course_id] if course_id is not None else []),
+    ).order_by(models.Submission.created_at.desc(), models.Submission.id.desc()).all()
+    latest: dict[tuple[int, str, str], tuple[Any, ...]] = {}
+    for row in rows:
+        submission, _assignment, course, _student, _problem = row
+        latest.setdefault((course.id, submission.student_id, submission.problem_id), row)
+
+    records = []
+    for submission, _assignment, course, student, problem in latest.values():
+        fingerprint = structural_fingerprint(submission.code, submission.language)
+        records.append({
+            "courseId": course.id,
+            "courseTitle": course.title,
+            "problemId": problem.id,
+            "problemTitle": problem.title,
+            "approachLabel": approach_label(fingerprint),
+            "approachSummary": approach_summary(fingerprint),
+            "student": _similarity_student_payload(student, submission),
+        })
+    return build_approach_groups(records)
 
 
 @app.get("/api/instructor/similarity")
@@ -2724,11 +2768,14 @@ def list_instructor_similarity_cases(
         get_owned_course(db, instructor.id, course_id)
     cases = instructor_similarity_cases(db, instructor.id, course_id)
     clusters = build_similarity_clusters(cases)
+    approach_groups = instructor_approach_groups(db, instructor.id, course_id)
     return {
         "cases": cases,
         "total_cases": len(cases),
         "clusters": clusters,
         "total_clusters": len(clusters),
+        "approach_groups": approach_groups,
+        "total_approach_groups": len(approach_groups),
     }
 
 

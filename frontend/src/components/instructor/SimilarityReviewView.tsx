@@ -15,8 +15,12 @@ type SimilarityCluster = {
   id: string; courseId: number; courseTitle: string; problemId: string; problemTitle: string;
   members: StudentSubmission[]; pairCount: number; caseIds: string[];
 };
+type ApproachGroup = {
+  id: string; courseId: number; courseTitle: string; problemId: string; problemTitle: string;
+  approachLabel: string; approachSummary: string; members: StudentSubmission[]; explanation: string;
+};
 type Course = { id: number; title: string; course_code?: string };
-type CaseResponse = { cases: SimilarityCase[]; clusters: SimilarityCluster[] };
+type CaseResponse = { cases: SimilarityCase[]; clusters: SimilarityCluster[]; approach_groups?: ApproachGroup[] };
 
 const score = (value?: number | null) => value === null || value === undefined ? '—' : `${Math.round(value)}%`;
 
@@ -24,9 +28,11 @@ export const SimilarityReviewView: React.FC = () => {
   const { authFetch } = useAuth();
   const [cases, setCases] = useState<SimilarityCase[]>([]);
   const [clusters, setClusters] = useState<SimilarityCluster[]>([]);
+  const [approachGroups, setApproachGroups] = useState<ApproachGroup[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState('all');
   const [selectedClusterId, setSelectedClusterId] = useState('');
+  const [selectedApproachId, setSelectedApproachId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -50,9 +56,12 @@ export const SimilarityReviewView: React.FC = () => {
       const nextClusters = Array.isArray(data.clusters) ? data.clusters : [];
       setCases(Array.isArray(data.cases) ? data.cases : []);
       setClusters(nextClusters);
+      const nextApproachGroups = Array.isArray(data.approach_groups) ? data.approach_groups : [];
+      setApproachGroups(nextApproachGroups);
       setSelectedClusterId((current) => nextClusters.some((item) => item.id === current) ? current : '');
+      setSelectedApproachId((current) => nextApproachGroups.some((item) => item.id === current) ? current : '');
     } catch (loadError) {
-      setCases([]); setClusters([]);
+      setCases([]); setClusters([]); setApproachGroups([]);
       setError(loadError instanceof Error ? loadError.message : 'Could not load similarity groups.');
     } finally { setLoading(false); }
   }, [authFetch, courseId]);
@@ -87,9 +96,10 @@ export const SimilarityReviewView: React.FC = () => {
 
     {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}<button onClick={() => void loadCases()} className="ml-3 font-bold underline">Retry</button></div>}
     {loading ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-slate-500"><LoaderCircle className="mx-auto mb-3 h-6 w-6 animate-spin" />Loading evaluated submissions…</div>
-      : clusters.length === 0 ? <div className="space-y-3 rounded-3xl border border-slate-200 bg-white p-12 text-center"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600"><Check className="h-6 w-6" /></div><h2 className="text-base font-bold text-slate-800">No review groups found</h2><p className="mx-auto max-w-lg text-sm text-slate-500">There are no same-problem submission groups needing review in this scope.</p></div>
+      : clusters.length === 0 && approachGroups.length === 0 ? <div className="space-y-3 rounded-3xl border border-slate-200 bg-white p-12 text-center"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600"><Check className="h-6 w-6" /></div><h2 className="text-base font-bold text-slate-800">No review groups found</h2><p className="mx-auto max-w-lg text-sm text-slate-500">There are no same-problem submission groups needing review in this scope.</p></div>
       : <>
         <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {clusters.length === 0 && <div className="rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-500 md:col-span-2 xl:col-span-3">No direct code-overlap groups were found. Approach groups below are informational only.</div>}
           {clusters.map((cluster, index) => {
             const isOpen = selectedClusterId === cluster.id;
             return <button key={cluster.id} type="button" onClick={() => setSelectedClusterId(isOpen ? '' : cluster.id)} className={`rounded-2xl border p-4 text-left transition ${isOpen ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-slate-50'}`}>
@@ -99,6 +109,8 @@ export const SimilarityReviewView: React.FC = () => {
             </button>;
           })}
         </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6"><div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] font-extrabold uppercase tracking-wider text-sky-700">Algorithm approach groups</p><h2 className="mt-1 text-base font-extrabold text-slate-900">Same technique, different code</h2><p className="mt-1 text-xs text-slate-500">Informational AST classifications only. These do not indicate code overlap or misconduct.</p></div><span className="text-xs font-bold text-slate-500">{approachGroups.length} group{approachGroups.length === 1 ? '' : 's'}</span></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{approachGroups.map((group) => { const open = selectedApproachId === group.id; return <button key={group.id} type="button" onClick={() => setSelectedApproachId(open ? '' : group.id)} className={`rounded-2xl border p-4 text-left transition ${open ? 'border-sky-400 bg-sky-50' : 'border-slate-200 hover:border-sky-300'}`}><p className="text-sm font-extrabold text-slate-900">{group.problemTitle}</p><p className="mt-2 inline-block rounded-full bg-sky-100 px-2 py-1 text-[10px] font-bold text-sky-800">{group.approachLabel}</p><p className="mt-3 font-mono text-[11px] text-slate-500">{group.members.length} students · {group.members.map((member) => member.id).join(' · ')}</p></button>; })}</div>{selectedApproachId && (() => { const group = approachGroups.find((item) => item.id === selectedApproachId); return group && <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4"><p className="text-sm font-extrabold text-sky-950">{group.problemTitle} · {group.approachLabel}</p><p className="mt-2 text-xs leading-relaxed text-sky-900">{group.explanation}</p><p className="mt-3 font-mono text-xs text-sky-800">Student IDs: {group.members.map((member) => member.id).join(' · ')}</p></div>; })()}</section>
 
         {selectedCluster && (() => {
           // All members are structurally similar. Show the highest-ranked

@@ -80,3 +80,48 @@ def build_similarity_clusters(cases: Iterable[dict[str, Any]]) -> list[dict[str,
                 "caseIds": [case["id"] for case in cluster_cases],
             })
     return sorted(clusters, key=lambda cluster: (-len(cluster["members"]), cluster["problemTitle"]))
+
+
+def build_approach_groups(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Group same-problem submissions by generic AST-derived approach.
+
+    These groups are intentionally separate from code-overlap clusters.  Two
+    students independently using the same standard technique is normal and is
+    never presented as a copying allegation.
+    """
+    grouped: dict[tuple[Any, Any, str], list[dict[str, Any]]] = defaultdict(list)
+    for record in records:
+        grouped[(record.get("courseId"), record.get("problemId"), record.get("approachLabel", "Unknown"))].append(record)
+
+    groups: list[dict[str, Any]] = []
+    for (course_id, problem_id, label), members in grouped.items():
+        if len(members) < 2:
+            continue
+        ordered_members = sorted(
+            (dict(member["student"]) for member in members),
+            key=lambda member: (
+                -(float(member.get("overallScore")) if member.get("overallScore") is not None else -1),
+                str(member["id"]),
+            ),
+        )
+        for rank, member in enumerate(ordered_members, start=1):
+            member["rank"] = rank
+        digest = hashlib.sha1(
+            f"approach:{course_id}:{problem_id}:{label}:{','.join(sorted(member['id'] for member in ordered_members))}".encode()
+        ).hexdigest()[:12]
+        groups.append({
+            "id": f"approach-{digest}",
+            "courseId": course_id,
+            "courseTitle": members[0]["courseTitle"],
+            "problemId": problem_id,
+            "problemTitle": members[0]["problemTitle"],
+            "approachLabel": label,
+            "approachSummary": members[0].get("approachSummary") or "",
+            "members": ordered_members,
+            "explanation": (
+                f"{len(ordered_members)} students independently match the generic AST approach "
+                f"‘{label}’ ({members[0].get('approachSummary') or 'structural evidence'}). "
+                "This is informational and is not a code-overlap finding."
+            ),
+        })
+    return sorted(groups, key=lambda group: (-len(group["members"]), group["problemTitle"], group["approachLabel"]))
