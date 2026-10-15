@@ -166,10 +166,10 @@ export const InstructorDashboard: React.FC = () => {
             </div>
             <div>
               <h4 className="text-sm font-bold text-rose-950">
-                Plagiarism & Similarity Alert: {similarityAlerts.length} Flagged Incident Detected
+                Similarity Review: {similarityAlerts.length} candidate pair{similarityAlerts.length === 1 ? '' : 's'} need attention
               </h4>
               <p className="text-xs text-rose-700 mt-0.5">
-                {topSimilarityAlert.studentA?.name || 'A student'} and {topSimilarityAlert.studentB?.name || 'another student'} have a {topSimilarityAlert.similarityPercentage}% similarity candidate on {topSimilarityAlert.problemTitle}.
+                {topSimilarityAlert.studentA?.name || 'A student'} and {topSimilarityAlert.studentB?.name || 'another student'} have a same-problem overlap candidate on {topSimilarityAlert.problemTitle}.
               </p>
             </div>
           </div>
@@ -221,7 +221,7 @@ export const InstructorDashboard: React.FC = () => {
             <AlertTriangle className="h-4 w-4 text-amber-700" />
           </div>
           <h3 className="mt-2 text-sm font-bold text-slate-900">
-            {topSimilarityAlert ? `${topSimilarityAlert.similarityPercentage}% AST Match` : 'No active flags'}
+            {topSimilarityAlert ? 'Review candidate available' : 'No active flags'}
           </h3>
           <p className="mt-1 text-xs text-slate-500 leading-relaxed">
             {topSimilarityAlert && topSimilarityAlert.studentA && topSimilarityAlert.studentB

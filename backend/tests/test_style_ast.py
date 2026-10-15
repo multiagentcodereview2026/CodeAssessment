@@ -72,6 +72,24 @@ int solve(int value) {
     assert any("duplicated" in issue["message"].lower() for issue in result["maintainability_issues"])
 
 
+def test_repeated_loop_headers_are_not_treated_as_duplicated_logic():
+    source = """
+int solve(const vector<int>& values) {
+    int first = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        first += values[i];
+    }
+    int second = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        second += values[i] * 2;
+    }
+    return first + second;
+}
+"""
+    result = analyze_style(source, "cpp")
+    assert not any("duplicated" in issue["message"].lower() for issue in result["modularity_issues"])
+
+
 def test_modularity_recognizes_helper_decomposition():
     source = """
 int parseValue(int value) { return value; }

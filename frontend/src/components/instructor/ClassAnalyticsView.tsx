@@ -29,6 +29,7 @@ export const ClassAnalyticsView: React.FC = () => {
   const [atRiskCount, setAtRiskCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [refreshTick, setRefreshTick] = useState(0);
   const courseId = searchParams.get('courseId');
   const assignmentId = searchParams.get('assignmentId');
   const activeAssignment = assignments.find((item) => String(item.id) === assignmentId);
@@ -40,6 +41,12 @@ export const ClassAnalyticsView: React.FC = () => {
   const highest = analytics?.highest_student;
   const lowest = analytics?.lowest_student;
   useEffect(() => {
+    const refresh = () => setRefreshTick((current) => current + 1);
+    const timer = window.setInterval(refresh, 60_000);
+    window.addEventListener('focus', refresh);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, []);
+  useEffect(() => {
     let cancelled = false;
     Promise.all([
       fetchJson<Array<{ id: number; title: string }>>(auth.authFetch, '/api/instructor/courses'),
@@ -50,7 +57,7 @@ export const ClassAnalyticsView: React.FC = () => {
       setAssignments(Array.isArray(assignmentData) ? assignmentData : []);
     }).catch(() => { if (!cancelled) setError('Could not load your courses and assignments.'); });
     return () => { cancelled = true; };
-  }, [auth.authFetch]);
+  }, [auth.authFetch, refreshTick]);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,7 +80,7 @@ export const ClassAnalyticsView: React.FC = () => {
     }).catch(() => { if (!cancelled) setError('Could not load analytics for this scope. Check your connection and retry.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [auth.authFetch, courseId, assignmentId]);
+  }, [auth.authFetch, courseId, assignmentId, refreshTick]);
 
   const scopeTitle = activeAssignment?.title ?? activeCourse?.title ?? 'All courses';
   const openRoster = (topic?: string) => {

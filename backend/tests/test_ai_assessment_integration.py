@@ -2,6 +2,7 @@ import asyncio
 
 from agents import aggregation
 from agents import complexity
+from agents.explainability import build_evidence_feedback
 from agents.complexity import public_problem_context, score_complexity_analysis
 from agents.correctness import (
     calculate_correctness_score,
@@ -153,3 +154,27 @@ def test_student_aggregation_does_not_replace_a_zero_score_with_a_default():
     assert result["overall_score"] == 0.0
     assert "execution" not in result["score_breakdown"]
     assert "originality" not in result["score_breakdown"]
+
+
+def test_student_explainability_fallback_uses_only_public_assessment_evidence():
+    feedback = build_evidence_feedback(
+        {
+            "problem": {"title": "Example Task"},
+            "submission": {"language": "cpp"},
+            "execution_result": {
+                "compile_status": "success",
+                "results": [
+                    {"is_hidden": False, "status": "accepted"},
+                    {"is_hidden": True, "status": "wrong_answer", "input": "secret"},
+                ],
+            },
+            "complexity_details": {"time_complexity": "O(n)", "space_complexity": "O(1)"},
+            "style_details": {},
+        }
+    )
+
+    serialized = str(feedback).lower()
+    assert feedback["feedback_source"] == "fallback"
+    assert "1/1 public examples" in feedback["mentor_feedback"]
+    assert "secret" not in serialized
+    assert "hidden" not in serialized

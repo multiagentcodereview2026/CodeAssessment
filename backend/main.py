@@ -18,6 +18,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, or_, text
 from analysis.analyzer_service import analyze_submission_complexity
 from scoring.rubric import complexity_dimension_percent
+from similarity_analysis import approach_label, approach_summary, structural_explanation, structural_fingerprint, structural_overlap
+from similarity_clustering import build_approach_groups, build_similarity_clusters, build_submission_groups
 
 import models
 from auth import (
@@ -311,7 +313,6 @@ def build_assignment_stats(db: Session, assignment: models.Assignment) -> Assign
         avg_correctness=average_score(latest, "correctness_score"),
         avg_complexity=average_score(latest, "complexity_score"),
         avg_style=average_score(latest, "style_score"),
-        avg_similarity=average_score(latest, "similarity_score"),
         problem_titles=problem_titles,
         score_distribution=score_distribution(latest),
         topic_performance=topic_performance(db, latest),
@@ -1251,8 +1252,6 @@ async def submit_and_evaluate_code(
         "assessment_flags": {},
         "style_score": None,
         "style_details": None,
-        "similarity_score": None,
-        "similarity_details": None,
         "overall_score": None,
         "score_breakdown": None,
         "confidence": None,
@@ -1287,7 +1286,6 @@ async def submit_and_evaluate_code(
         correctness_score=final_state.get("correctness_score"),
         complexity_score=final_state.get("complexity_score"),
         style_score=final_state.get("style_score"),
-        similarity_score=final_state.get("similarity_score"),
         execution_result=safe_execution_result,
         complexity_details=final_state.get("complexity_details"),
         score_breakdown=final_state.get("score_breakdown"),
@@ -2686,6 +2684,42 @@ def similarity_tokens(code: str) -> set[tuple[str, ...]]:
     return {tuple(tokens[index:index + 5]) for index in range(max(0, len(tokens) - 4))}
 
 
+def _similarity_student_payload(student: models.Student, submission: models.Submission) -> dict[str, Any]:
+    """Assessment context shown only after an instructor opens a group."""
+    return {
+        "id": student.student_id,
+        "name": student.name,
+        "rollNumber": student.student_id,
+        "submissionId": submission.submission_id,
+        "submittedAt": utc_isoformat(submission.created_at),
+        "language": submission.language,
+        "overallScore": round(submission.overall_score, 1) if submission.overall_score is not None else None,
+        "correctnessScore": round(submission.correctness_score, 1) if submission.correctness_score is not None else None,
+        "timeScore": complexity_dimension_percent(submission.complexity_details, "time"),
+        "spaceScore": complexity_dimension_percent(submission.complexity_details, "space"),
+        "styleScore": round(submission.style_score, 1) if submission.style_score is not None else None,
+    }
+
+
+def _latest_similarity_rows(rows: list[tuple[Any, ...]]) -> list[tuple[Any, ...]]:
+    """Choose the newest evaluated submission for one assignment/student/problem.
+
+    Similarity review must never retain an earlier source file after a student
+    resubmits.  Assignment is intentionally part of the key: the same global
+    problem can be reused by two different course assignments.
+    """
+    latest: dict[tuple[int, int, str, str], tuple[Any, ...]] = {}
+    for row in rows:
+        submission, assignment, course, _student, _problem = row
+        key = (course.id, assignment.id, submission.student_id, submission.problem_id)
+        current = latest.get(key)
+        current_marker = ((current[0].created_at or datetime.min), current[0].id or 0) if current else None
+        candidate_marker = (submission.created_at or datetime.min, submission.id or 0)
+        if current is None or candidate_marker > current_marker:
+            latest[key] = row
+    return list(latest.values())
+
+
 def instructor_similarity_cases(db: Session, instructor_id: int, course_id: Optional[int] = None) -> list[dict[str, Any]]:
     rows = db.query(models.Submission, models.Assignment, models.Course, models.Student, models.Problem).join(
         models.Assignment, models.Assignment.id == models.Submission.assignment_id
@@ -2697,19 +2731,21 @@ def instructor_similarity_cases(db: Session, instructor_id: int, course_id: Opti
         models.Submission.status == "EVALUATED",
         *([models.Course.id == course_id] if course_id is not None else []),
     ).order_by(models.Submission.created_at.desc(), models.Submission.id.desc()).all()
-    latest: dict[tuple[int, str, str], tuple[Any, ...]] = {}
-    for row in rows:
+    latest_rows = _latest_similarity_rows(rows)
+    grouped: dict[tuple[int, int, str], list[tuple[Any, ...]]] = {}
+    for row in latest_rows:
         submission, assignment, course, _student, _problem = row
-        latest.setdefault((course.id, submission.student_id, submission.problem_id), row)
-    grouped: dict[tuple[int, str], list[tuple[Any, ...]]] = {}
-    for row in latest.values():
-        submission, _assignment, course, _student, _problem = row
-        grouped.setdefault((course.id, submission.problem_id), []).append(row)
+        grouped.setdefault((course.id, assignment.id, submission.problem_id), []).append(row)
+
+    fingerprints = {
+        submission.submission_id: structural_fingerprint(submission.code, submission.language)
+        for submission, _assignment, _course, _student, _problem in latest_rows
+    }
 
     alerts = []
     for submissions in grouped.values():
         for left, right in combinations(submissions, 2):
-            sub_a, _assign_a, course_a, student_a, problem_a = left
+            sub_a, assignment_a, course_a, student_a, problem_a = left
             sub_b, _assign_b, _course_b, student_b, _problem_b = right
             if student_a.student_id == student_b.student_id:
                 continue
@@ -2720,6 +2756,9 @@ def instructor_similarity_cases(db: Session, instructor_id: int, course_id: Opti
             percentage = round(overlap * 100)
             if percentage < 72:
                 continue
+            fingerprint_a = fingerprints[sub_a.submission_id]
+            fingerprint_b = fingerprints[sub_b.submission_id]
+            ast_overlap = structural_overlap(fingerprint_a, fingerprint_b)
             pair_id = ":".join(sorted((sub_a.submission_id, sub_b.submission_id)))
             review_status = (sub_a.assessment_flags or {}).get("similarity_reviews", {}).get(pair_id, "open")
             if review_status == "dismissed":
@@ -2731,18 +2770,60 @@ def instructor_similarity_cases(db: Session, instructor_id: int, course_id: Opti
                 "problemTitle": problem_a.title,
                 "courseId": course_a.id,
                 "courseTitle": course_a.title,
-                "studentA": {"id": student_a.student_id, "name": student_a.name, "rollNumber": student_a.student_id, "submissionId": sub_a.submission_id},
-                "studentB": {"id": student_b.student_id, "name": student_b.name, "rollNumber": student_b.student_id, "submissionId": sub_b.submission_id},
+                "assignmentId": assignment_a.id,
+                "assignmentTitle": assignment_a.title,
+                "studentA": _similarity_student_payload(student_a, sub_a),
+                "studentB": _similarity_student_payload(student_b, sub_b),
                 "similarityPercentage": percentage,
                 "riskLevel": "High" if percentage >= 85 else "Medium",
                 "matchedLinesCount": len(tokens_a & tokens_b),
                 "timestamp": utc_isoformat(created_at) if created_at else "Unknown",
                 "studentACodeSnippet": sub_a.code[:12000],
                 "studentBCodeSnippet": sub_b.code[:12000],
-                "aiAuditNotes": "Automated normalized token-shingle overlap screening. Shared boilerplate and common solution patterns can produce matches; this is a review lead, not a finding of misconduct.",
+                "astOverlap": round(ast_overlap * 100),
+                "evidenceExplanation": structural_explanation(fingerprint_a, fingerprint_b, ast_overlap),
+                "aiAuditNotes": "Automated normalized token and AST-structure screening. Shared boilerplate and common solution patterns can produce matches; this is a review lead, not a finding of misconduct.",
                 "reviewStatus": review_status,
             })
     return sorted(alerts, key=lambda alert: (alert["similarityPercentage"], alert["timestamp"]), reverse=True)[:100]
+
+
+def instructor_approach_groups(db: Session, instructor_id: int, course_id: Optional[int] = None) -> list[dict[str, Any]]:
+    """Return same-problem algorithm groups separately from overlap candidates."""
+    return build_approach_groups(instructor_similarity_records(db, instructor_id, course_id))
+
+
+def instructor_similarity_records(db: Session, instructor_id: int, course_id: Optional[int] = None) -> list[dict[str, Any]]:
+    """Return the one current assessed coursework submission per student/task."""
+    rows = db.query(models.Submission, models.Assignment, models.Course, models.Student, models.Problem).join(
+        models.Assignment, models.Assignment.id == models.Submission.assignment_id
+    ).join(models.Course, models.Course.id == models.Assignment.course_id).join(
+        models.Student, models.Student.student_id == models.Submission.student_id
+    ).join(models.Problem, models.Problem.id == models.Submission.problem_id).filter(
+        models.Course.instructor_id == instructor_id,
+        models.Course.is_active == True,
+        models.Submission.status == "EVALUATED",
+        *([models.Course.id == course_id] if course_id is not None else []),
+    ).order_by(models.Submission.created_at.desc(), models.Submission.id.desc()).all()
+    records = []
+    for submission, assignment, course, student, problem in _latest_similarity_rows(rows):
+        fingerprint = structural_fingerprint(submission.code, submission.language)
+        records.append({
+            "courseId": course.id,
+            "courseTitle": course.title,
+            "assignmentId": assignment.id,
+            "assignmentTitle": assignment.title,
+            "problemId": problem.id,
+            "problemTitle": problem.title,
+            "approachLabel": approach_label(fingerprint),
+            "approachSummary": approach_summary(fingerprint),
+            "student": _similarity_student_payload(student, submission),
+            # This remains in the instructor-only response and lets each
+            # group show one representative source file without duplicating
+            # every member's code in the browser.
+            "sourceCode": submission.code,
+        })
+    return records
 
 
 @app.get("/api/instructor/similarity")
@@ -2754,7 +2835,20 @@ def list_instructor_similarity_cases(
     if course_id is not None:
         get_owned_course(db, instructor.id, course_id)
     cases = instructor_similarity_cases(db, instructor.id, course_id)
-    return {"cases": cases, "total_cases": len(cases)}
+    clusters = build_similarity_clusters(cases)
+    records = instructor_similarity_records(db, instructor.id, course_id)
+    approach_groups = build_approach_groups(records)
+    submission_groups = build_submission_groups(records, cases)
+    return {
+        "cases": cases,
+        "total_cases": len(cases),
+        "clusters": clusters,
+        "total_clusters": len(clusters),
+        "approach_groups": approach_groups,
+        "total_approach_groups": len(approach_groups),
+        "submission_groups": submission_groups,
+        "total_submission_groups": len(submission_groups),
+    }
 
 
 @app.post("/api/instructor/similarity/{case_id}/{action}")
@@ -2884,7 +2978,6 @@ def get_instructor_student_progress(
     corr_avg = sum(s.correctness_score or 0 for s in evaluated_subs) / len(evaluated_subs) if evaluated_subs else None
     comp_avg = sum(s.complexity_score or 0 for s in evaluated_subs) / len(evaluated_subs) if evaluated_subs else None
     style_avg = sum(s.style_score or 0 for s in evaluated_subs) / len(evaluated_subs) if evaluated_subs else None
-    sim_avg = sum(s.similarity_score or 0 for s in evaluated_subs) / len(evaluated_subs) if evaluated_subs else None
 
     # Sort chronological for progress trend
     chronological_evaluated = [s for s in reversed(submissions) if s.status == "EVALUATED" and s.overall_score is not None]
@@ -2905,7 +2998,6 @@ def get_instructor_student_progress(
         "correctness_avg": corr_avg,
         "complexity_avg": comp_avg,
         "style_avg": style_avg,
-        "similarity_avg": sim_avg,
         "total_attempts": total_attempts,
         "latest_submission": {
             "id": latest_sub.submission_id,
@@ -2935,7 +3027,7 @@ def export_course_csv(
     
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Student ID", "Student Name", "Course", "Completed Problems", "Average Score", "Correctness", "Complexity", "Style", "Similarity", "Last Submission"])
+    writer.writerow(["Student ID", "Student Name", "Course", "Completed Problems", "Average Score", "Correctness", "Complexity", "Style", "Last Submission"])
     
     for enroll in enrollments:
         student = db.query(models.Student).filter(models.Student.student_id == enroll.student_id).first()
@@ -2958,7 +3050,6 @@ def export_course_csv(
         avg_corr = round(sum(s.correctness_score or 0 for s in evaluated_subs) / len(evaluated_subs), 2) if evaluated_subs else "N/A"
         avg_comp = round(sum(s.complexity_score or 0 for s in evaluated_subs) / len(evaluated_subs), 2) if evaluated_subs else "N/A"
         avg_style = round(sum(s.style_score or 0 for s in evaluated_subs) / len(evaluated_subs), 2) if evaluated_subs else "N/A"
-        avg_sim = round(sum(s.similarity_score or 0 for s in evaluated_subs) / len(evaluated_subs), 2) if evaluated_subs else "N/A"
         
         last_sub_date = utc_isoformat(submissions[0].created_at) if submissions else "N/A"
         
@@ -2971,7 +3062,6 @@ def export_course_csv(
             avg_corr,
             avg_comp,
             avg_style,
-            avg_sim,
             last_sub_date
         ])
     

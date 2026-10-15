@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, ClipboardList, Search, Send, Sparkles, Target, Users, X } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, ClipboardList, RefreshCw, Search, Send, Sparkles, Target, Users, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/useAuth';
@@ -26,7 +26,7 @@ export const StudentRosterView: React.FC = () => {
   const [filterTopic, setFilterTopic] = useState(topicParam || 'all');
   const [filterStatus, setFilterStatus] = useState('all');
 
-  const loadRoster = async () => {
+  const loadRoster = useCallback(async () => {
     setLoading(true); setLoadError('');
     try {
       const rosterUrl = courseId ? `/api/instructor/roster?course_id=${encodeURIComponent(courseId)}` : '/api/instructor/roster';
@@ -44,9 +44,18 @@ export const StudentRosterView: React.FC = () => {
       console.error('Unable to load live instructor roster:', error);
       setStudentRoster([]); setLoadError('We could not load the roster. Refresh the page to try again.');
     } finally { setLoading(false); }
-  };
+  }, [auth.authFetch, courseId]);
 
-  useEffect(() => { void loadRoster(); }, [auth.authFetch, courseId]);
+  useEffect(() => {
+    void loadRoster();
+    const refresh = () => void loadRoster();
+    const timer = window.setInterval(refresh, 60_000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [loadRoster]);
   useEffect(() => { setFilterTopic(topicParam || 'all'); }, [topicParam]);
   const allTopics = useMemo(() => Array.from(new Set(studentRoster.flatMap((student) => student.weakTopics))), [studentRoster]);
   const atRiskCount = studentRoster.filter((student) => student.status === 'At Risk').length;
@@ -60,7 +69,7 @@ export const StudentRosterView: React.FC = () => {
 
   const emptyMessage = studentRoster.length ? 'No students match these filters.' : 'No students are enrolled in your active courses yet.';
   return <div className="space-y-6 pb-12 animate-fadeIn">
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div><h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Student Performance Roster</h1><p className="text-xs sm:text-sm text-slate-500 mt-1">Live enrollment, assessment results, score trends, and weak-topic alerts across your courses.</p></div><div className="flex items-center gap-3"><span className="text-xs font-semibold text-slate-600 bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200 shadow-xs">Total Enrolled: <strong className="text-slate-900 font-mono text-sm ml-1">{studentRoster.length}</strong></span><button onClick={() => navigate('/instructor/courses')} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all cursor-pointer"><Users className="w-4 h-4" />Manage Course Rosters</button></div></div>
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div><h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Student Performance Roster</h1><p className="text-xs sm:text-sm text-slate-500 mt-1">Live enrollment, assessment results, score trends, and weak-topic alerts across your courses. Refreshes automatically after new evaluations.</p></div><div className="flex items-center gap-3"><span className="text-xs font-semibold text-slate-600 bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200 shadow-xs">Total Enrolled: <strong className="text-slate-900 font-mono text-sm ml-1">{studentRoster.length}</strong></span><button type="button" onClick={() => void loadRoster()} disabled={loading} className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Refresh</button><button onClick={() => navigate('/instructor/courses')} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all cursor-pointer"><Users className="w-4 h-4" />Manage Course Rosters</button></div></div>
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <button onClick={() => setFilterStatus('at risk')} className="text-left bg-white rounded-2xl border border-rose-200/80 p-5 shadow-xs hover:border-rose-400 transition-all cursor-pointer"><div className="flex justify-between"><span className="text-xs font-extrabold uppercase text-rose-700">At Risk</span><AlertTriangle className="w-4 h-4 text-rose-500" /></div><div className="mt-2 flex items-baseline gap-2"><span className="text-3xl font-extrabold text-rose-700 font-mono">{atRiskCount}</span><span className="text-xs text-slate-500">students</span></div><p className="mt-1 text-[11px] text-slate-500">Average score below 50%.</p></button>
       <button onClick={() => setFilterStatus('needs attention')} className="text-left bg-white rounded-2xl border border-amber-200/80 p-5 shadow-xs hover:border-amber-400 transition-all cursor-pointer"><div className="flex justify-between"><span className="text-xs font-extrabold uppercase text-amber-700">Needs Attention</span><Target className="w-4 h-4 text-amber-500" /></div><div className="mt-2 flex items-baseline gap-2"><span className="text-3xl font-extrabold text-amber-700 font-mono">{needsAttentionCount}</span><span className="text-xs text-slate-500">students</span></div><p className="mt-1 text-[11px] text-slate-500">Low scores, weak topics, or no coursework submissions.</p></button>

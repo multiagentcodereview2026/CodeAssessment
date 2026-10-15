@@ -247,7 +247,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       };
 
       void loadInstructorOverview();
-      return () => { cancelled = true; };
+      const refreshOnFocus = () => { void loadInstructorOverview(); };
+      const refreshTimer = window.setInterval(refreshOnFocus, 60_000);
+      window.addEventListener('focus', refreshOnFocus);
+      return () => {
+        cancelled = true;
+        window.clearInterval(refreshTimer);
+        window.removeEventListener('focus', refreshOnFocus);
+      };
     }
   }, [auth?.user, auth?.authFetch]);
 

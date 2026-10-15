@@ -10,7 +10,6 @@ import ast
 import re
 from typing import Any
 
-
 _ALLOWED_SHORT = {"i", "j", "k", "n", "m", "x", "y", "u", "v", "r", "c"}
 _GENERIC_NAMES = {"tmp", "temp", "data", "val", "value", "obj", "res", "result", "var"}
 STYLE_PENALTY_MULTIPLIER = 1
@@ -141,6 +140,17 @@ def _python_metrics(source: str) -> tuple[list[dict[str, Any]], list[dict[str, A
                         naming.append(_finding("naming", f"Parameter `{name}` is too cryptic.", "moderate", 4, node.lineno))
                 if len(node.name) <= 1:
                     naming.append(_finding("naming", f"Function `{node.name}` is cryptic.", "major", 8, node.lineno))
+                    # A one-letter entry point also forces readers to infer
+                    # its purpose from the implementation.  This is a
+                    # readability concern independent of the naming penalty.
+                    if ast.get_docstring(node) is None:
+                        readability.append(_finding(
+                            "readability",
+                            f"Cryptic function `{node.name}` has no purpose description.",
+                            "minor",
+                            1,
+                            node.lineno,
+                        ))
                 lines = (getattr(node, "end_lineno", node.lineno) - node.lineno + 1)
                 if lines > 120:
                     readability.append(_finding("readability", f"Function `{node.name}` is very long.", "major", 5))
@@ -212,6 +222,19 @@ def _python_metrics(source: str) -> tuple[list[dict[str, Any]], list[dict[str, A
         line = next((i for i, text in enumerate(lines, 1) if re.search(r"\b(?:TODO|FIXME)\b", text, re.I)), None)
         maintainability.append(_finding("maintainability", "TODO/FIXME markers remain in the submission.", "minor", 1, line))
     return naming, readability, modularity, maintainability
+
+
+def _is_repeated_executable_statement(line: str) -> bool:
+    """Exclude repeated syntax scaffolding from duplicate-logic evidence.
+
+    Repeated loop/branch headers are normal in algorithms that make multiple
+    passes over an input.  A style deduction needs repeated executable work,
+    not merely the same control-flow syntax.
+    """
+    normalized = line.strip()
+    if not normalized or normalized in {"{", "}", "};"}:
+        return False
+    return not bool(re.match(r"^(?:else\s+)?(?:for|while|if|switch|catch|do)\b", normalized))
 
 
 def _generic_metrics(source: str, language: str = "") -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -292,7 +315,12 @@ def _generic_metrics(source: str, language: str = "") -> tuple[list[dict[str, An
     if function_count == 1 and len(nonempty_lines) > 60:
         modularity.append(_finding("modularity", "A large implementation could be decomposed into helpers.", "minor", 1, 1))
     normalized_lines = [re.sub(r"\s+", " ", line.strip()) for line in nonempty_lines]
-    repeated = {line for line in normalized_lines if len(line) >= 12 and normalized_lines.count(line) >= 2}
+    repeated = {
+        line for line in normalized_lines
+        if len(line) >= 12
+        and _is_repeated_executable_statement(line)
+        and normalized_lines.count(line) >= 2
+    }
     if repeated:
         modularity.append(_finding("modularity", "Repeated statements suggest duplicated logic.", "moderate", 5, 1))
         maintainability.append(_finding("maintainability", "Duplicated logic increases maintenance cost.", "moderate", 6, 1))
@@ -310,9 +338,6 @@ def analyze_style(source: str, language: str) -> dict[str, Any]:
     if normalized_language in {"python", "py"}:
         groups = _python_metrics(source)
     elif normalized_language in {"cpp", "c++", "c", "java", "javascript", "js"}:
-        # Keep language dispatch explicit.  These languages currently share
-        # the conservative source/structure adapter; each can be upgraded to
-        # a native parser without changing the scoring contract.
         groups = _generic_metrics(source, normalized_language)
     else:
         # Unknown languages receive conservative generic evidence rather than
