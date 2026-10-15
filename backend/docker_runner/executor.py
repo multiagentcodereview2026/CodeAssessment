@@ -1288,7 +1288,10 @@ async def execute_code_sandboxed(
                 "tests_total",
                 len(formatted_cases)
             ),
-            "results": normalized_results
+            "results": normalized_results,
+            # The engine only supplies this one deliberate learning case; all
+            # other hidden results remain redacted before they reach here.
+            "revealed_feedback_case": data.get("revealed_feedback_case"),
         }
 
     # -------------------------------------------------------------

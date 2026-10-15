@@ -18,6 +18,7 @@ from app.sandbox import cleanup_submission_workspace
 from app.schemas import ExecuteRequest
 from app.schemas import ExecutionResultResponse
 from app.schemas import FailedTestCaseSummaryResponse
+from app.schemas import RevealedFeedbackCaseResponse
 from app.schemas import TestCaseResultResponse
 
 
@@ -94,6 +95,7 @@ async def process_execution_request(req: ExecuteRequest) -> ExecutionResultRespo
     tests_failed = 0
     results_list = []
     last_failed_case = None
+    revealed_feedback_case = None
 
     # Every test keeps its own disposable, network-isolated runner container.
     # Bounded parallelism prevents a 60–200 case submission from waiting for
@@ -218,6 +220,16 @@ async def process_execution_request(req: ExecuteRequest) -> ExecutionResultRespo
             tests_passed += 1
         else:
             tests_failed += 1
+            # Expose exactly the first failed hidden case as a learning aid.
+            # The remaining hidden tests retain the standard redacted shape.
+            if tc.is_hidden and revealed_feedback_case is None:
+                revealed_feedback_case = RevealedFeedbackCaseResponse(
+                    status=res.status,
+                    reason=failure_reason(res.status),
+                    input=tc.input,
+                    expected_output=tc.expected_output,
+                    actual_output=res.actual_output or "",
+                )
             # This summary contains no source test data, so it is safe for
             # public API responses even when the failed test is hidden.
             # Keep overwriting it while iterating in stored order so it is
@@ -257,4 +269,5 @@ async def process_execution_request(req: ExecuteRequest) -> ExecutionResultRespo
         tests_failed=tests_failed,
         results=results_list,
         last_failed_case=last_failed_case,
+        revealed_feedback_case=revealed_feedback_case,
     )

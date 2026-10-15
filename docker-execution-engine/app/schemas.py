@@ -59,6 +59,16 @@ class FailedTestCaseSummaryResponse(BaseModel):
     is_hidden: bool
 
 
+class RevealedFeedbackCaseResponse(BaseModel):
+    """The one failed hidden case intentionally released for learning."""
+
+    status: str
+    reason: str
+    input: str
+    expected_output: str
+    actual_output: str
+
+
 class ExecutionResultResponse(BaseModel):
 
     status: str
@@ -71,3 +81,4 @@ class ExecutionResultResponse(BaseModel):
     tests_failed: int
     results: list[TestCaseResultResponse] = []
     last_failed_case: FailedTestCaseSummaryResponse | None = None
+    revealed_feedback_case: RevealedFeedbackCaseResponse | None = None
