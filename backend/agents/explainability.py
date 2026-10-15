@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Dict, Any
-from agents.base import load_prompt, invoke_agent
+from agents.base import load_prompt, invoke_agent, sanitize_code_comments
 from workflow.state import EvaluationState
 
 
@@ -33,11 +33,11 @@ def build_evidence_feedback(state: EvaluationState) -> Dict[str, Any]:
     total = len(public_results)
     failed = [
         (index + 1, result)
-        for index, result in enumerate(results)
-        if not result.get("is_hidden", result.get("isHidden", False))
-        and str(result.get("status", "")).lower() != "accepted"
+        for index, result in enumerate(public_results)
+        if str(result.get("status", "")).lower() != "accepted"
     ]
-    compile_ok = str(execution.get("compile_status", "")).lower() == "success"
+    compile_status = str(execution.get("compile_status") or "").lower()
+    compile_failed = bool(compile_status) and compile_status != "success"
     complexity = state.get("complexity_details") or {}
     style = state.get("style_details") or {}
 
@@ -46,7 +46,7 @@ def build_evidence_feedback(state: EvaluationState) -> Dict[str, Any]:
     steps: List[str] = []
     if total:
         strengths.append(f"Your {language} submission for {title} passed {passed} of {total} public examples.")
-    if not compile_ok:
+    if compile_failed:
         diagnostic = str(execution.get("compile_error") or execution.get("stderr") or "").strip()
         first_line = next((line.strip() for line in diagnostic.splitlines() if line.strip()), "")
         if first_line:
@@ -99,7 +99,7 @@ def build_evidence_feedback(state: EvaluationState) -> Dict[str, Any]:
     mentor_feedback = f"For {title}, "
     if total:
         mentor_feedback += f"your {language} code passed {passed}/{total} public examples. "
-    elif not compile_ok:
+    elif compile_failed:
         mentor_feedback += f"your {language} submission needs to compile before it can be assessed. "
     if weaknesses:
         mentor_feedback += "Start with this evidence-based issue: " + weaknesses[0]
@@ -141,8 +141,7 @@ async def explainability_node(state: EvaluationState) -> Dict[str, Any]:
             "status": str(result.get("status") or "unknown"),
             "error": result.get("error_message"),
         }
-        for index, result in enumerate(execution.get("results") or [])
-        if not result.get("is_hidden", result.get("isHidden", False))
+        for index, result in enumerate(public_results)
     ]
     payload = {
         "problem_title": state.get("problem", {}).get("title", ""),
@@ -152,7 +151,7 @@ async def explainability_node(state: EvaluationState) -> Dict[str, Any]:
         "correctness_score": state.get("correctness_score"),
         "overall_score": state.get("overall_score"),
         "public_execution_summary": {
-            "compilation_success": execution.get("compile_status") == "success",
+            "compilation_success": str(execution.get("compile_status") or "").lower() == "success",
             "public_cases_passed": sum(
                 str(result.get("status", "")).lower() == "accepted"
                 for result in public_results
@@ -162,7 +161,7 @@ async def explainability_node(state: EvaluationState) -> Dict[str, Any]:
         },
         "complexity_details": state.get("complexity_details"),
         "style_details": state.get("style_details"),
-        "source_code": state.get("submission", {}).get("source_code", "")
+        "source_code": sanitize_code_comments(state.get("submission", {}).get("source_code", ""))
     }
 
     fallback = build_evidence_feedback(state)
