@@ -299,7 +299,9 @@ export const FeedbackRecommendationsView: React.FC = () => {
               <div>
                 <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Suggested next steps</span>
                 <h3 className="mt-1 text-base font-bold text-slate-900">
-                  Raise {activeAssessment.problemTitle} from {activeAssessment.scoreProjection.currentScore} to {activeAssessment.scoreProjection.projectedScore}
+                  {activeAssessment.scoreProjection.isExpected
+                    ? `Expected: ${activeAssessment.problemTitle} can move from ${activeAssessment.scoreProjection.currentScore} to ${activeAssessment.scoreProjection.projectedScore}`
+                    : `Improve ${activeAssessment.problemTitle}, then submit again for a verified score`}
                 </h3>
                 <p className="mt-1 text-xs text-slate-500 leading-relaxed">Focus areas are based on your latest assessment.</p>
               </div>

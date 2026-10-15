@@ -1,46 +1,53 @@
-from pydantic import BaseModel
-from typing import Dict, Any
-from agents.base import load_prompt, invoke_agent
+from typing import Any, Dict
 from workflow.state import EvaluationState
 
-class ScoreProjectionOutput(BaseModel):
-    projected_score: float
-    current_score: float
-    confidence: float
-    expected_improvement: float
-    improvement_breakdown: Dict[str, float]
-    timeline: str
-    motivational_message: str
+
+def _score(value: Any) -> float | None:
+    try:
+        return round(max(0.0, min(100.0, float(value))), 1)
+    except (TypeError, ValueError):
+        return None
 
 async def score_projection_node(state: EvaluationState) -> Dict[str, Any]:
-    prompt = load_prompt("projection")
-    current_score = state.get("overall_score")
-    if current_score is None:
-        current_score = 0.0
+    """Calculate a conditional, evidence-based revision scenario.
 
-    payload = {
-        "current_score": current_score,
-        "correctness_score": state.get("correctness_score"),
-        "complexity_score": state.get("complexity_score"),
-        "style_score": state.get("style_score")
-    }
-
-    fallback = {
-        # An invented fixed gain is misleading. Hide the projection unless it
-        # was actually produced from this submission's evidence.
+    The suggested code has not yet been judged, so this is never a promise.
+    It shows the score unlocked if correctness is fixed while the measured
+    complexity and style components remain unchanged.
+    """
+    current_score = _score(state.get("overall_score")) or 0.0
+    correctness = _score(state.get("correctness_score"))
+    gate = (state.get("score_breakdown") or {}).get("correctness_gate") or {}
+    raw_score = _score(gate.get("raw_score"))
+    unavailable = {
+        "available": False,
+        "verified": False,
         "projected_score": None,
         "current_score": current_score,
-        "confidence": 0.0,
         "expected_improvement": None,
-        "improvement_breakdown": {},
-        "timeline": "Unavailable",
-        "motivational_message": "A personalized score projection is unavailable for this assessment."
+        "assumptions": [],
+        "message": "Submit revised code to the judge to receive a verified score.",
     }
+    if correctness is None or raw_score is None:
+        return {"projected_score": unavailable, "status": "complete"}
+    if correctness >= 100.0:
+        unavailable["message"] = "This submission already passed all evaluated cases; a new score requires a newly submitted revision."
+        return {"projected_score": unavailable, "status": "complete"}
 
-    result = await invoke_agent(prompt, payload, ScoreProjectionOutput, fallback)
-    used_fallback = result is fallback
-    result = dict(result)
-    result["available"] = not used_fallback
+    expected_score = max(current_score, raw_score)
+    result = {
+        "available": True,
+        "verified": False,
+        "projection_basis": "correctness_fix_scenario",
+        "projected_score": expected_score,
+        "current_score": current_score,
+        "expected_improvement": round(expected_score - current_score, 1),
+        "assumptions": [
+            "The revised code passes every evaluated test case.",
+            "Its time complexity, space complexity, and style scores remain unchanged.",
+        ],
+        "message": "This is an expected score scenario, not a verified result. Submit the exact revised code to the judge to confirm it.",
+    }
     return {
         "projected_score": result,
         "status": "complete"

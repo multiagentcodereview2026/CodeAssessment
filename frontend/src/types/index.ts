@@ -131,6 +131,7 @@ export interface ScoreProjection {
   currentScore: number;
   projectedScore: number;
   improvementDelta: number;
+  isExpected?: boolean;
   focusAreas: string[];
   iterationTimeline: IterationTimelineStep[];
 }

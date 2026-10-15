@@ -627,15 +627,16 @@ export const ProblemWorkspace: React.FC = () => {
         ],
         scoreProjection: {
           currentScore: Math.round(data.overall_score ?? 85),
-          projectedScore: Math.min(100, Math.round((data.overall_score ?? 85) + (data.projected_score?.score_improvement_delta ?? 7))),
-          improvementDelta: data.projected_score?.score_improvement_delta ?? 7,
+          projectedScore: Math.round(data.projected_score?.projected_score ?? data.overall_score ?? 85),
+          improvementDelta: Number(data.projected_score?.expected_improvement ?? 0),
+          isExpected: Boolean(data.projected_score?.available),
           focusAreas: [
             'Optimize Space Complexity & bucket allocation',
             'Improve Code Readability & variable naming standards'
           ],
           iterationTimeline: [
             { stage: 'Initial Submission', score: Math.round(data.overall_score ?? 85), note: 'Current solution evaluated' },
-            { stage: 'AI Projected Score', score: Math.min(100, Math.round((data.overall_score ?? 85) + 7)), note: 'Target with recommended optimizations' }
+            { stage: 'Expected score scenario', score: Math.round(data.projected_score?.projected_score ?? data.overall_score ?? 85), note: data.projected_score?.available ? 'Expected if the revision passes all evaluated cases' : 'Submit a revision for a verified score' }
           ]
         },
         // Some analysis providers return an object with an `improved_code`
