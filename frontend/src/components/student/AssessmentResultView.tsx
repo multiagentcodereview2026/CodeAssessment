@@ -128,18 +128,28 @@ export const AssessmentResultView: React.FC = () => {
       { name: 'Style', score: weightedMark(style, 100, 20), max: 20, color: 'bg-violet-500', detail: 'Code style assessment. Weight: 20%.' }
     ];
     const legacyFixedProjection = /top 12%|quick pass on clean naming/i.test(str(projection.motivational_message));
-    const projected = projection.available === false || legacyFixedProjection || str(projection.projection_basis) !== 'correctness_fix_scenario'
-      ? null
-      : num(projection.projected_score);
-    const gain = num(projection.score_improvement_delta) ?? num(projection.expected_improvement) ?? (projected != null && submission.overall_score != null ? Math.max(0, projected - submission.overall_score) : null);
-    const projectionAssumptions = list(projection.assumptions);
-    const projectionMessage = str(projection.message);
     const compileFailed = String(execution.compile_status || '').toLowerCase() === 'error';
     const compilerDiagnostics = str(execution.compile_error) || str(execution.stderr);
     const scoreGate = obj(scoreBreakdown.correctness_gate);
     const rawScore = num(scoreGate.raw_score);
     const correctnessFactor = num(scoreGate.correctness_factor);
     const scoreCap = num(scoreGate.score_cap);
+    const storedProjection = projection.available === false || legacyFixedProjection || str(projection.projection_basis) !== 'correctness_fix_scenario'
+      ? null
+      : num(projection.projected_score);
+    const correctnessNeedsFix = correctness != null && correctness < 100;
+    const projected = storedProjection ?? (correctnessNeedsFix && rawScore != null ? Math.max(num(submission.overall_score) ?? 0, rawScore) : null);
+    const gain = projected != null && submission.overall_score != null ? Math.max(0, projected - submission.overall_score) : null;
+    const projectionAssumptions = storedProjection != null
+      ? list(projection.assumptions)
+      : projected != null
+        ? ['The revised code passes every evaluated test case.', 'Its time complexity, space complexity, and style scores remain unchanged.']
+        : [];
+    const projectionMessage = storedProjection != null
+      ? str(projection.message)
+      : projected != null
+        ? 'This expected score scenario is calculated from saved assessment evidence. Submit the exact revised code to the judge to confirm it.'
+        : '';
     return { execution, complexity, feedback, recommendations, results, publicCases, publicPassingCases, failedPublicCases, revealedCase, hasRevealedCase, hasCorrectnessIssue, passed, total, accepted, steps, strengths, rows, projected, gain, projectionAssumptions, projectionMessage, compileFailed, compilerDiagnostics, isGenericFallback, unrelatedSavedFeedback, rawScore, correctnessFactor, scoreCap };
   }, [submission]);
   const revisedSuggestion = useMemo(() => parseSuggestion(submission?.improved_code), [submission?.improved_code]);
