@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Send, ArrowLeft, Code, AlertCircle, CheckCircle2, XCircle, Terminal } from 'lucide-react';
@@ -9,7 +9,9 @@ const CodeEditor = () => {
   const { id } = useParams();
   const problemId = id || "two-sum";
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, authFetch } = useAuth();
+  const assignmentId = new URLSearchParams(location.search).get('assignmentId');
 
   const [problem, setProblem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -127,7 +129,8 @@ const CodeEditor = () => {
           student_id: user?.username || "24BD1A058Z",
           problem_id: problemId,
           language,
-          code: currentCode
+          code: currentCode,
+          assignment_id: assignmentId ? Number(assignmentId) : null
         })
       });
 

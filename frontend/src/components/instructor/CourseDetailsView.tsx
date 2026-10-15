@@ -153,6 +153,13 @@ export const CourseDetailsView: React.FC = () => {
 
   useEffect(() => {
     void loadCourseData();
+    const refresh = () => void loadCourseData();
+    const timer = window.setInterval(refresh, 60_000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+    };
   }, [loadCourseData]);
 
   const handleUpdateCourse = async (e: React.FormEvent) => {

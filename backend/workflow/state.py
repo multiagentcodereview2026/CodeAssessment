@@ -25,9 +25,6 @@ class EvaluationState(TypedDict):
     assessment_flags: Optional[Dict[str, Any]]
     style_score: Optional[float]
     style_details: Optional[Dict[str, Any]]
-    similarity_score: Optional[float]
-    similarity_details: Optional[Dict[str, Any]]
-    
     # Aggregated & Pedagogical Layers
     overall_score: Optional[float]
     score_breakdown: Optional[Dict[str, Any]]

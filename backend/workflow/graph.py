@@ -5,7 +5,6 @@ from agents.supervisor import supervisor_node
 from agents.correctness import correctness_node
 from agents.complexity import complexity_node
 from agents.style import style_node
-from agents.similarity import similarity_node
 from agents.aggregation import aggregation_node
 from agents.explainability import explainability_node
 from agents.recommendation import recommendation_node
@@ -29,7 +28,6 @@ def build_graph():
     builder.add_node("correctness_node", correctness_node)
     builder.add_node("complexity_node", complexity_node)
     builder.add_node("style_node", style_node)
-    builder.add_node("similarity_node", similarity_node)
     builder.add_node("aggregation_node", aggregation_node)
     builder.add_node("explainability_node", explainability_node)
     builder.add_node("recommendation_node", recommendation_node)
@@ -47,15 +45,15 @@ def build_graph():
         }
     )
 
-    # 3. Parallel Fan-Out: Correctness triggers Complexity, Style, and Similarity concurrently
+    # 3. Parallel Fan-Out: student grading uses correctness, complexity, and
+    # style only. Similarity is recalculated from latest coursework records in
+    # the instructor-only review endpoint.
     builder.add_edge("correctness_node", "complexity_node")
     builder.add_edge("correctness_node", "style_node")
-    builder.add_edge("correctness_node", "similarity_node")
 
-    # 4. Join: All 3 parallel branches feed into Aggregation
+    # 4. Join: both student-grading branches feed into aggregation.
     builder.add_edge("complexity_node", "aggregation_node")
     builder.add_edge("style_node", "aggregation_node")
-    builder.add_edge("similarity_node", "aggregation_node")
 
     # 5. Pedagogical and Revision Flow
     builder.add_edge("aggregation_node", "explainability_node")

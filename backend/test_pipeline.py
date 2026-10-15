@@ -33,8 +33,6 @@ async def test_langgraph_pipeline_dry_run():
         "complexity_details": None,
         "style_score": None,
         "style_details": None,
-        "similarity_score": None,
-        "similarity_details": None,
         "overall_score": None,
         "score_breakdown": None,
         "confidence": None,
@@ -64,7 +62,6 @@ async def test_langgraph_pipeline_dry_run():
     print(f"Correctness     : {result['correctness_score']}")
     print(f"Complexity      : {result['complexity_score']}")
     print(f"Style           : {result['style_score']}")
-    print(f"Originality     : {100.0 - result['similarity_score']}")
     print(f"Projected Score : {result['projected_score']['projected_score']}")
     print(f"Strengths       : {result['feedback']['strengths']}")
     print(f"Insight         : {result['feedback']['key_insight']}")

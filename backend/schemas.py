@@ -456,7 +456,6 @@ class AssignmentWithStats(AssignmentResponse):
     avg_correctness: Optional[float] = None
     avg_complexity: Optional[float] = None
     avg_style: Optional[float] = None
-    avg_similarity: Optional[float] = None
     problem_titles: List[str] = []
     score_distribution: List[Dict[str, Any]] = []
     topic_performance: List[Dict[str, Any]] = []
@@ -474,7 +473,6 @@ class InstructorStudentProgressResponse(BaseModel):
     correctness_avg: Optional[float] = None
     complexity_avg: Optional[float] = None
     style_avg: Optional[float] = None
-    similarity_avg: Optional[float] = None
     total_attempts: int
     latest_submission: Optional[dict] = None
     progress_trend: List[float] = []
