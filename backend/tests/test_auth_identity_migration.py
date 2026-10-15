@@ -71,7 +71,7 @@ def test_legacy_schema_migration_adds_and_backfills_auth_links(tmp_path):
     assert "user_id" in student_columns
     assert "token_version" in user_columns
     assert {"target_time_complexity", "target_space_complexity", "complexity_reasoning"}.issubset(problem_columns)
-    assert {"assignment_id", "complexity_details", "assessment_flags"}.issubset(submission_columns)
+    assert {"assignment_id", "complexity_details", "assessment_flags", "score_breakdown"}.issubset(submission_columns)
     assert any(
         foreign_key.get("constrained_columns") == ["user_id"]
         and foreign_key.get("referred_table") == "users"

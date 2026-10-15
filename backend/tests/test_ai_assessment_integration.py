@@ -150,6 +150,6 @@ def test_student_aggregation_does_not_replace_a_zero_score_with_a_default():
 
     # Only correctness (20%) and style (20%) are available. Similarity never
     # participates in a student score, so the available rubric is normalized.
-    assert result["overall_score"] == 45.0
+    assert result["overall_score"] == 0.0
     assert "execution" not in result["score_breakdown"]
     assert "originality" not in result["score_breakdown"]

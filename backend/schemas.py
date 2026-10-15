@@ -171,6 +171,7 @@ class SubmissionResponse(BaseModel):
     correctness_score: Optional[float] = None
     complexity_score: Optional[float] = None
     complexity_details: Optional[Dict[str, Any]] = None
+    score_breakdown: Optional[Dict[str, Any]] = None
     style_score: Optional[float] = None
     execution_result: Optional[Dict[str, Any]] = None
     feedback: Optional[Dict[str, Any]] = None

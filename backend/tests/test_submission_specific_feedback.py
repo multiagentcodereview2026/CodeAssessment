@@ -135,3 +135,35 @@ def test_missing_execution_evidence_is_not_reported_as_a_compile_failure():
     })
 
     assert "did not compile" not in feedback["mentor_feedback"].lower()
+
+
+def test_revealed_feedback_case_drives_feedback_before_style_advice(monkeypatch):
+    async def generic_style_advice(_prompt, _payload, _schema, _fallback):
+        return {
+            "strengths": [],
+            "weaknesses": ["Add comments."],
+            "deductions": [],
+            "improvement_steps": ["Add comments around the loop."],
+            "mentor_feedback": "Add more comments.",
+            "key_insight": "Comments are important.",
+        }
+
+    monkeypatch.setattr(explainability, "invoke_agent", generic_style_advice)
+    result = asyncio.run(explainability.explainability_node({
+        "problem": {"title": "Palindrome Number"},
+        "submission": {"language": "cpp", "source_code": "return x == reverse(x);"},
+        "execution_result": {
+            "compile_status": "success",
+            "results": [{"status": "accepted", "is_hidden": False}],
+            "revealed_feedback_case": {
+                "status": "WRONG_ANSWER",
+                "input": "10",
+                "expected_output": "false",
+                "actual_output": "true",
+            },
+        },
+    }))["feedback"]
+
+    assert "Input: 10" in result["mentor_feedback"]
+    assert "expected: false" in result["mentor_feedback"]
+    assert "comment" not in " ".join(result["improvement_steps"]).lower()

@@ -223,6 +223,8 @@ class Submission(Base):
     # Safe, student-visible complexity analysis. It deliberately omits the
     # private optimal TC/SC stored on the related problem.
     complexity_details = Column(JSON, nullable=True)
+    # Student-visible audit trail for the correctness-adjusted final score.
+    score_breakdown = Column(JSON, nullable=True)
     # Internal-only review signals, deliberately excluded from response schemas.
     assessment_flags = Column(JSON, nullable=True)
     feedback = Column(JSON, nullable=True)

@@ -17,6 +17,10 @@ STUDENT_RUBRIC_WEIGHTS = {
     "style": 0.20,
 }
 
+# A submission that is not accepted can still receive credit for efficient,
+# maintainable work, but it must not be presented as an excellent solution.
+NON_ACCEPTED_SCORE_CAP = 79.0
+
 # The instructor score is a review metric, not a replacement for the student
 # grade.  Its final component is originality (100 - similarity risk).
 INSTRUCTOR_RUBRIC_WEIGHTS = {
@@ -92,7 +96,7 @@ def student_rubric_score(
     complexity_details: Any,
     style: Any,
 ) -> tuple[float, dict[str, dict[str, float | None]]]:
-    return weighted_rubric_score(
+    raw_score, breakdown = weighted_rubric_score(
         {
             "correctness": correctness,
             "time": complexity_dimension_percent(complexity_details, "time"),
@@ -101,6 +105,21 @@ def student_rubric_score(
         },
         STUDENT_RUBRIC_WEIGHTS,
     )
+    correctness_percent = _clamp(correctness) or 0.0
+    correctness_factor = correctness_percent / 100.0
+    score_before_cap = round(raw_score * correctness_factor, 1)
+    accepted = correctness_percent >= 100.0
+    score_cap = None if accepted else NON_ACCEPTED_SCORE_CAP
+    final_score = min(score_before_cap, score_cap) if score_cap is not None else score_before_cap
+    breakdown["correctness_gate"] = {
+        "raw_score": raw_score,
+        "correctness_factor": round(correctness_factor, 4),
+        "score_before_cap": score_before_cap,
+        "score_cap": score_cap,
+        "final_score": final_score,
+        "accepted": accepted,
+    }
+    return final_score, breakdown
 
 
 def instructor_rubric_score(

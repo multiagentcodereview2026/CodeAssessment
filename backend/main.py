@@ -368,6 +368,30 @@ FAILED_CASE_REASONS = {
 }
 
 
+def revealed_feedback_case(results):
+    """Allow exactly one failed hidden case to become a student learning aid.
+
+    The returned object is deliberately allowlisted.  Every other hidden case
+    remains redacted, and judge diagnostics are not exposed.
+    """
+    if not isinstance(results, list):
+        return None
+    for case_result in results:
+        if not isinstance(case_result, dict):
+            continue
+        is_hidden = bool(case_result.get("is_hidden", case_result.get("isHidden", False)))
+        status = str(case_result.get("status") or "").upper()
+        if is_hidden and status != "ACCEPTED":
+            return {
+                "status": status or "SYSTEM_ERROR",
+                "reason": FAILED_CASE_REASONS.get(status, "This feedback case did not pass."),
+                "input": str(case_result.get("input") or ""),
+                "expected_output": str(case_result.get("expected_output") or ""),
+                "actual_output": str(case_result.get("actual_output") or ""),
+            }
+    return None
+
+
 def redact_hidden_execution(execution_result, *, student_view=False):
     """Keep hidden judge data out of API responses and persisted submissions.
 
@@ -381,6 +405,22 @@ def redact_hidden_execution(execution_result, *, student_view=False):
     safe_result = copy.deepcopy(execution_result)
     results = safe_result.get("results")
     if isinstance(results, list):
+        existing_revealed_case = safe_result.get("revealed_feedback_case")
+        revealed_case = None
+        # A prior internal redaction may already have extracted the one
+        # allowlisted learning case. Preserve it while removing all remaining
+        # hidden result details on the final student-facing pass.
+        if isinstance(existing_revealed_case, dict):
+            existing = existing_revealed_case
+            revealed_case = {
+                "status": str(existing.get("status") or "SYSTEM_ERROR"),
+                "reason": str(existing.get("reason") or "This feedback case did not pass."),
+                "input": str(existing.get("input") or ""),
+                "expected_output": str(existing.get("expected_output") or ""),
+                "actual_output": str(existing.get("actual_output") or ""),
+            }
+        else:
+            revealed_case = revealed_feedback_case(results)
         first_private_failure = None
         public_results = []
         for ordinal, case_result in enumerate(results, start=1):
@@ -412,7 +452,12 @@ def redact_hidden_execution(execution_result, *, student_view=False):
                 and public_passed == 3
                 else None
             )
+            # One intentionally revealed learning case is the only hidden
+            # test data included in a student response.
+            safe_result["revealed_feedback_case"] = revealed_case
             return safe_result
+
+        safe_result["revealed_feedback_case"] = revealed_case
 
     # The execution layer deliberately provides only fixed metadata for the
     # final failed hidden test. Keep the stored/API shape allowlisted even if
@@ -1245,6 +1290,7 @@ async def submit_and_evaluate_code(
         similarity_score=final_state.get("similarity_score"),
         execution_result=safe_execution_result,
         complexity_details=final_state.get("complexity_details"),
+        score_breakdown=final_state.get("score_breakdown"),
         assessment_flags=final_state.get("assessment_flags"),
         feedback=final_state.get("feedback"),
         recommendations=final_state.get("recommendations"),
@@ -1276,6 +1322,7 @@ async def submit_and_evaluate_code(
         correctness_score=new_submission.correctness_score,
         complexity_score=new_submission.complexity_score,
         complexity_details=final_state.get("complexity_details"),
+        score_breakdown=final_state.get("score_breakdown"),
         style_score=new_submission.style_score,
         execution_result=new_submission.execution_result,
         feedback=new_submission.feedback,

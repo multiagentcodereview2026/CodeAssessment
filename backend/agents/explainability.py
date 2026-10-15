@@ -17,6 +17,12 @@ def _unique(items: List[str], limit: int = 3) -> List[str]:
     return result
 
 
+def _is_style_only_advice(text: str) -> bool:
+    return any(word in text.lower() for word in (
+        "comment", "naming", "readability", "maintainability", "rename",
+    ))
+
+
 def build_evidence_feedback(state: EvaluationState) -> Dict[str, Any]:
     """Create per-submission feedback from observed evidence when AI is offline."""
     problem = state.get("problem") or {}
@@ -38,6 +44,7 @@ def build_evidence_feedback(state: EvaluationState) -> Dict[str, Any]:
     ]
     compile_status = str(execution.get("compile_status") or "").lower()
     compile_failed = bool(compile_status) and compile_status != "success"
+    revealed_case = execution.get("revealed_feedback_case") or {}
     complexity = state.get("complexity_details") or {}
     style = state.get("style_details") or {}
 
@@ -60,6 +67,16 @@ def build_evidence_feedback(state: EvaluationState) -> Dict[str, Any]:
         status = str(failed_result.get("status") or "failed").replace("_", " ")
         weaknesses.append(f"Public test case {ordinal} did not pass ({status}).")
         steps.append(f"Review the logic exercised by public test case {ordinal}, then rerun the examples.")
+    elif revealed_case:
+        status = str(revealed_case.get("status") or "failed").replace("_", " ").lower()
+        case_input = str(revealed_case.get("input") or "").strip()
+        expected = str(revealed_case.get("expected_output") or "").strip()
+        actual = str(revealed_case.get("actual_output") or "").strip()
+        detail = f"The revealed feedback case did not pass ({status})."
+        if case_input or expected or actual:
+            detail += f" Input: {case_input or '—'}; expected: {expected or '—'}; your output: {actual or '—'}."
+        weaknesses.append(detail)
+        steps.append("Use the revealed feedback case to trace the condition that produces the unexpected output, then rerun the examples.")
     elif total:
         strengths.append("All displayed public examples passed for this submission.")
 
@@ -143,6 +160,7 @@ async def explainability_node(state: EvaluationState) -> Dict[str, Any]:
         }
         for index, result in enumerate(public_results)
     ]
+    revealed_case = execution.get("revealed_feedback_case") or None
     payload = {
         "problem_title": state.get("problem", {}).get("title", ""),
         "problem_statement": state.get("problem", {}).get("statement") or state.get("problem", {}).get("description", ""),
@@ -159,6 +177,7 @@ async def explainability_node(state: EvaluationState) -> Dict[str, Any]:
             "public_cases_total": len(public_results),
             "public_cases": public_case_evidence,
         },
+        "revealed_feedback_case": revealed_case,
         "complexity_details": state.get("complexity_details"),
         "style_details": state.get("style_details"),
         "source_code": sanitize_code_comments(state.get("submission", {}).get("source_code", ""))
@@ -169,5 +188,19 @@ async def explainability_node(state: EvaluationState) -> Dict[str, Any]:
     result = await invoke_agent(prompt, payload, ExplainabilityOutput, fallback)
     used_fallback = result is fallback
     result = dict(result)
+    # A failed execution is the student's first task.  Preserve precise,
+    # deterministic evidence ahead of optional style advice even if an AI
+    # provider returns a generic response.
+    has_correctness_issue = bool(
+        str(execution.get("compile_status") or "").lower() not in {"", "success"}
+        or any(str(case.get("status") or "").lower() != "accepted" for case in public_results)
+        or revealed_case
+    )
+    if has_correctness_issue:
+        ai_steps = [step for step in result.get("improvement_steps", []) if not _is_style_only_advice(str(step))]
+        result["mentor_feedback"] = fallback["mentor_feedback"]
+        result["key_insight"] = fallback["key_insight"]
+        result["weaknesses"] = _unique([*fallback["weaknesses"], *result.get("weaknesses", [])])
+        result["improvement_steps"] = _unique([*fallback["improvement_steps"], *ai_steps])
     result["feedback_source"] = "fallback" if used_fallback else "ai"
     return {"feedback": result}
