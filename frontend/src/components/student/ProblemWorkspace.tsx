@@ -16,7 +16,8 @@ import {
   Terminal,
   Cpu,
   ShieldCheck,
-  Check
+  Check,
+  MoreHorizontal
 } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
@@ -926,21 +927,19 @@ export const ProblemWorkspace: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setResetCodeConfirmOpen(true)}
-                  title="Reset to starter template"
-                  className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setIsEditorFullscreen((value) => !value)}
-                  title={isEditorFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen editor'}
-                  className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors"
-                >
-                  {isEditorFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                </button>
-                <div className="mx-1 h-5 w-px bg-slate-700" />
+                <details className="relative">
+                  <summary className="flex cursor-pointer list-none items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 [&::-webkit-details-marker]:hidden">
+                    <MoreHorizontal className="h-4 w-4" /> More
+                  </summary>
+                  <div className="absolute left-0 top-full z-20 mt-2 w-44 rounded-lg border border-slate-700 bg-slate-900 p-1.5 shadow-xl">
+                    <button onClick={() => setResetCodeConfirmOpen(true)} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-slate-200 hover:bg-slate-800">
+                      <RotateCcw className="h-3.5 w-3.5" /> Reset to starter code
+                    </button>
+                    <button onClick={() => setIsEditorFullscreen((value) => !value)} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-slate-200 hover:bg-slate-800">
+                      {isEditorFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />} {isEditorFullscreen ? 'Exit fullscreen' : 'Fullscreen editor'}
+                    </button>
+                  </div>
+                </details>
                 <button
                   onClick={handleRunCode}
                   disabled={isRunning || isSubmitting || isProblemLoading || !remoteProblem}
