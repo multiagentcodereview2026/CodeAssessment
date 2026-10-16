@@ -786,6 +786,48 @@ def test_similarity_review_uses_owned_course_pairs_and_persists_actions(db_sessi
     assert list_instructor_similarity_cases(db_session, instructor_user.instructor_profile)["total_cases"] == 0
 
 
+def test_similarity_uses_only_latest_assessed_submission_after_resubmit(db_session):
+    instructor_user = add_account(db_session, username="latest-similarity-instructor", role="instructor", password="instructor-password")
+    student_a_user = add_account(db_session, username="latest-similarity-a", role="student", password="student-password-a")
+    student_b_user = add_account(db_session, username="latest-similarity-b", role="student", password="student-password-b")
+    course = models.Course(course_code="LATEST-101", title="Latest-only course", instructor_id=instructor_user.instructor_profile.id)
+    problem = models.Problem(id="latest-similarity-problem", title="Latest-only comparison", description="Task", examples=[], constraints=[], starter_codes={}, test_cases=[])
+    db_session.add_all([course, problem])
+    db_session.flush()
+    assignment = models.Assignment(title="Latest-only task", course_id=course.id, status="ACTIVE")
+    db_session.add(assignment)
+    db_session.flush()
+
+    independent = "def independent(values):\n    return sum(values)\n"
+    shared = "def compute(values):\n    total = 0\n    for value in values:\n        total += value * 2\n    return total\n"
+    db_session.add_all([
+        models.Submission(submission_id="LATEST-A-OLD", student_id=student_a_user.student_profile.student_id, problem_id=problem.id, assignment_id=assignment.id, language="python", code=independent, status="EVALUATED", overall_score=42),
+        models.Submission(submission_id="LATEST-B", student_id=student_b_user.student_profile.student_id, problem_id=problem.id, assignment_id=assignment.id, language="python", code=shared, status="EVALUATED", overall_score=88),
+    ])
+    db_session.flush()
+    # A's newer solution replaces its prior independent one and must be the
+    # only A source considered in the API response and group representative.
+    db_session.add(models.Submission(submission_id="LATEST-A-NEW", student_id=student_a_user.student_profile.student_id, problem_id=problem.id, assignment_id=assignment.id, language="python", code=shared, status="EVALUATED", overall_score=99))
+    db_session.commit()
+
+    response = list_instructor_similarity_cases(db_session, instructor_user.instructor_profile)
+
+    assert response["total_cases"] == 1
+    groups = response["submission_groups"]
+    assert len(groups) == 1
+    group = groups[0]
+    assert group["groupKind"] == "code_overlap"
+    assert {member["submissionId"] for member in group["members"]} == {"LATEST-A-NEW", "LATEST-B"}
+    assert group["representativeCode"] == shared
+    assert group["members"][0]["overallScore"] == 99
+
+
+def test_similarity_ignores_comments_but_keeps_preprocessor_directives():
+    with_comments = "#include <vector>\nint total(vector<int> values) {\n    // explanatory note\n    return values.size(); /* same operation */\n}\n"
+    without_comments = "#include <vector>\nint total(vector<int> items) {\n    return items.size();\n}\n"
+    assert main_module.similarity_tokens(with_comments, "cpp") == main_module.similarity_tokens(without_comments, "cpp")
+
+
 def test_student_course_request_approval_leave_and_notifications(db_session):
     instructor_user = add_account(db_session, username="course-owner", role="instructor", password="instructor-password")
     student_user = add_account(db_session, username="course-joiner", role="student", password="student-password")

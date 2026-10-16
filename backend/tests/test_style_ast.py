@@ -90,6 +90,21 @@ int solve(const vector<int>& values) {
     assert not any("duplicated" in issue["message"].lower() for issue in result["modularity_issues"])
 
 
+def test_repeated_heap_removals_are_not_false_duplicate_logic():
+    source = """
+int solve(priority_queue<int>& stones) {
+    int first = stones.top();
+    stones.pop();
+    int second = stones.top();
+    stones.pop();
+    return first - second;
+}
+"""
+    result = analyze_style(source, "cpp")
+    assert not any("duplicated" in issue["message"].lower() for issue in result["modularity_issues"])
+    assert not any("duplicated" in issue["message"].lower() for issue in result["maintainability_issues"])
+
+
 def test_modularity_recognizes_helper_decomposition():
     source = """
 int parseValue(int value) { return value; }

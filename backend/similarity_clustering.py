@@ -199,6 +199,11 @@ def build_submission_groups(
             ordered_members = _ordered_members(component_rows)
             representative_id = str(ordered_members[0]["id"])
             representative = record_by_student[representative_id]
+            evidence: list[str] = []
+            for case in component_cases:
+                for explanation in case.get("evidenceExplanation") or []:
+                    if explanation not in evidence:
+                        evidence.append(explanation)
             digest = hashlib.sha1(
                 f"code:{course_id}:{assignment_id}:{problem_id}:{','.join(sorted(component_set))}".encode()
             ).hexdigest()[:12]
@@ -213,6 +218,7 @@ def build_submission_groups(
                 "groupKind": "code_overlap",
                 "groupLabel": "Direct code overlap",
                 "approachSummary": representative.get("approachSummary") or "",
+                "evidenceSummary": evidence[:3],
                 "members": ordered_members,
                 "representativeCode": representative.get("sourceCode") or "",
                 "pairCount": len(component_cases),
@@ -244,6 +250,7 @@ def build_submission_groups(
                 "groupKind": kind,
                 "groupLabel": group_label,
                 "approachSummary": summary,
+                "evidenceSummary": ([f"AST classification: {label} ({summary})."] if summary else [f"AST classification: {label}."]),
                 "members": ordered_members,
                 "representativeCode": representative.get("sourceCode") or "",
                 "pairCount": 0,

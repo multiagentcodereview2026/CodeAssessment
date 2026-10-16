@@ -234,6 +234,11 @@ def _is_repeated_executable_statement(line: str) -> bool:
     normalized = line.strip()
     if not normalized or normalized in {"{", "}", "};"}:
         return False
+    # Repeating a no-argument container removal is often the intended shape
+    # of an algorithm (for example, removing the two largest heap entries).
+    # Its identifier length must never decide whether a style penalty applies.
+    if re.match(r"^[A-Za-z_]\w*(?:\s*(?:\.|->)\s*[A-Za-z_]\w*)*\s*\.\s*(?:pop|pop_back|dequeue)\s*\(\s*\)\s*;$", normalized):
+        return False
     return not bool(re.match(r"^(?:else\s+)?(?:for|while|if|switch|catch|do)\b", normalized))
 
 

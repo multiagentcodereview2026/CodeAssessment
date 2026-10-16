@@ -69,3 +69,12 @@ def test_newest_submission_replaces_old_group_membership_when_it_becomes_similar
     assert len(groups) == 1
     assert groups[0]["groupKind"] == "code_overlap"
     assert {member["submissionId"] for member in groups[0]["members"]} == {"a-new", "b-current"}
+
+
+def test_submission_group_carries_explainable_structural_evidence():
+    records = [
+        {"courseId": 1, "courseTitle": "Algorithms", "assignmentId": 9, "problemId": "p-1", "problemTitle": "P1", "approachLabel": "Iterative Loop", "approachSummary": "loop depth 1", "sourceCode": "a", "student": {"id": "a", "overallScore": 90}},
+        {"courseId": 1, "courseTitle": "Algorithms", "assignmentId": 9, "problemId": "p-1", "problemTitle": "P1", "approachLabel": "Iterative Loop", "approachSummary": "loop depth 1", "sourceCode": "b", "student": {"id": "b", "overallScore": 80}},
+    ]
+    groups = build_submission_groups(records, [case("ab", "a", "b") | {"assignmentId": 9, "evidenceExplanation": ["Both contain nesting depth 1 loop structure."]}])
+    assert groups[0]["evidenceSummary"] == ["Both contain nesting depth 1 loop structure."]

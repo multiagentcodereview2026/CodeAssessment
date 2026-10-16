@@ -996,8 +996,10 @@ async def execute_code_sandboxed(
     """
     Execute code in the Docker execution microservice.
 
-    If the Docker microservice cannot be reached,
-    fall back to local execution.
+    If the Docker microservice cannot be reached, Python can use the small
+    local fallback.  Compiled languages must *not* do that: the backend image
+    intentionally has no compiler, so a local fallback would incorrectly tell
+    a student that their valid code failed to compile.
     """
 
     if isinstance(
@@ -1112,10 +1114,14 @@ async def execute_code_sandboxed(
     # -------------------------------------------------------------
     # 1. Try Docker execution microservice
     # -------------------------------------------------------------
-    data = await asyncio.to_thread(
-        _sync_request_docker,
-        payload
-    )
+    data = await asyncio.to_thread(_sync_request_docker, payload)
+
+    # A runner can be briefly unavailable while Docker is starting a language
+    # container.  Retry once before deciding that the execution service is
+    # unavailable.  This is deliberately a service retry, not a resubmission.
+    if not data:
+        await asyncio.sleep(0.5)
+        data = await asyncio.to_thread(_sync_request_docker, payload)
 
     if data and "results" in data:
 
@@ -1297,6 +1303,28 @@ async def execute_code_sandboxed(
     # -------------------------------------------------------------
     # 2. Local execution fallback
     # -------------------------------------------------------------
+    # The backend container is not a compiler host.  Do not convert an
+    # execution-engine outage into a misleading "g++ not found" student
+    # compiler error for C, C++, or Java submissions.
+    if language.lower() in {"c", "cpp", "c++", "java"}:
+        return {
+            "compile_status": "unavailable",
+            "compile_error": (
+                "The isolated code-execution service is temporarily unavailable. "
+                "Please retry your submission."
+            ),
+            "execution_status": "system_error",
+            "exit_code": 1,
+            "stdout": "",
+            "stderr": "",
+            "runtime_ms": 0,
+            "memory_kb": 0,
+            "passed_cases": 0,
+            "failed_cases": 0,
+            "total_cases": len(formatted_cases),
+            "results": [],
+        }
+
     local_res = await asyncio.to_thread(
         execute_locally,
         source_code,

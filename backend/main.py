@@ -1068,8 +1068,13 @@ async def generate_problem_hints(
             allowed = instructor is not None and any(assignment.course.instructor_id == instructor.id for assignment in course_question)
         if problem is None or not allowed:
             raise HTTPException(status_code=404, detail="Problem not found")
+    fallback_hints = ProblemHintsResponse(hints=[
+        f"Start by restating what one valid result for {problem.title} must represent, then trace the public examples by hand.",
+        f"Use the constraints and the listed topic ({problem.category or 'the problem statement'}) to choose the smallest data structure or state that preserves the information needed for the next step.",
+        "Before coding, write three checkpoints: parse the input, update one well-named state for each step, and test boundary cases such as the smallest allowed input.",
+    ])
     if llm is None:
-        raise HTTPException(status_code=503, detail="Hint generation is unavailable. Please try again later.")
+        return fallback_hints
     prompt = (
         "Return JSON only: {\"hints\":[string,string,string]}. Generate three progressive hints for the supplied programming problem. "
         "Hint 1 is a gentle observation; Hint 2 names an algorithm/data structure and state; Hint 3 gives language-independent implementation steps. "
@@ -1085,7 +1090,7 @@ async def generate_problem_hints(
         return parsed
     except Exception as error:
         logger.warning("Hint generation failed for %s: %s", problem.id, error)
-        raise HTTPException(status_code=503, detail="Hint generation failed. Please retry shortly.")
+        return fallback_hints
 
 # ==========================================
 # Code Execution & Submission Endpoints
@@ -1242,6 +1247,12 @@ async def submit_and_evaluate_code(
         )
 
     exec_result = execution_outcome
+    if exec_result.get("execution_status") == "system_error":
+        logger.error("Sandbox execution service was unavailable: %s", exec_result.get("compile_error"))
+        raise HTTPException(
+            status_code=503,
+            detail="Code execution service is temporarily unavailable. Please retry your submission.",
+        )
     # The agent workflow needs verdicts and counts, not the input/output of a
     # private judge case. Redact only after the execution task has completed.
     safe_exec_result = redact_hidden_execution(exec_result)
@@ -1410,10 +1421,18 @@ async def regenerate_submission_revision(
     }
     revision = (await revision_node(state)).get("improved_code") or {}
     if revision.get("revision_source") != "ai" or not revision.get("improved_code"):
-        raise HTTPException(
-            status_code=503,
-            detail="A task-specific rewrite could not be generated right now. Check the AI provider connection and try again.",
-        )
+        # AI code generation is optional.  Preserve task-specific guidance so
+        # a student still receives a useful next step when the provider is
+        # unavailable, but never label it as generated or verified code.
+        revision = dict(revision)
+        revision["verification"] = {
+            "status": "guidance_only",
+            "verified": False,
+            "message": "Task-specific guidance is available, but no generated code was produced or verified.",
+        }
+        submission.improved_code = revision
+        db.commit()
+        return {"improved_code": revision}
 
     revision = await verify_generated_revision(
         revision, submission.language, load_problem_cases(db, problem, public_only=False),
@@ -2719,9 +2738,61 @@ def get_assignment(
 
 # ============ Instructor Analytics APIs ============
 
-def similarity_tokens(code: str) -> set[tuple[str, ...]]:
-    """Create identifier-normalized token shingles for a conservative overlap screen."""
-    raw_tokens = re.findall(r"[A-Za-z_][A-Za-z_0-9]*|\d+(?:\.\d+)?|==|!=|<=|>=|\S", code or "")
+def _similarity_source_without_comments(code: str, language: Optional[str] = None) -> str:
+    """Remove common source comments without treating comment text as code.
+
+    This intentionally keeps C/C++ preprocessor directives and quoted strings
+    intact.  It is a lightweight lexical pass for the overlap screen, not a
+    language parser; AST analysis remains responsible for structural facts.
+    """
+    source, output, index = code or "", [], 0
+    hash_starts_comment = (language or "").lower() not in {"c", "cpp", "c++", "objective-c", "objective-cpp"}
+    line_start = True
+    while index < len(source):
+        char, next_char = source[index], source[index + 1] if index + 1 < len(source) else ""
+        if char in {"'", '"'}:
+            quote = char
+            output.append(char)
+            index += 1
+            while index < len(source):
+                output.append(source[index])
+                if source[index] == "\\" and index + 1 < len(source):
+                    index += 1
+                    output.append(source[index])
+                elif source[index] == quote:
+                    index += 1
+                    break
+                index += 1
+            line_start = False
+            continue
+        if char == "/" and next_char == "*":
+            end = source.find("*/", index + 2)
+            index = len(source) if end < 0 else end + 2
+            continue
+        if char == "/" and next_char == "/":
+            end = source.find("\n", index + 2)
+            index = len(source) if end < 0 else end
+            continue
+        if char == "#" and hash_starts_comment:
+            if not (line_start and re.match(r"#\s*include\b", source[index:])):
+                end = source.find("\n", index + 1)
+                index = len(source) if end < 0 else end
+                continue
+        output.append(char)
+        line_start = char == "\n" or (line_start and char.isspace())
+        index += 1
+    return "".join(output)
+
+
+def similarity_tokens(code: str, language: Optional[str] = None) -> set[tuple[str, ...]]:
+    """Create identifier-normalized token shingles for a conservative overlap screen.
+
+    Comments are deliberately discarded.  A class-provided starter comment or
+    a student's explanatory notes should never be the reason two submissions
+    become a review lead; the comparison is about executable structure.
+    """
+    source = _similarity_source_without_comments(code, language)
+    raw_tokens = re.findall(r"[A-Za-z_][A-Za-z_0-9]*|\d+(?:\.\d+)?|==|!=|<=|>=|\S", source)
     keywords = {"if", "else", "for", "while", "return", "def", "class", "function", "int", "float", "double", "string", "const", "let", "var", "void", "public", "private", "new", "true", "false", "null", "None", "import", "from", "include", "using", "namespace", "try", "catch", "break", "continue"}
     tokens = [token if token in keywords or not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", token) else "IDENT" for token in raw_tokens]
     return {tuple(tokens[index:index + 5]) for index in range(max(0, len(tokens) - 4))}
@@ -2792,7 +2863,8 @@ def instructor_similarity_cases(db: Session, instructor_id: int, course_id: Opti
             sub_b, _assign_b, _course_b, student_b, _problem_b = right
             if student_a.student_id == student_b.student_id:
                 continue
-            tokens_a, tokens_b = similarity_tokens(sub_a.code), similarity_tokens(sub_b.code)
+            tokens_a = similarity_tokens(sub_a.code, sub_a.language)
+            tokens_b = similarity_tokens(sub_b.code, sub_b.language)
             if not tokens_a or not tokens_b:
                 continue
             overlap = len(tokens_a & tokens_b) / len(tokens_a | tokens_b)
