@@ -28,10 +28,17 @@ async def score_projection_node(state: EvaluationState) -> Dict[str, Any]:
         "assumptions": [],
         "message": "Submit revised code to the judge to receive a verified score.",
     }
+    revision = state.get("improved_code") or {}
+    verification = revision.get("verification") if isinstance(revision, dict) else {}
+    verification_status = str((verification or {}).get("status") or "")
     if correctness is None or raw_score is None:
         return {"projected_score": unavailable, "status": "complete"}
     if correctness >= 100.0:
         unavailable["message"] = "This submission already passed all evaluated cases; a new score requires a newly submitted revision."
+        return {"projected_score": unavailable, "status": "complete"}
+
+    if verification_status == "verification_failed":
+        unavailable["message"] = "The displayed generated draft did not pass every evaluated case, so no score projection is shown for it."
         return {"projected_score": unavailable, "status": "complete"}
 
     expected_score = max(current_score, raw_score)
@@ -48,6 +55,9 @@ async def score_projection_node(state: EvaluationState) -> Dict[str, Any]:
         ],
         "message": "This is an expected score scenario, not a verified result. Submit the exact revised code to the judge to confirm it.",
     }
+    if verification_status == "verified_passed":
+        result["revision_verification"] = "passed_all_evaluated_cases"
+        result["message"] = "The displayed generated revision passed every evaluated case. Its final official score still requires a student submission, because complexity and style are assessed from the submitted code."
     return {
         "projected_score": result,
         "status": "complete"

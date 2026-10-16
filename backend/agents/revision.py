@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from agents.base import load_prompt, invoke_agent
+from agents.revision_verification import unverified_revision
 from workflow.state import EvaluationState
 
 
@@ -79,4 +80,7 @@ async def revision_node(state: EvaluationState) -> Dict[str, Any]:
 
     result = dict(result)
     result["revision_source"] = "fallback" if used_fallback else "ai"
+    result["verification"] = unverified_revision(
+        "This generated draft has not been judged yet."
+    )
     return {"improved_code": result}

@@ -104,6 +104,9 @@ def build_evidence_feedback(state: EvaluationState) -> Dict[str, Any]:
         values = style.get(key) or []
         if isinstance(values, list):
             style_findings.extend(str(value) for value in values if value)
+    # Comments are optional documentation, not a grading priority. Keep the
+    # feedback focused on concrete structure/readability evidence instead.
+    style_findings = [finding for finding in style_findings if "comment" not in finding.lower()]
     for finding in _unique(style_findings, 1):
         weaknesses.append(finding)
         steps.append(finding)

@@ -8,7 +8,7 @@ Rules:
 - Use the supplied public execution results and assessment findings to decide what to change. Do not infer or mention hidden test cases.
 - If the submitted solution already appears correct and no evidence supports a change, return the student's code unchanged and explain that no code change is justified.
 - Make only changes that are supported by this problem and submission. Do not invent requirements or claim unverified performance gains.
-- Include concise comments explaining improvements.
+- Do not add comments merely to increase style marks. Prefer clear structure and names; comments are only appropriate when they explain non-obvious reasoning.
 
 Return ONLY this JSON without markdown formatting:
 {

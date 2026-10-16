@@ -32,6 +32,9 @@ class EvaluationState(TypedDict):
     feedback: Optional[Dict[str, Any]]
     recommendations: Optional[Dict[str, Any]]
     improved_code: Optional[Dict[str, Any]]
+    # Backend-only judge inputs for validating generated revisions. Revision
+    # generation never reads this field, so private cases never reach the AI.
+    revision_test_cases: Optional[List[Dict[str, Any]]]
     learning_analytics: Optional[Dict[str, Any]]
     projected_score: Optional[Dict[str, Any]]
     

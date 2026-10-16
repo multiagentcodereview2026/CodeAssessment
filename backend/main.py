@@ -80,6 +80,7 @@ from docker_runner.executor import execute_code_sandboxed
 from agents.complexity import analyze_student_complexity, unavailable_analysis
 from agents.base import llm, extract_clean_json
 from agents.revision import revision_node
+from agents.revision_verification import summarize_revision_verification, unverified_revision
 from workflow.graph import evaluation_graph
 from workflow.state import EvaluationState
 from instructor_repository import (
@@ -493,6 +494,34 @@ def student_submission_details(submission):
         student_view=True,
     )
     return SubmissionDetails(**payload)
+
+
+async def verify_generated_revision(revision, language, test_cases):
+    """Judge generated code before presenting it as a usable reference.
+
+    Only an allowlisted verdict/count summary is persisted. The test inputs and
+    outputs remain in the judge and are never copied into the revision payload.
+    """
+    if not isinstance(revision, dict) or revision.get("revision_source") != "ai":
+        return revision
+    code = str(revision.get("improved_code") or "").strip()
+    if not code or not test_cases:
+        safe = dict(revision)
+        safe["verification"] = unverified_revision("No judge cases were available to verify this generated draft.")
+        return safe
+    safe = dict(revision)
+    try:
+        outcome = await execute_code_sandboxed(
+            source_code=code,
+            language=language,
+            test_cases=test_cases,
+            stop_on_first_failure=False,
+        )
+        safe["verification"] = summarize_revision_verification(outcome)
+    except Exception as error:
+        logger.warning("Generated revision verification failed: %s", error)
+        safe["verification"] = unverified_revision("The judge was unavailable, so this generated draft could not be verified.")
+    return safe
 
 app = FastAPI(
     title="Explainable Multi-Agent AI Code Evaluator (Production API)",
@@ -1258,6 +1287,7 @@ async def submit_and_evaluate_code(
         "feedback": None,
         "recommendations": None,
         "improved_code": None,
+        "revision_test_cases": test_cases,
         "learning_analytics": None,
         "projected_score": None,
         "status": "running",
@@ -1383,6 +1413,9 @@ async def regenerate_submission_revision(
             detail="A task-specific rewrite could not be generated right now. Check the AI provider connection and try again.",
         )
 
+    revision = await verify_generated_revision(
+        revision, submission.language, load_problem_cases(db, problem, public_only=False),
+    )
     submission.improved_code = revision
     db.commit()
     return {"improved_code": revision}
