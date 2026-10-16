@@ -98,6 +98,7 @@ export const AssignmentsManagerView: React.FC = () => {
   const [editHasSubmissions, setEditHasSubmissions] = useState(false);
   const [editProblemIds, setEditProblemIds] = useState<string[]>([]);
   const [editCourseId, setEditCourseId] = useState('');
+  const [editRevisionPolicy, setEditRevisionPolicy] = useState<'HINTS_ONLY' | 'EXPLAIN_CHANGES' | 'VERIFIED_REFERENCE'>('VERIFIED_REFERENCE');
 
   const openEditModal = (assignment: Assignment & { courseId?: number }) => {
     setEditAssignmentId(String(assignment.id));
@@ -108,6 +109,7 @@ export const AssignmentsManagerView: React.FC = () => {
     setEditHasSubmissions(assignment.submittedCount > 0);
     setEditProblemIds(assignment.problemIds || []);
     setEditCourseId(String(assignment.courseId || ''));
+    setEditRevisionPolicy(assignment.revisionPolicy || 'VERIFIED_REFERENCE');
     setIsEditModalOpen(true);
   };
 
@@ -125,7 +127,8 @@ export const AssignmentsManagerView: React.FC = () => {
           description: editHasSubmissions ? undefined : editDescription.trim(),
           due_date: editHasSubmissions ? undefined : (editDueDate ? new Date(editDueDate).toISOString() : null),
           status: editStatus,
-          problem_ids: editHasSubmissions ? undefined : editProblemIds
+          problem_ids: editHasSubmissions ? undefined : editProblemIds,
+          revision_policy: editRevisionPolicy
         })
       });
       if (!response.ok) {
@@ -211,6 +214,14 @@ export const AssignmentsManagerView: React.FC = () => {
               <input type="date" value={editDueDate} onChange={(event) => setEditDueDate(event.target.value)} disabled={editHasSubmissions} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 disabled:bg-slate-100" />
             </label>
           </div>
+          <label className="block font-semibold text-slate-700">AI learning support
+            <select value={editRevisionPolicy} onChange={(event) => setEditRevisionPolicy(event.target.value as typeof editRevisionPolicy)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5">
+              <option value="HINTS_ONLY">Hints only — no generated revision</option>
+              <option value="EXPLAIN_CHANGES">Explain changes — no full code</option>
+              <option value="VERIFIED_REFERENCE">Verified reference code after assessment</option>
+            </select>
+            <span className="mt-1 block text-xs font-normal text-slate-500">This setting may be changed after submissions; problem content remains locked.</span>
+          </label>
           <label className="block font-semibold text-slate-700">AI learning support
             <select value={revisionPolicy} onChange={(event) => setRevisionPolicy(event.target.value as typeof revisionPolicy)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5">
               <option value="HINTS_ONLY">Hints only — no generated revision</option>
