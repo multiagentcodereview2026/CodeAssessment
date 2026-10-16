@@ -1287,7 +1287,6 @@ async def submit_and_evaluate_code(
         "feedback": None,
         "recommendations": None,
         "improved_code": None,
-        "revision_test_cases": test_cases,
         "learning_analytics": None,
         "projected_score": None,
         "status": "running",
@@ -1393,6 +1392,9 @@ async def regenerate_submission_revision(
     ).first()
     if not problem:
         raise HTTPException(status_code=404, detail="Problem not found")
+    policy = getattr(submission.assignment, "revision_policy", "VERIFIED_REFERENCE") if submission.assignment_id else "VERIFIED_REFERENCE"
+    if policy == "HINTS_ONLY":
+        raise HTTPException(status_code=403, detail="Your instructor has enabled hints only for this assignment.")
 
     state: EvaluationState = {
         "problem": {
@@ -1416,6 +1418,10 @@ async def regenerate_submission_revision(
     revision = await verify_generated_revision(
         revision, submission.language, load_problem_cases(db, problem, public_only=False),
     )
+    if policy == "EXPLAIN_CHANGES":
+        revision = dict(revision)
+        revision["improved_code"] = ""
+        revision["verification"] = {"status": "explanation_only", "verified": False, "message": "Your instructor allows explanations of changes but not full revised code for this assignment."}
     submission.improved_code = revision
     db.commit()
     return {"improved_code": revision}
@@ -2526,6 +2532,7 @@ def get_student_course_assignments(
             course_title=enrollment.course.title,
             due_date=assignment.due_date,
             status=assignment.status,
+            revision_policy=assignment.revision_policy,
             problems=[link.problem_id for link in links],
             problem_titles=[problem.title for problem in problems if problem is not None],
         ))
@@ -2572,6 +2579,7 @@ def create_assignment(
             course_id=assignment.course_id,
             due_date=assignment.due_date,
             status=assignment.status,
+            revision_policy=assignment.revision_policy,
         )
         db.add(new_assignment)
         db.flush()
@@ -2607,6 +2615,7 @@ def create_assignment(
         course_id=new_assignment.course_id,
         due_date=new_assignment.due_date,
         status=new_assignment.status,
+        revision_policy=new_assignment.revision_policy,
         created_at=new_assignment.created_at,
         problems=assignment.problem_ids
     )
@@ -2676,6 +2685,7 @@ def update_assignment(
         course_id=assignment.course_id,
         due_date=assignment.due_date,
         status=assignment.status,
+        revision_policy=assignment.revision_policy,
         created_at=assignment.created_at,
         problems=[link.problem_id for link in links],
     )

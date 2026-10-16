@@ -8,8 +8,6 @@ from agents.style import style_node
 from agents.aggregation import aggregation_node
 from agents.explainability import explainability_node
 from agents.recommendation import recommendation_node
-from agents.revision import revision_node
-from agents.revision_verification_node import revision_verification_node
 from agents.projection import score_projection_node
 
 def check_compilation_failure(state: EvaluationState) -> str:
@@ -32,8 +30,6 @@ def build_graph():
     builder.add_node("aggregation_node", aggregation_node)
     builder.add_node("explainability_node", explainability_node)
     builder.add_node("recommendation_node", recommendation_node)
-    builder.add_node("revision_node", revision_node)
-    builder.add_node("revision_verification_node", revision_verification_node)
     builder.add_node("score_projection_node", score_projection_node)
 
     # 2. Sequential & Conditional Flow
@@ -60,9 +56,9 @@ def build_graph():
     # 5. Pedagogical and Revision Flow
     builder.add_edge("aggregation_node", "explainability_node")
     builder.add_edge("explainability_node", "recommendation_node")
-    builder.add_edge("recommendation_node", "revision_node")
-    builder.add_edge("revision_node", "revision_verification_node")
-    builder.add_edge("revision_verification_node", "score_projection_node")
+    # Official scoring should finish without waiting for optional AI code
+    # generation. Students may request a revision from the saved result later.
+    builder.add_edge("recommendation_node", "score_projection_node")
     builder.add_edge("score_projection_node", END)
 
     return builder.compile()
