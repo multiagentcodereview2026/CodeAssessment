@@ -736,8 +736,8 @@ export const ProblemWorkspace: React.FC = () => {
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-[1800px] space-y-4 pb-12">
-      {/* Top Breadcrumb & Action bar */}
-      <div className="flex items-center justify-between">
+      {/* Keep the workspace entry point quiet so the problem and editor lead. */}
+      <div className="flex items-center">
         <button
           onClick={() => {
             navigate(isInstructorProblem ? '/problems?view=instructor' : '/problems');
@@ -748,20 +748,7 @@ export const ProblemWorkspace: React.FC = () => {
           <span>{isInstructorProblem ? 'Back to Instructor Problems' : 'Back to Problem Bank'}</span>
         </button>
 
-        <div className="flex items-center gap-2 text-right">
-          <span className="text-xs text-slate-500">
-            {assignmentId
-              ? 'Coursework draft · run and submit to update the instructor'
-              : 'Browser draft only · independent practice does not update the instructor'}
-          </span>
-          <span className={`w-2 h-2 rounded-full ${assignmentId ? 'bg-indigo-500' : 'bg-amber-500'}`} />
-        </div>
       </div>
-
-      {!assignmentId && <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-        <div><b>Independent Practice.</b><span className="ml-1 text-amber-800">This editor draft is local until you submit it, and independent submissions do not update an instructor’s course analytics or similarity groups.</span></div>
-        <button type="button" onClick={() => navigate('/courses')} className="rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-800">Open My Courses</button>
-      </section>}
 
       {/* Main Split Grid */}
       <div className="grid min-w-0 grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(390px,1fr)_minmax(500px,1.2fr)] xl:grid-cols-[minmax(450px,1fr)_minmax(660px,1.2fr)]">
@@ -774,10 +761,6 @@ export const ProblemWorkspace: React.FC = () => {
                 {selectedProblem.title}
               </h1>
               <DifficultyBadge difficulty={selectedProblem.difficulty} />
-            </div>
-            <div className="flex items-center gap-4 text-xs text-slate-500">
-              <span>Acceptance: <strong className="text-slate-700">{selectedProblem.acceptanceRate}</strong></span>
-              <span>Complexity benchmark: <strong className="text-slate-700">Private during assessment</strong></span>
             </div>
           </div>
 
@@ -975,9 +958,6 @@ export const ProblemWorkspace: React.FC = () => {
                   <Send className="w-3.5 h-3.5" />
                   <span>Submit Code</span>
                 </button>
-                <span className={`text-[10px] ${canSubmit ? 'text-emerald-400' : 'text-slate-400'}`}>
-                  {canSubmit ? 'Examples passed · ready to submit' : code.trim() ? 'Run code and pass examples to submit' : 'Enter code to begin'}
-                </span>
               </div>
             </div>
 
