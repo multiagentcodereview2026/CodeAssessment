@@ -10,14 +10,14 @@ import {
   XCircle,
   Clock,
   HardDrive,
-  Sparkles,
   Layers,
   ArrowLeft,
   Terminal,
   Cpu,
   ShieldCheck,
   Check,
-  MoreHorizontal
+  MoreHorizontal,
+  LoaderCircle
 } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
@@ -954,11 +954,16 @@ export const ProblemWorkspace: React.FC = () => {
                   title={canSubmit ? 'Submit this code for a full assessment.' : 'Run this code and pass all sample cases to enable submission.'}
                   className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-slate-900 active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Submit Code</span>
+                  {isSubmitting ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  <span>{isSubmitting ? 'Assessing…' : 'Submit Code'}</span>
                 </button>
               </div>
             </div>
+
+            {isSubmitting && <div aria-live="polite" className="flex items-center gap-2 border-t border-slate-800 bg-slate-900 px-4 py-2 text-xs text-slate-300">
+              <LoaderCircle className="h-3.5 w-3.5 shrink-0 animate-spin text-indigo-300" />
+              Assessment in progress. Your code stays visible and is locked until the result is ready.
+            </div>}
 
             {/* Monaco keeps its own vertical scrollbar; page scrolling is not trapped. */}
             <div className={`${isEditorFullscreen ? 'flex-1 min-h-0' : 'h-[720px] min-h-[720px] lg:h-auto lg:min-h-0 lg:flex-1'} relative bg-slate-900 overflow-hidden`}>
@@ -991,24 +996,11 @@ export const ProblemWorkspace: React.FC = () => {
                   insertSpaces: true,
                   padding: { top: 14, bottom: 14 },
                   suggest: { showKeywords: true, showSnippets: true },
-                  quickSuggestions: { other: true, comments: false, strings: false }
+                  quickSuggestions: { other: true, comments: false, strings: false },
+                  readOnly: isSubmitting
                 }}
               />
             </div>
-
-            {/* AI Multi-Agent Assessment Loading Overlay */}
-            {isSubmitting && (
-              <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-md z-30 flex flex-col items-center justify-center p-6 text-center animate-fadeIn">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center text-white shadow-2xl shadow-indigo-500/50 mb-4 animate-bounce">
-                  <Sparkles className="w-8 h-8" />
-                </div>
-                <h3 className="text-lg font-extrabold text-white">
-                  Multi-Agent AI Assessment in Progress
-                </h3>
-                <p className="text-xs text-slate-400 max-w-sm mt-1 mb-6">Running the secure judge and assessment workflow. This service returns one final report, so individual agent stages cannot be shown as completed until the result is saved.</p>
-                <div className="w-full max-w-md bg-slate-900 rounded-2xl p-4 border border-slate-800 text-left text-xs text-slate-300"><div className="flex items-center gap-2.5"><div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" /><span className="font-semibold">Secure execution and assessment are running</span></div><p className="mt-2 text-slate-400">The report will show execution status, correctness, time and space complexity, and code style when the server completes.</p></div>
-              </div>
-            )}
           </div>
 
           {/* Test Case Output Drawer */}
