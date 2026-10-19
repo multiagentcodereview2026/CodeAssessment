@@ -1,0 +1,11 @@
+# Local Phase 2 verification only. Keep the existing CodeAssessment volumes intact.
+volumes:
+  postgres-data:
+    name: codeassessment_phase12_postgres-data
+  execution-work:
+    name: codeassessment_phase12_execution-work
+
+services:
+  execution-engine:
+    environment:
+      SANDBOX_VOLUME: codeassessment_phase12_execution-work

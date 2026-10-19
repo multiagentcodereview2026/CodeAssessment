@@ -98,10 +98,16 @@ def test_sandbox_commands_apply_isolation_and_read_only_runner_mount(monkeypatch
 
     monkeypatch.setattr(sandbox, "is_docker_available", lambda: True)
     monkeypatch.setattr(sandbox, "run_container_command", fake_run_container_command)
-    result = sandbox.execute_in_sandbox("int main(){return 0;}", get_language_config("cpp"), "", "")
+    result = sandbox.execute_in_sandbox(
+        "int main(){return 0;}", get_language_config("cpp"), "", "", time_limit=2
+    )
     assert result.status == VERDICT_ACCEPTED
     assert len(commands) == 2
     runner = commands[1]
+    timeout_index = runner.index("timeout")
+    assert runner[timeout_index + 1:timeout_index + 4] == [
+        "--signal=TERM", "--kill-after=1s", "2s"
+    ]
     for option in ("--network", "none", "--read-only", "--pids-limit", "--memory", "--cpus", "--cap-drop", "ALL", "--security-opt", "no-new-privileges"):
         assert option in runner
     mount_index = runner.index("-v") + 1

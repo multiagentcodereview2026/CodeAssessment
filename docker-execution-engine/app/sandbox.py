@@ -211,12 +211,12 @@ def execute_in_sandbox(
         if time_limit
         else int(get_env_limit("EXECUTION_TIMEOUT_SECONDS", "5"))
     )
-    # Docker Desktop may briefly delay an otherwise-ready process under
-    # concurrent runner creation. Keep the judge bounded, while giving that
-    # platform scheduling delay a small allowance.
-    runner_timeout_sec = timeout_sec + int(
+    # The program's timeout must stay equal to the judge limit. Allow extra
+    # time only around the outer Docker command for scheduling and startup.
+    scheduling_grace_sec = int(
         get_env_limit("EXECUTION_DOCKER_SCHEDULING_GRACE_SECONDS", "3")
     )
+    timeout_kill_grace_sec = 1
 
     pids_limit = get_env_limit(
         "EXECUTION_MAX_PROCESSES",
@@ -344,8 +344,9 @@ def execute_in_sandbox(
             # disposable runner container and enforces the real judge limit.
             runner_cmd = [
                 "timeout",
-                "--signal=KILL",
-                f"{runner_timeout_sec}s",
+                "--signal=TERM",
+                f"--kill-after={timeout_kill_grace_sec}s",
+                f"{timeout_sec}s",
             ] + lang_config.run_cmd
 
             run_cmd = [
@@ -391,7 +392,12 @@ def execute_in_sandbox(
             returncode, stdout_data, stderr_data, timed_out, output_limited = run_container_command(
                 cmd_list=run_cmd,
                 container_name=run_name,
-                timeout_seconds=runner_timeout_sec + int(get_env_limit("EXECUTION_DOCKER_STARTUP_GRACE_SECONDS", "5")),
+                timeout_seconds=(
+                    timeout_sec
+                    + timeout_kill_grace_sec
+                    + scheduling_grace_sec
+                    + int(get_env_limit("EXECUTION_DOCKER_STARTUP_GRACE_SECONDS", "5"))
+                ),
                 input_str=formatted_input,
                 max_output_bytes=max_output_bytes
             )
@@ -422,7 +428,7 @@ def execute_in_sandbox(
         if timed_out or returncode == 124:
             return SandboxRunResult(
                 status=VERDICT_TIME_LIMIT_EXCEEDED,
-                runtime_ms=runner_timeout_sec * 1000,
+                runtime_ms=timeout_sec * 1000,
                 memory_kb=0,
                 compile_success=True,
                 compile_stderr=None,
