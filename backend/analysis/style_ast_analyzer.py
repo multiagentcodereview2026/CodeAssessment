@@ -298,6 +298,62 @@ def _generic_metrics(source: str, language: str = "") -> tuple[list[dict[str, An
         line = next((i for i, text in enumerate(lines, 1) if len(text) > 120), None)
         readability.append(_finding("readability", "One or more lines exceed 120 characters.", "minor", 3, line))
     nonempty_lines = [line for line in source.splitlines() if line.strip()]
+    # Formatting is observable source evidence, not an AI judgement.  Track
+    # executable lines inside brace-delimited blocks that are flush with the
+    # parent declaration.  A single compact line is allowed; repeated missing
+    # indentation across a block is a material readability issue.
+    brace_depth = 0
+    unindented_block_lines: list[int] = []
+    for line_number, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        closing_prefix = len(stripped) - len(stripped.lstrip("}"))
+        effective_depth = max(0, brace_depth - closing_prefix)
+        leading = len(line) - len(line.lstrip(" \t"))
+        if (
+            effective_depth > 0
+            and not stripped.startswith("}")
+            and leading < min(4, effective_depth * 4)
+        ):
+            unindented_block_lines.append(line_number)
+        brace_depth += stripped.count("{") - stripped.count("}")
+        brace_depth = max(0, brace_depth)
+    if len(unindented_block_lines) >= 3:
+        readability.append(_finding(
+            "readability",
+            "Block contents are not indented consistently.",
+            "major",
+            8,
+            unindented_block_lines[0],
+        ))
+        modularity.append(_finding(
+            "modularity",
+            "Unindented nested blocks make the control-flow structure difficult to review.",
+            "moderate",
+            4,
+            unindented_block_lines[0],
+        ))
+        maintainability.append(_finding(
+            "maintainability",
+            "Inconsistent block formatting increases the risk of unsafe changes.",
+            "moderate",
+            5,
+            unindented_block_lines[0],
+        ))
+    compact_control_headers = [
+        line_number
+        for line_number, line in enumerate(lines, 1)
+        if re.search(r"\b(?:if|for|while|switch)\(", line)
+    ]
+    if len(compact_control_headers) >= 2:
+        readability.append(_finding(
+            "readability",
+            "Control-flow headers omit conventional spacing.",
+            "minor",
+            3,
+            compact_control_headers[0],
+        ))
     depth = max(((len(line) - len(line.lstrip(" \t"))) // 4 for line in nonempty_lines), default=0)
     if depth >= 5:
         readability.append(_finding("readability", "Control flow appears deeply nested.", "moderate", 5, 1))

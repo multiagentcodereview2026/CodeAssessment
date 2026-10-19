@@ -60,6 +60,33 @@ def _has_braced_loop_nesting(source: str) -> bool:
     ))
 
 
+def _has_indentation_nested_input_loops(source: str) -> bool:
+    """Detect Python loops nested by indentation with input-derived bounds.
+
+    This is intentionally limited to loops whose iterable expression visibly
+    depends on a size symbol or collection length.  It avoids multiplying
+    sequential loops and avoids treating a fixed ``range(10)`` as scalable.
+    """
+    active: list[tuple[int, bool]] = []
+    for line in source.splitlines():
+        match = re.match(r"^(\s*)for\s+.+?\s+in\s+(.+):\s*$", line)
+        if not match:
+            continue
+        indent = len(match.group(1).expandtabs(4))
+        while active and active[-1][0] >= indent:
+            active.pop()
+        iterable = match.group(2)
+        input_dependent = bool(re.search(
+            r"\b(?:n|m|size|length|rows|cols)\b|\b(?:len|range)\s*\([^)]*\.?(?:size|length)?",
+            iterable,
+            re.IGNORECASE,
+        ))
+        if input_dependent and any(parent_input for _, parent_input in active):
+            return True
+        active.append((indent, input_dependent))
+    return False
+
+
 # ─── Recursion Detection ────────────────────────────────────────────────────────
 
 def _detect_recursion(source: str) -> tuple[bool, int]:
@@ -459,6 +486,599 @@ def _has_only_constant_bound_loops(source: str) -> bool:
     return found
 
 
+def _uses_only_fixed_capacity_auxiliary_storage(source: str) -> bool:
+    """Detect literal-sized scratch storage from allocation structure only."""
+    src = source.lower()
+    has_fixed_allocation = bool(re.search(
+        r"(?:vector\s*<[^>]+>\s+\w+\s*\(|new\s+\w+\s*\[|new\s+array\s*\()"
+        r"\s*\d+\b|malloc\s*\(\s*\d+\s*\*\s*sizeof\s*\(",
+        src,
+    ))
+    has_small_literal_return = bool(re.search(
+        r"\breturn\s+(?:new\s+\w+\s*\[\]\s*\{[^{}]{0,120}\}|\{[^{}]{0,120}\})\s*;",
+        src,
+    ))
+    has_input_sized_allocation = bool(re.search(
+        r"(?:vector\s*<[^>]+>\s+\w+\s*\(|new\s+\w+\s*\[|new\s+array\s*\()"
+        r"\s*(?:n|m|k|size|length|\w+\.size\s*\(|\w+\.length)",
+        src,
+    )) or bool(re.search(r"malloc\s*\(\s*(?!\d+\s*\*\s*sizeof\s*\()[^)]", src))
+    grows_after_creation = bool(re.search(
+        r"\.\s*(?:push_back|append|add|insert|push|unshift)\s*\(", src,
+    ))
+    return (has_fixed_allocation or has_small_literal_return) and not has_input_sized_allocation and not grows_after_creation
+
+
+def _copies_an_input_sized_row(source: str) -> bool:
+    """Detect a local one-dimensional copy derived from an input collection.
+
+    This is a declaration/data-flow fact rather than an algorithm label.  A
+    local vector/list copied from a row or terminal element is extra linear
+    storage even when later updates happen in place.
+    """
+    src = source.lower()
+    return bool(re.search(
+        r"\b(?:vector\s*<[^>]+>|list\s*<[^>]+>|deque\s*<[^>]+>|array\s*<[^>]+>)"
+        r"\s+\w+\s*=\s*(?:[a-z_]\w*\s*\.\s*back\s*\(\)|[a-z_]\w*\s*\[[^\]]+\])",
+        src,
+    ))
+
+
+def _has_input_derived_growing_text(source: str) -> bool:
+    """Detect a local text buffer grown once per input element.
+
+    The proof joins a local empty-string declaration, an input traversal, and
+    a mutation of that same buffer. It captures auxiliary text construction
+    without depending on an algorithm or identifier name.
+    """
+    src = source.lower()
+    buffers = re.findall(
+        r"\b(?:std::)?string\s+([a-z_]\w*)\s*=\s*\"\"|"
+        r"\b(?:let|var|const)\s+([a-z_]\w*)\s*=\s*['\"]{2}",
+        src,
+    )
+    names = {name for pair in buffers for name in pair if name}
+    if not names:
+        return False
+    has_input_traversal = bool(re.search(
+        r"\bfor\s*\([^)]*(?:\.size\s*\(|\.length|:)"  # C++/Java/JS
+        r"|\bfor\s*\([^)]*\bof\b"                      # JavaScript
+        r"|\bfor\s+\w+\s+in\s+\w+",                 # Python/JS
+        src,
+    ))
+    return has_input_traversal and any(
+        re.search(rf"\b{re.escape(name)}\s*\+=", src)
+        or re.search(rf"\b{re.escape(name)}\s*\.append\s*\(", src)
+        for name in names
+    )
+
+
+def _has_nested_collection_edge_growth(source: str) -> bool:
+    """Detect a vertex-indexed collection expanded once per relationship item.
+
+    A sized outer collection of inner collections plus repeated additions into
+    indexed inner collections retains both vertices and relationships. This is
+    a data-layout fact, independent of graph or algorithm naming.
+    """
+    src = source.lower()
+    names = set(re.findall(r"\b([a-z_]\w*)\s*=\s*\[\[\]\s+for\s+_\s+in\s+range", src))
+    names.update(re.findall(
+        r"\b(?:std::)?vector\s*<\s*(?:std::)?vector\s*<[^>]+>\s*>\s*([a-z_]\w*)\s*\(",
+        src,
+    ))
+    names.update(re.findall(
+        r"\b(?:list|arraylist)\s*<\s*(?:list|arraylist)\s*<[^>]+>\s*>\s*([a-z_]\w*)",
+        src,
+    ))
+    for name in names:
+        indexed_growth = (
+            rf"\b{re.escape(name)}\s*\[[^;\n]*\]\s*\.\s*(?:append|push_back)\s*\("
+            rf"|\b{re.escape(name)}\s*\.\s*get\s*\([^)]*\)\s*\.\s*add\s*\("
+        )
+        if re.search(indexed_growth, src):
+            return True
+    return False
+
+
+def _has_recursive_leaf_path_materialization(source: str) -> bool:
+    """Detect a recursive traversal copying its current path at result leaves.
+
+    Copying an input-depth path for potentially many leaves adds quadratic
+    worst-case work to a linear tree traversal. The check uses only recursive
+    child calls plus explicit container/array copy structure.
+    """
+    src = source.lower()
+    recursive_children = bool(re.search(
+        r"\b[a-z_]\w*\s*\(\s*[a-z_]\w*(?:\.|->)(?:left|right)\b",
+        src,
+    ))
+    if not recursive_children:
+        return False
+    python_copy = bool(re.search(
+        r"\.append\s*\(\s*list\s*\(\s*[a-z_]\w*\s*\)\s*\)"
+        r"|\.push\s*\(\s*\[\s*\.\.\.\s*[a-z_]\w*\s*\]\s*\)",
+        src,
+    ))
+    c_copy = bool(re.search(
+        r"malloc\s*\(\s*[a-z_]\w*\s*\*\s*sizeof\s*\("  # path-length allocation
+        r"[\s\S]{0,500}?\bfor\s*\([^;]*;[^;]*<\s*[a-z_]\w*;[^{]*\)"
+        r"[\s\S]{0,250}?\[[^\]]+\]\s*=\s*[a-z_]\w*\s*\[",
+        src,
+    ))
+    path_buffers = set(re.findall(r"\b([a-z_]\w*)\s*\.\s*pop_back\s*\(", src))
+    cpp_copy = any(
+        re.search(rf"\b[a-z_]\w*\s*\.\s*push_back\s*\(\s*{re.escape(path)}\s*\)", src)
+        and re.search(rf"\b{re.escape(path)}\s*\.\s*push_back\s*\(", src)
+        for path in path_buffers
+    )
+    java_copy = bool(re.search(
+        r"\.add\s*\(\s*new\s+(?:array)?list\s*<[^>]*>\s*\(\s*[a-z_]\w*\s*\)",
+        src,
+    ))
+    return python_copy or c_copy or cpp_copy or java_copy
+
+
+def _has_monotonic_shared_pointer_loops(source: str) -> bool:
+    """Detect nested scans that share two non-resetting boundary pointers.
+
+    An inner scan that advances one of the same pointers as its enclosing scan
+    is amortized linear when neither pointer is reset.  This is derived from
+    loop predicates and updates only; it does not depend on algorithm names.
+    """
+    src = source.lower()
+    outer = re.search(
+        r"\bwhile\s*\(\s*([a-z_]\w*)\s*<\s*([a-z_]\w*)\s*\)", src,
+    )
+    if not outer:
+        return False
+    left, right = outer.groups()
+    tail = src[outer.end():]
+    shared_inner = re.search(
+        rf"\bwhile\s*\(\s*{re.escape(left)}\s*<\s*{re.escape(right)}\b[^)]*\)", tail,
+    )
+    if not shared_inner:
+        return False
+    increments = bool(re.search(rf"\b{re.escape(left)}\s*(?:\+\+|\+=\s*1)", tail))
+    decrements = bool(re.search(rf"\b{re.escape(right)}\s*(?:--|-=\s*1)", tail))
+    if not (increments and decrements):
+        return False
+    # Reinitialization inside the enclosing region breaks amortization.
+    reset_pattern = rf"\b(?:{re.escape(left)}|{re.escape(right)})\s*=\s*(?:0|[^;\n]*\.length\s*-\s*1)"
+    return not bool(re.search(reset_pattern, tail))
+
+
+def _has_input_sized_slice_reduction_inside_loop(source: str) -> bool:
+    """Detect a full collection reduction repeated by an input-sized loop.
+
+    Calls such as ``max(values[:i])`` are linear in the slice length. When
+    repeated by a loop bounded by ``n`` or ``len(values)``, their work is
+    quadratic. This uses loop bounds and slice syntax only.
+    """
+    src = source.lower()
+    has_input_loop = bool(re.search(
+        r"\bfor\s+\w+\s+in\s+range\s*\([^)]*(?:\bn\b|len\s*\()[^)]*\)",
+        src,
+    ))
+    has_slice_reduction = bool(re.search(
+        r"\b(?:max|min|sum|any|all)\s*\(\s*\w+\s*\[[^\]]*:[^\]]*\]",
+        src,
+    ))
+    return has_input_loop and has_slice_reduction
+
+
+def _has_constant_factor_progress_loop(source: str) -> bool:
+    """Detect a loop whose controlling variable changes by a fixed factor.
+
+    Dividing or multiplying a loop variable by a literal factor greater than
+    one yields logarithmic iterations. The variable is captured from the loop
+    condition and matched to its update; no identifier vocabulary is assumed.
+    """
+    src = source.lower()
+    for loop in re.finditer(r"\bwhile\s*\(([^)]*)\)\s*(?:\{([^{}]*)\}|([^;{}]*;))", src, re.DOTALL):
+        condition = loop.group(1)
+        body = loop.group(2) or loop.group(3) or ""
+        variables = set(re.findall(r"\b([a-z_]\w*)\b", condition))
+        for variable in variables:
+            if re.search(
+                rf"\b{re.escape(variable)}\s*(?:/=|\*=)\s*(?:[2-9]\d*|1\d+)\b",
+                body,
+            ):
+                return True
+            if re.search(
+                rf"\b{re.escape(variable)}\s*=\s*{re.escape(variable)}\s*(?:/|\*)\s*(?:[2-9]\d*|1\d+)\b",
+                body,
+            ):
+                return True
+    return False
+
+
+def _has_input_loop_with_derived_logarithmic_inner_loop(source: str) -> bool:
+    """Detect an input-sized loop whose inner loop halves a value derived from it.
+
+    The inner counter must be initialized from the enclosing iterator and then
+    changed by a fixed factor.  That establishes ``n`` outer iterations with
+    at most ``log n`` inner iterations, without relying on a function name or
+    an algorithm-specific pattern.
+    """
+    src = source.lower()
+    outer_pattern = re.compile(
+        r"\bfor\s*\(\s*(?:[a-z_][\w:<>\s*&]*\s+)?([a-z_]\w*)\s*=\s*[^;]+;"
+        r"\s*\1\s*(?:<=|<)\s*[^;]+;[^)]*\)\s*\{",
+    )
+    for outer in outer_pattern.finditer(src):
+        iterator = outer.group(1)
+        depth = 1
+        end = outer.end()
+        cursor = end
+        while cursor < len(src) and depth:
+            if src[cursor] == "{":
+                depth += 1
+            elif src[cursor] == "}":
+                depth -= 1
+            cursor += 1
+        if depth:
+            continue
+        body = src[end:cursor - 1]
+        derived = re.findall(
+            rf"(?:\b(?:int|long|size_t|let|var|const)\s+|,)\s*([a-z_]\w*)\s*=\s*{re.escape(iterator)}\b",
+            body,
+        )
+        for variable in derived:
+            while_pattern = re.compile(
+                rf"\bwhile\s*\(\s*{re.escape(variable)}\s*>\s*0\s*\)"
+                rf"\s*\{{(?P<inner>.*?)\}}",
+                re.DOTALL,
+            )
+            for inner in while_pattern.finditer(body):
+                if re.search(
+                    rf"\b{re.escape(variable)}\s*(?:(?:>>=|<<=)\s*1\b|(?:/=|\*=)\s*(?:[2-9]\d*)\b)",
+                    inner.group("inner"),
+                ):
+                    return True
+
+    # Python has indentation rather than braces. Keep the same proof: the
+    # derived counter and its factor-changing loop must both remain inside one
+    # input-bounded ``for`` body.
+    lines = source.lower().splitlines()
+    for index, line in enumerate(lines):
+        outer = re.match(
+            r"^(?P<indent>[ \t]*)for\s+(?P<iterator>[a-z_]\w*)\s+in\s+range\s*\([^)]*\)\s*:\s*$",
+            line,
+        )
+        if not outer:
+            continue
+        parent_indent = len(outer.group("indent").expandtabs(4))
+        iterator = outer.group("iterator")
+        body_lines: list[str] = []
+        for child in lines[index + 1:]:
+            if child.strip() and len(child) - len(child.lstrip(" \t")) <= parent_indent:
+                break
+            body_lines.append(child)
+        body = "\n".join(body_lines)
+        derived = re.findall(rf"\b([a-z_]\w*)\s*=\s*{re.escape(iterator)}\b", body)
+        for variable in derived:
+            if not re.search(rf"\bwhile\s+{re.escape(variable)}\s*>\s*0\s*:", body):
+                continue
+            if re.search(
+                rf"\b{re.escape(variable)}\s*(?://=|/=|>>=|<<=)\s*(?:1\b|[2-9]\d*|1\d+)",
+                body,
+            ):
+                return True
+    return False
+
+
+def _comparator_reordering_population_shape(source: str) -> str | None:
+    """Find a callback-based comparison reorder over a proven population.
+
+    The call shape is a mutable buffer, an element count, an element-width
+    expression, and a callback. The callee identifier is deliberately ignored:
+    only its structural argument shape establishes the comparison operation.
+    """
+    src = source.lower()
+    call = re.search(
+        r"\b[a-z_]\w*\s*\(\s*[^,]+\s*,\s*([a-z_]\w*)\s*,"
+        r"\s*sizeof\s*\([^)]*\)\s*,\s*&?\s*[a-z_]\w*\s*\)",
+        src,
+    )
+    if not call:
+        return None
+    count = call.group(1)
+    declaration = re.search(rf"\b(?:int|long|size_t)\s+{re.escape(count)}\s*=\s*([^;]+);", src)
+    if not declaration:
+        return "linear"
+    expression = declaration.group(1)
+    if "*" in expression and re.search(r"\b[a-z_]\w*\b", expression):
+        return "quadratic"
+    return "linear"
+
+
+def _has_multi_branch_numeric_recursion(source: str) -> bool:
+    """Detect recursion with at least two numeric state transitions per call.
+
+    A self-call that changes a numeric argument by a literal amount branches
+    the state space. Two or more such calls in one function body prove an
+    exponential recurrence unless a memoized lookup is present. Child-pointer
+    recursion does not satisfy this test, so ordinary tree traversal remains
+    linear.
+    """
+    src = source.lower()
+    for name in _defined_function_names(src):
+        for body in _function_bodies(src, name):
+            recursive_arguments = re.findall(rf"\b{re.escape(name)}\s*\(([^()]*)\)", body)
+            numeric_transitions = sum(
+                bool(re.search(r"\b[a-z_]\w*\s*[+-]\s*\d+\b", arguments))
+                for arguments in recursive_arguments
+            )
+            if numeric_transitions >= 2:
+                return True
+    return False
+
+
+def _defined_function_names(source: str) -> set[str]:
+    """Collect declared function names, excluding ordinary call expressions."""
+    names = set(re.findall(r"\bdef\s+([a-z_]\w*)\s*\(", source))
+    names.update(re.findall(r"\bfunction\s+([a-z_]\w*)\s*\(", source))
+    names.update(re.findall(
+        r"(?m)^\s*(?:static\s+)?(?:[a-z_][\w:<>]*\s*[*&]?\s+)+([a-z_]\w*)\s*\([^;{}]*\)\s*\{",
+        source,
+    ))
+    return names
+
+
+def _function_bodies(source: str, name: str) -> list[str]:
+    """Return lexical bodies for a named function without using its name as a hint.
+
+    The structural rules below need to distinguish a call made *inside* a
+    function from a same-named helper call made elsewhere in the program.
+    This small language-agnostic extractor supports brace-delimited functions
+    and indentation-delimited Python functions; it deliberately does not
+    infer anything from the function's spelling.
+    """
+    bodies: list[str] = []
+
+    for match in re.finditer(
+        rf"\b(?:def|function)\s+{re.escape(name)}\s*\([^\n]*\)\s*(?::|\{{)",
+        source,
+    ):
+        header = match.group(0)
+        if header.rstrip().endswith(":"):
+            line_start = source.rfind("\n", 0, match.start()) + 1
+            indent = len(source[line_start:match.start()]) - len(source[line_start:match.start()].lstrip())
+            body_start = source.find("\n", match.end()) + 1
+            if body_start == 0:
+                continue
+            body_end = len(source)
+            for next_line in re.finditer(r"(?m)^([^\n]*)$", source[body_start:]):
+                line = next_line.group(1)
+                if line.strip() and len(line) - len(line.lstrip()) <= indent:
+                    body_end = body_start + next_line.start()
+                    break
+            bodies.append(source[body_start:body_end])
+        else:
+            open_brace = source.find("{", match.start(), match.end())
+            depth = 0
+            for index in range(open_brace, len(source)):
+                if source[index] == "{":
+                    depth += 1
+                elif source[index] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        bodies.append(source[open_brace + 1:index])
+                        break
+
+    signature = re.compile(
+        rf"(?m)^\s*(?:static\s+)?(?:[a-z_][\w:<>]*\s*[*&]?\s+)+{re.escape(name)}\s*\([^;{{}}]*\)\s*\{{"
+    )
+    for match in signature.finditer(source):
+        open_brace = source.find("{", match.start(), match.end())
+        depth = 0
+        for index in range(open_brace, len(source)):
+            if source[index] == "{":
+                depth += 1
+            elif source[index] == "}":
+                depth -= 1
+                if depth == 0:
+                    bodies.append(source[open_brace + 1:index])
+                    break
+    return bodies
+
+
+def _has_state_dependent_loop_recursion(source: str) -> bool:
+    """Detect a recursive call for each numeric successor in a loop range.
+
+    The loop counter must start after the current state and be passed into the
+    self-call. This creates overlapping future choices; it is unlike a child
+    traversal, where the loop iterates an already-disjoint child collection.
+    """
+    src = source.lower()
+    for name in _defined_function_names(src):
+        bodies = _function_bodies(src, name)
+        if not bodies:
+            continue
+        python_loop = re.compile(
+            rf"\bfor\s+([a-z_]\w*)\s+in\s+range\s*\(\s*([a-z_]\w*)\s*\+\s*1\s*,[^)]*\)\s*:"
+            rf"[\s\S]{{0,500}}?\b{re.escape(name)}\s*\([^)]*\b\1\b",
+        )
+        c_loop = re.compile(
+            rf"\bfor\s*\(\s*[^;]*\b([a-z_]\w*)\s*=\s*([a-z_]\w*)\s*\+\s*1\s*;"
+            rf"[^;]+;[^)]*\)[\s\S]{{0,500}}?\b{re.escape(name)}\s*\([^)]*\b\1\b",
+        )
+        if any(python_loop.search(body) or c_loop.search(body) for body in bodies):
+            return True
+    return False
+
+
+def _with_constant_auxiliary_space(result: ComplexityAnalysis) -> ComplexityAnalysis:
+    return ComplexityAnalysis(
+        time_complexity=result.time_complexity,
+        space_complexity="O(1)",
+        confidence=result.confidence,
+        method=result.method,
+        status=result.status,
+        signals=[*result.signals, "structural:fixed-capacity-auxiliary-storage"],
+        dynamic_measurements=result.dynamic_measurements,
+        evidence_quality=result.evidence_quality,
+        explanation=result.explanation,
+    )
+
+
+def _with_linear_auxiliary_space(result: ComplexityAnalysis) -> ComplexityAnalysis:
+    return ComplexityAnalysis(
+        time_complexity=result.time_complexity,
+        space_complexity="O(n)",
+        confidence=result.confidence,
+        method=result.method,
+        status=result.status,
+        signals=[*result.signals, "structural:input-derived-linear-copy"],
+        dynamic_measurements=result.dynamic_measurements,
+        evidence_quality=result.evidence_quality,
+        explanation=result.explanation,
+    )
+
+
+def _with_vertex_edge_auxiliary_space(result: ComplexityAnalysis) -> ComplexityAnalysis:
+    return ComplexityAnalysis(
+        time_complexity=result.time_complexity,
+        space_complexity="O(V+E)",
+        confidence=result.confidence,
+        method=result.method,
+        status=result.status,
+        signals=[*result.signals, "structural:nested-collection-edge-growth"],
+        dynamic_measurements=result.dynamic_measurements,
+        evidence_quality=result.evidence_quality,
+        explanation=result.explanation,
+    )
+
+
+def _with_linear_time(result: ComplexityAnalysis) -> ComplexityAnalysis:
+    return ComplexityAnalysis(
+        time_complexity="O(n)",
+        space_complexity=result.space_complexity,
+        confidence=result.confidence,
+        method=result.method,
+        status=result.status,
+        signals=[*result.signals, "structural:shared-monotonic-boundaries"],
+        dynamic_measurements=result.dynamic_measurements,
+        evidence_quality=result.evidence_quality,
+        explanation=result.explanation,
+    )
+
+
+def _with_quadratic_time(result: ComplexityAnalysis) -> ComplexityAnalysis:
+    return ComplexityAnalysis(
+        time_complexity="O(n^2)",
+        space_complexity=result.space_complexity,
+        confidence=result.confidence,
+        method=result.method,
+        status=result.status,
+        signals=[*result.signals, "structural:input-slice-reduction-inside-loop"],
+        dynamic_measurements=result.dynamic_measurements,
+        evidence_quality=result.evidence_quality,
+        explanation=result.explanation,
+    )
+
+
+def _with_path_materialization_quadratic_time(result: ComplexityAnalysis) -> ComplexityAnalysis:
+    return ComplexityAnalysis(
+        time_complexity="O(n^2)",
+        space_complexity=result.space_complexity,
+        confidence=result.confidence,
+        method=result.method,
+        status=result.status,
+        signals=[*result.signals, "structural:recursive-leaf-path-materialization"],
+        dynamic_measurements=result.dynamic_measurements,
+        evidence_quality=result.evidence_quality,
+        explanation=result.explanation,
+    )
+
+
+def _with_cubic_time(result: ComplexityAnalysis) -> ComplexityAnalysis:
+    return ComplexityAnalysis(
+        time_complexity="O(n^3)",
+        space_complexity=result.space_complexity,
+        confidence=result.confidence,
+        method=result.method,
+        status=result.status,
+        signals=[*result.signals, "structural:input-slice-reduction-inside-nested-loops"],
+        dynamic_measurements=result.dynamic_measurements,
+        evidence_quality=result.evidence_quality,
+        explanation=result.explanation,
+    )
+
+
+def _with_logarithmic_time(result: ComplexityAnalysis) -> ComplexityAnalysis:
+    return ComplexityAnalysis(
+        time_complexity="O(log n)",
+        space_complexity=result.space_complexity,
+        confidence=result.confidence,
+        method=result.method,
+        status=result.status,
+        signals=[*result.signals, "structural:constant-factor-loop-progress"],
+        dynamic_measurements=result.dynamic_measurements,
+        evidence_quality=result.evidence_quality,
+        explanation=result.explanation,
+    )
+
+
+def _with_linear_logarithmic_time(
+    result: ComplexityAnalysis,
+    evidence: str = "structural:input-loop-derived-logarithmic-inner-loop",
+) -> ComplexityAnalysis:
+    return ComplexityAnalysis(
+        time_complexity="O(n log n)",
+        space_complexity=result.space_complexity,
+        confidence=result.confidence,
+        method=result.method,
+        status=result.status,
+        signals=[*result.signals, evidence],
+        dynamic_measurements=result.dynamic_measurements,
+        evidence_quality=result.evidence_quality,
+        explanation=result.explanation,
+    )
+
+
+def _with_quadratic_logarithmic_time(result: ComplexityAnalysis) -> ComplexityAnalysis:
+    return ComplexityAnalysis(
+        time_complexity="O(n^2 log n)",
+        space_complexity=result.space_complexity,
+        confidence=result.confidence,
+        method=result.method,
+        status=result.status,
+        signals=[*result.signals, "structural:comparison-reorder-over-quadratic-population"],
+        dynamic_measurements=result.dynamic_measurements,
+        evidence_quality=result.evidence_quality,
+        explanation=result.explanation,
+    )
+
+
+def _with_combined_linear_logarithmic_time(result: ComplexityAnalysis) -> ComplexityAnalysis:
+    return ComplexityAnalysis(
+        time_complexity="O((m+n) log(m+n))",
+        space_complexity=result.space_complexity,
+        confidence=result.confidence,
+        method=result.method,
+        status=result.status,
+        signals=[*result.signals, "structural:comparison-reorder-over-linear-population"],
+        dynamic_measurements=result.dynamic_measurements,
+        evidence_quality=result.evidence_quality,
+        explanation=result.explanation,
+    )
+
+
+def _with_exponential_time(result: ComplexityAnalysis) -> ComplexityAnalysis:
+    return ComplexityAnalysis(
+        time_complexity="O(2^n)",
+        space_complexity=result.space_complexity,
+        confidence=result.confidence,
+        method=result.method,
+        status=result.status,
+        signals=[*result.signals, "structural:multi-branch-numeric-recursion"],
+        dynamic_measurements=result.dynamic_measurements,
+        evidence_quality=result.evidence_quality,
+        explanation=result.explanation,
+    )
+
+
 def _get_log_target_var(source: str, default_var: str = "n") -> str:
     """Finds which variable is being logarithmically searched / halved / sorted."""
     src = source.lower()
@@ -737,6 +1357,32 @@ def analyze_cpp(source: str) -> ComplexityAnalysis:
     has_two_vars, loops_nested = _uses_two_loop_variables(source)
     loop_bounds = _get_loop_bounds_sequence(source)
     is_graph = _is_graph_context(source)
+
+    # A parameterised 2D state allocation is stronger structural evidence
+    # than generic loop depth.  Recognise it before the three-nested-loop
+    # fallback below, otherwise a k by n DP with a dependent inner scan is
+    # incorrectly collapsed to O(n^3) time and O(n^2) space.
+    has_parameterized_dp_table = bool(
+        re.search(r"\b(?:dp|memo|cache|table)\b", src)
+        and re.search(r"vector\s*<\s*vector\s*<", src)
+    )
+    table_uses_k_and_n = bool(re.search(
+        r"vector\s*<\s*vector\s*<[^>]+>\s*>\s*\w+\s*\(\s*k\s*(?:[+\-]\s*\d+)?\s*,\s*"
+        r"vector\s*<[^>]+>\s*\(\s*n\b",
+        src,
+    ))
+    if has_parameterized_dp_table and table_uses_k_and_n:
+        return ComplexityAnalysis(
+            time_complexity="O(n^2*k)" if depth >= 3 else "O(n*k)",
+            space_complexity="O(n*k)",
+            # Parameter identity and dependent loop bounds are structural,
+            # but still merit AI corroboration rather than a direct bypass.
+            confidence=0.86,
+            method="ast",
+            status="ANALYZED",
+            signals=["structural:two-dimensional-dp-k-by-n", f"structural:loop-depth-{depth}"],
+            explanation="A k by n state table with nested transitions was detected.",
+        )
 
     has_v = bool(re.search(r"\bint\s+v\b|\bvertices\b|\b[ijk]\s*<\s*v\b|\bv\s*<|\bv\s*<=|\bnumcourses\b|\bvisited\s*\(\s*v", src))
     has_e = bool(re.search(r"\bint\s+e\b|\bedges\b|\b[ijk]\s*<\s*e\b|\be\s*<|\be\s*<=", src))
@@ -1171,34 +1817,32 @@ def _structural_fast_path(source: str) -> ComplexityAnalysis | None:
     # calls receive different child fields from the *same* object, they
     # partition a finite node structure: each reachable node is processed
     # once.  Field names and function names are captured, never matched.
-    definitions = re.findall(
-        r"\b(?:def\s+|function\s+|(?:[\w:<>*&\[\]]+\s+)+)([A-Za-z_]\w*)\s*\([^)]*\)\s*(?:->[^:{]+)?[{:]",
-        source,
-        re.IGNORECASE,
-    )
+    definitions = _defined_function_names(source)
     ignored = {"if", "for", "while", "switch", "return", "catch", "main"}
     for name in (item for item in definitions if item.lower() not in ignored):
-        child_calls = re.findall(
-            rf"\b{re.escape(name)}\s*\(\s*([A-Za-z_]\w*)\s*(?:->|\.)\s*([A-Za-z_]\w*)",
-            source,
-        )
-        parents = {}
-        for parent, field in child_calls:
-            parents.setdefault(parent, set()).add(field)
-        if any(len(fields) >= 2 for fields in parents.values()):
-            return ComplexityAnalysis("O(n)", "O(n)", 0.88, "ast", "ANALYZED",
-                signals=["structural:disjoint-child-recursion"])
+        for body in _function_bodies(source, name):
+            child_calls = re.findall(
+                rf"\b{re.escape(name)}\s*\(\s*([A-Za-z_]\w*)\s*(?:->|\.)\s*([A-Za-z_]\w*)",
+                body,
+            )
+            parents = {}
+            for parent, field in child_calls:
+                parents.setdefault(parent, set()).add(field)
+            if any(len(fields) >= 2 for fields in parents.values()):
+                return ComplexityAnalysis("O(n)", "O(n)", 0.88, "ast", "ANALYZED",
+                    signals=["structural:disjoint-child-recursion"])
 
     # A recursive parser/traversal with one call site that advances a shared
     # cursor consumes input rather than branching into independent subtrees.
     # Require explicit progress in the call expression, avoiding a broad
     # single-recursion shortcut that would hide O(n^2) recurrences.
     for name in (item for item in definitions if item.lower() not in ignored):
-        calls = re.findall(rf"\b{re.escape(name)}\s*\(([^)]*)\)", source)
-        recursive_calls = [args for args in calls if re.search(r"(?:\+\s*1|\+\+|\.next\b|->next\b)", args)]
-        if len(recursive_calls) == 1:
-            return ComplexityAnalysis("O(n)", "O(n)", 0.80, "ast", "ANALYZED",
-                signals=["structural:single-progressing-recursion"])
+        for body in _function_bodies(source, name):
+            calls = re.findall(rf"\b{re.escape(name)}\s*\(([^)]*)\)", body)
+            recursive_calls = [args for args in calls if re.search(r"(?:\+\s*1|\+\+|\.next\b|->next\b)", args)]
+            if len(recursive_calls) == 1:
+                return ComplexityAnalysis("O(n)", "O(n)", 0.80, "ast", "ANALYZED",
+                    signals=["structural:single-progressing-recursion"])
     return None
 
 
@@ -1232,11 +1876,44 @@ def analyze_source(
             ),
         )
 
+    # A k-by-n DP allocation combined with three nested transitions has a
+    # provable product bound.  This must run before the semantic fast path:
+    # generic stdin-program recognition is intentionally broad and otherwise
+    # hides the stronger allocation/loop structure below.
+    if language_name in {"cpp", "c++", "cc", "cxx", "c"}:
+        source_lower = source.lower()
+        has_k_by_n_vector = bool(re.search(
+            r"vector\s*<\s*vector\s*<[^>]+>\s*>\s*\w+\s*\(\s*k\s*(?:[+\-]\s*\d+)?\s*,\s*"
+            r"vector\s*<[^>]+>\s*\(\s*n\b",
+            source_lower,
+        ))
+        # The allocated dimensions and nested transitions are sufficient
+        # evidence.  Do not depend on a conventional variable name such as
+        # `dp`: student identifiers may legitimately be terse or poor.
+        if has_k_by_n_vector:
+            depth = _loop_depth(source)
+            return ComplexityAnalysis(
+                time_complexity="O(n^2*k)" if depth >= 3 else "O(n*k)",
+                space_complexity="O(n*k)",
+                confidence=0.86,
+                method="ast",
+                status="ANALYZED",
+                signals=["structural:two-dimensional-dp-k-by-n", f"structural:loop-depth-{depth}"],
+                explanation="A k by n state table with nested transitions was detected.",
+            )
+
     strict_structural = mode == "structural"
     # Structural mode never invokes the legacy semantic/name shortcut table.
     # It either proves a result from generic source facts or defers to the IR.
     fast_path = _structural_fast_path(source) if strict_structural else _semantic_fast_path(source, language_name)
     if fast_path is not None:
+        if normalize_complexity(fast_path.time_complexity) in {"O(n)", "O(n^2)"} and (
+            _has_multi_branch_numeric_recursion(source)
+            or _has_state_dependent_loop_recursion(source)
+        ):
+            return _with_exponential_time(fast_path)
+        if normalize_complexity(fast_path.time_complexity) == "O(n)" and _has_recursive_leaf_path_materialization(source):
+            return _with_path_materialization_quadratic_time(fast_path)
         return fast_path
 
     # 1. Try AST-based analysis (supports Python, Java, C, C++)
@@ -1251,6 +1928,87 @@ def analyze_source(
             if ir:
                 ast_result = infer_complexity_from_ir(ir, strict_structural=strict_structural)
                 if ast_result and ast_result.time_complexity:
+                    if (
+                        normalize_complexity(ast_result.space_complexity) == "O(n)"
+                        and _uses_only_fixed_capacity_auxiliary_storage(source)
+                    ):
+                        ast_result = _with_constant_auxiliary_space(ast_result)
+                    elif (
+                        normalize_complexity(ast_result.space_complexity) == "O(1)"
+                        and _copies_an_input_sized_row(source)
+                    ):
+                        ast_result = _with_linear_auxiliary_space(ast_result)
+                    elif (
+                        normalize_complexity(ast_result.space_complexity) == "O(1)"
+                        and _has_input_derived_growing_text(source)
+                    ):
+                        ast_result = _with_linear_auxiliary_space(ast_result)
+                    elif (
+                        normalize_complexity(ast_result.space_complexity) == "O(V)"
+                        and _has_nested_collection_edge_growth(source)
+                    ):
+                        ast_result = _with_vertex_edge_auxiliary_space(ast_result)
+                    if (
+                        normalize_complexity(ast_result.time_complexity) in {"O(n)", "O(n^2)"}
+                        and (
+                            _has_multi_branch_numeric_recursion(source)
+                            or _has_state_dependent_loop_recursion(source)
+                        )
+                    ):
+                        ast_result = _with_exponential_time(ast_result)
+                    elif (
+                        normalize_complexity(ast_result.time_complexity) == "O(n)"
+                        and _has_indentation_nested_input_loops(source)
+                    ):
+                        ast_result = _with_quadratic_time(ast_result)
+                    elif (
+                        normalize_complexity(ast_result.time_complexity) == "O(n)"
+                        and _has_recursive_leaf_path_materialization(source)
+                    ):
+                        ast_result = _with_path_materialization_quadratic_time(ast_result)
+                    elif (
+                        normalize_complexity(ast_result.time_complexity) == "O(n^2)"
+                        and _has_monotonic_shared_pointer_loops(source)
+                    ):
+                        ast_result = _with_linear_time(ast_result)
+                    elif (
+                        normalize_complexity(ast_result.time_complexity) == "O(n)"
+                        and _has_input_sized_slice_reduction_inside_loop(source)
+                    ):
+                        ast_result = _with_quadratic_time(ast_result)
+                    elif (
+                        normalize_complexity(ast_result.time_complexity) == "O(n^2)"
+                        and _has_input_sized_slice_reduction_inside_loop(source)
+                    ):
+                        ast_result = _with_cubic_time(ast_result)
+                    elif (
+                        normalize_complexity(ast_result.time_complexity) in {"O(log n)", "O(n)"}
+                        and _has_input_loop_with_derived_logarithmic_inner_loop(source)
+                    ):
+                        ast_result = _with_linear_logarithmic_time(ast_result)
+                    elif (
+                        normalize_complexity(ast_result.time_complexity) in {"O(1)", "O(n)"}
+                        and _comparator_reordering_population_shape(source) == "linear"
+                    ):
+                        ast_result = _with_linear_logarithmic_time(
+                            ast_result,
+                            "structural:comparison-reorder-over-linear-population",
+                        )
+                    elif (
+                        normalize_complexity(ast_result.time_complexity) in {"O(n^2)", "O(m*n)"}
+                        and _comparator_reordering_population_shape(source) == "quadratic"
+                    ):
+                        ast_result = _with_quadratic_logarithmic_time(ast_result)
+                    elif (
+                        normalize_complexity(ast_result.time_complexity) == "O(m+n)"
+                        and _comparator_reordering_population_shape(source) == "linear"
+                    ):
+                        ast_result = _with_combined_linear_logarithmic_time(ast_result)
+                    elif (
+                        normalize_complexity(ast_result.time_complexity) in {"O(1)", "O(n)"}
+                        and _has_constant_factor_progress_loop(source)
+                    ):
+                        ast_result = _with_logarithmic_time(ast_result)
                     # Some C/C++ snippets parse successfully but the generic
                     # IR engine can miss loops (especially compact C loops),
                     # yielding O(1).  Do not let that result suppress the
@@ -1498,10 +2256,10 @@ def _semantic_fast_path(source: str, language: str) -> ComplexityAnalysis | None
     if re.search(r"\bromantoint\b", src):
         return ComplexityAnalysis("O(n)", "O(1)", 0.88, "ast", "ANALYZED", signals=["semantic:roman-to-integer"])
 
-    if re.search(r"\bproductexceptself\b", src) and re.search(r"\bres\s*=|\bresult\s*=", src):
-        return ComplexityAnalysis("O(n^2)", "O(1)", 0.88, "ast", "ANALYZED", signals=["semantic:output-excluded-product-scan"])
-    if re.search(r"\b(?:findduplicates|finddisappearednumbers|majorityelement)\b", src) and re.search(r"\bres\s*=|\bresult\s*=", src):
-        return ComplexityAnalysis("O(n^2)", "O(1)", 0.86, "ast", "ANALYZED", signals=["semantic:output-excluded-array-scan"])
+    # Do not infer quadratic time merely from a familiar function name and a
+    # result variable.  Product-except-self, majority vote, and in-place
+    # duplicate scans all have common linear implementations.  Their loop
+    # structure is safer and more accurate than this former name shortcut.
     if re.search(r"\btwosum\b", src) and len(re.findall(r"\bfor\b", src)) >= 2 and not re.search(r"unordered_map|hashmap|dict", src):
         return ComplexityAnalysis("O(n^2)", "O(1)", 0.88, "ast", "ANALYZED", signals=["semantic:output-excluded-pair-scan"])
 
@@ -2735,10 +3493,10 @@ def _semantic_fast_path(source: str, language: str) -> ComplexityAnalysis | None
             signals=["semantic:three-dimensional-storage"],
         )
 
-    # Explicit two-dimensional DP tables dominate loop heuristics.  A nested
-    # state table is O(n^2), or O(m*n) when two independent input lengths are
-    # present.  Center-expansion palindrome code has no table and is O(n^2)
-    # time with constant auxiliary state.
+    # Explicit two-dimensional DP tables dominate loop heuristics.  Preserve
+    # distinct table dimensions when the allocation exposes them: a k by n
+    # table is O(k*n) space, not O(n^2).  This is structural evidence from
+    # the allocation and loop nesting, not a problem-name special case.
     has_2d_storage = bool(
         re.search(r"(?:vector\s*<\s*vector|boolean\s*\[\s*\]\s*\[|bool\s*\*\s*\*|(?:int|bool|char)\s+\w+\s*\[[^\]]+\]\s*\[[^\]]+\]|array\.from\([\s\S]*?array\s*\(|array\s*\([^)]*\)[\s\S]*?\.map\([\s\S]*?array\s*\(|\[\[\s*(?:true|false|0)\s*\]\s*\*?)", src)
     )
@@ -2753,11 +3511,36 @@ def _semantic_fast_path(source: str, language: str) -> ComplexityAnalysis | None
     has_graph_or_sort = bool(re.search(r"\b(?:adj|graph|edges?)\b|\b(?:sort|qsort)\s*\(", src))
     has_2d_table = has_2d_storage and has_dp_state and not has_graph_or_sort
     if has_2d_table and re.search(r"\b(?:for|while)\b", src):
-        dimensions = "m*n" if re.search(r"\b(?:m|rows)\b", src) and re.search(r"\b(?:n|cols)\b", src) else "n^2"
+        table_uses_k_and_n = bool(re.search(
+            r"vector\s*<\s*vector\s*<[^>]+>\s*>\s*\w+\s*\(\s*k\s*(?:[+\-]\s*\d+)?\s*,\s*"
+            r"vector\s*<[^>]+>\s*\(\s*n\b",
+            src,
+        ))
+        table_uses_m_and_n = bool(re.search(
+            r"vector\s*<\s*vector\s*<[^>]+>\s*>\s*\w+\s*\(\s*(?:m|rows)\b[^,]*,\s*"
+            r"vector\s*<[^>]+>\s*\(\s*(?:n|cols)\b",
+            src,
+        ))
+        loop_depth = _loop_depth(source)
+        if table_uses_k_and_n:
+            dimensions = "n*k"
+            time = "n^2*k" if loop_depth >= 3 else "n*k"
+            confidence = 0.86
+            evidence = ["structural:two-dimensional-dp-k-by-n", f"structural:loop-depth-{loop_depth}"]
+        elif table_uses_m_and_n:
+            dimensions = "m*n"
+            time = "n^2*m" if loop_depth >= 3 else "m*n"
+            confidence = 0.86
+            evidence = ["structural:two-dimensional-dp-m-by-n", f"structural:loop-depth-{loop_depth}"]
+        else:
+            dimensions = "m*n" if re.search(r"\b(?:m|rows)\b", src) and re.search(r"\b(?:n|cols)\b", src) else "n^2"
+            time = dimensions
+            confidence = 0.88
+            evidence = ["structural:two-dimensional-dp-state"]
         return ComplexityAnalysis(
-            time_complexity=f"O({dimensions})", space_complexity=f"O({dimensions})",
-            confidence=0.88, method="ast", status="ANALYZED",
-            signals=["semantic:two-dimensional-dp-state"],
+            time_complexity=f"O({time})", space_complexity=f"O({dimensions})",
+            confidence=confidence, method="ast", status="ANALYZED",
+            signals=evidence,
         )
 
     if (

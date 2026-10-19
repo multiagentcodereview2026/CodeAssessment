@@ -10,9 +10,11 @@ def merge_complexity_evidence(
             static_result.time_complexity
             == dynamic_result.time_complexity
         )
+        # Runtime samples are only trusted for time. A missing dynamic space
+        # estimate therefore means "not measured", not a contradiction.
         same_space = (
-            static_result.space_complexity
-            == dynamic_result.space_complexity
+            dynamic_result.space_complexity is None
+            or static_result.space_complexity == dynamic_result.space_complexity
         )
 
         combined_signals = list(dict.fromkeys(

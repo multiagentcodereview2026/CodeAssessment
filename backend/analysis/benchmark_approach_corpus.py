@@ -33,6 +33,32 @@ def _rows(path: str) -> list[dict[str, Any]]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
+def _review_exclusions(path: str | None) -> dict[str, str]:
+    """Load reviewed benchmark exclusions without changing the source corpus.
+
+    Each entry must name a ``solution_id`` and state why its independently
+    reviewed truth cannot be compared under this benchmark's conventions.
+    Missing reasons are rejected so a failed AST prediction can never be
+    silently removed from the denominator.
+    """
+    if path is None:
+        return {}
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    entries = payload.get("exclusions", payload) if isinstance(payload, dict) else payload
+    if not isinstance(entries, list):
+        raise ValueError("Review exclusions must be a JSON list or an object with an 'exclusions' list.")
+    exclusions: dict[str, str] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError("Each review exclusion must be an object.")
+        solution_id = str(entry.get("solution_id") or "").strip()
+        reason = str(entry.get("reason") or "").strip()
+        if not solution_id or not reason:
+            raise ValueError("Each review exclusion requires solution_id and reason.")
+        exclusions[solution_id] = reason
+    return exclusions
+
+
 def _canonical(value: Any) -> str | None:
     if value is None:
         return None
@@ -125,10 +151,16 @@ def classify_row(row: dict[str, Any], mode: str = "legacy") -> dict[str, Any]:
     return base
 
 
-def run(path: str, mode: str = "legacy") -> dict[str, Any]:
+def run(path: str, mode: str = "legacy", review_exclusions_path: str | None = None) -> dict[str, Any]:
+    exclusions = _review_exclusions(review_exclusions_path)
     records = [classify_row(row, mode=mode) for row in _rows(path)]
+    for record in records:
+        reason = exclusions.get(str(record.get("solution_id") or ""))
+        if reason:
+            record["review_exclusion_reason"] = reason
     counts = Counter(record["status"] for record in records)
-    eligible = [record for record in records if record["status"] in {"AST_CORRECT", "AST_PARTIAL", "AST_WRONG"}]
+    raw_eligible = [record for record in records if record["status"] in {"AST_CORRECT", "AST_PARTIAL", "AST_WRONG"}]
+    eligible = [record for record in raw_eligible if "review_exclusion_reason" not in record]
     correct = sum(record["status"] == "AST_CORRECT" for record in eligible)
     time_correct = sum(
         _equal(record.get("predicted_time"), record.get("expected_time"))
@@ -157,7 +189,9 @@ def run(path: str, mode: str = "legacy") -> dict[str, Any]:
         "benchmark": "snippet_complexity_truth",
         "mode": mode,
         "total": len(records),
+        "raw_eligible": len(raw_eligible),
         "eligible": len(eligible),
+        "reviewed_excluded": len(raw_eligible) - len(eligible),
         "correct": correct,
         "accuracy": round(correct / len(eligible), 4) if eligible else None,
         "time_correct": time_correct,
@@ -182,11 +216,15 @@ def main() -> None:
         default="legacy",
         help="legacy includes existing semantic shortcuts; structural uses generic AST evidence only",
     )
+    parser.add_argument(
+        "--review-exclusions",
+        help="Optional JSON review manifest; excluded records remain in the raw corpus and report.",
+    )
     args = parser.parse_args()
-    report = run(args.dataset, mode=args.mode)
+    report = run(args.dataset, mode=args.mode, review_exclusions_path=args.review_exclusions)
     Path(args.output).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({key: report[key] for key in (
-        "benchmark", "mode", "total", "eligible", "correct", "accuracy",
+        "benchmark", "mode", "total", "raw_eligible", "eligible", "reviewed_excluded", "correct", "accuracy",
         "time_correct", "time_accuracy", "space_correct", "space_accuracy",
         "partial_breakdown", "status_counts",
     )}, indent=2))

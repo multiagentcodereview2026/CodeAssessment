@@ -9,7 +9,7 @@ response.
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 
 TIME_COMPLEXITY_LEVELS = (
@@ -43,6 +43,7 @@ def normalize_complexity(complexity: Optional[str]) -> Optional[str]:
     compact = raw
     compact = compact.replace("²", "^2").replace("³", "^3")
     compact = compact.replace("ⁿ", "^n").replace("√", "sqrt")
+    compact = compact.replace("·", "*").replace("×", "*")
     compact = compact.replace("**", "^")
     compact = re.sub(r"\s+", "", compact)
     # Normalize common log spellings and harmless constant factors.
@@ -65,6 +66,16 @@ def normalize_complexity(complexity: Optional[str]) -> Optional[str]:
         "o(n2)": "O(n^2)",
         "o(n^3)": "O(n^3)",
         "o(n3)": "O(n^3)",
+        # Keep bounded-parameter expressions exact in the report.  They are
+        # projected to the score ladder separately, using only the private
+        # constraints of the current problem.
+        "o(k)": "O(k)",
+        "o(n*k)": "O(n*k)",
+        "o(k*n)": "O(n*k)",
+        "o(n^2*k)": "O(n^2*k)",
+        "o(k*n^2)": "O(n^2*k)",
+        "o(n*k^2)": "O(n*k^2)",
+        "o(k^2*n)": "O(n*k^2)",
         "o(2^n)": "O(2^n)",
         "o(n!)": "O(n!)",
     }
@@ -137,6 +148,83 @@ def normalize_complexity(complexity: Optional[str]) -> Optional[str]:
     return complexity.strip()
 
 
+def bounded_parameters_from_constraints(constraints: object) -> set[str]:
+    """Find scalar parameters with a fixed numeric upper bound.
+
+    This is deliberately a constraint parser rather than a problem-name rule.
+    ``1 <= k <= 100`` establishes that ``k`` is bounded for rank scoring,
+    while ``n`` remains the platform's primary input-size variable.
+    """
+    if isinstance(constraints, str):
+        constraints = [constraints]
+    if not isinstance(constraints, (list, tuple)):
+        return set()
+
+    bounded: set[str] = set()
+    for constraint in constraints:
+        text = str(constraint).lower().replace("≤", "<=")
+        for name, upper in re.findall(r"\b([a-z][a-z0-9_]*)\s*<=\s*(\d+)\b", text):
+            if name != "n" and int(upper) >= 0:
+                bounded.add(name)
+    return bounded
+
+
+def _score_projection(
+    complexity: Optional[str],
+    bounded_parameters: Iterable[str] = (),
+) -> Optional[str]:
+    """Project a simple monomial onto the fixed single-size rank ladder.
+
+    The original expression is never replaced in the student report.  This
+    private projection is only used for score comparison.  It supports terms
+    such as ``O(k*n^2)`` when ``k`` has a fixed upper bound in the problem's
+    published constraints.  General multi-variable expressions remain review
+    only rather than being guessed.
+    """
+    normalized = normalize_complexity(complexity)
+    if normalized in TIME_COMPLEXITY_LEVELS:
+        return normalized
+    if not normalized:
+        return None
+
+    compact = normalized.lower().replace("·", "*").replace("×", "*")
+    compact = re.sub(r"\s+", "", compact)
+    match = re.fullmatch(r"o\(([^()]+)\)", compact)
+    if not match:
+        return None
+
+    expression = match.group(1)
+    if any(token in expression for token in "+/-") or "log" in expression:
+        return None
+    factors = expression.split("*")
+    powers: dict[str, int] = {}
+    for factor in factors:
+        factor_match = re.fullmatch(r"([a-z][a-z0-9_]*)(?:\^(\d+))?", factor)
+        if not factor_match:
+            return None
+        name, exponent = factor_match.groups()
+        powers[name] = powers.get(name, 0) + int(exponent or 1)
+
+    for name in bounded_parameters:
+        powers.pop(str(name).lower(), None)
+
+    if not powers:
+        return "O(1)"
+    if set(powers) != {"n"}:
+        return None
+
+    degree = powers["n"]
+    if degree == 1:
+        return "O(n)"
+    if degree == 2:
+        return "O(n^2)"
+    if degree == 3:
+        return "O(n^3)"
+    if degree >= 4:
+        return "O(n^4+)"
+    return None
+
+
 def complexity_rank(complexity: str) -> int:
     normalized = normalize_complexity(complexity)
     if normalized not in TIME_COMPLEXITY_LEVELS:
@@ -147,7 +235,10 @@ def complexity_rank(complexity: str) -> int:
 
 
 def private_time_complexity_breakdown(
-    optimal_time: Optional[str], student_time: Optional[str]
+    optimal_time: Optional[str],
+    student_time: Optional[str],
+    *,
+    bounded_parameters: Iterable[str] = (),
 ) -> dict[str, Any]:
     """Calculate the complete rank-distance assessment inside the backend.
 
@@ -178,10 +269,9 @@ def private_time_complexity_breakdown(
             "reason": "The submitted algorithm could not be classified automatically.",
         }
 
-    if (
-        normalized_target not in TIME_COMPLEXITY_LEVELS
-        or normalized_student not in TIME_COMPLEXITY_LEVELS
-    ):
+    projected_target = _score_projection(normalized_target, bounded_parameters)
+    projected_student = _score_projection(normalized_student, bounded_parameters)
+    if not projected_target or not projected_student:
         return {
             "status": "REVIEW_REQUIRED",
             "classification": "REVIEW_REQUIRED",
@@ -191,8 +281,8 @@ def private_time_complexity_breakdown(
             "reason": "This problem uses variables that require a problem-specific complexity comparison.",
         }
 
-    optimal_rank = complexity_rank(normalized_target)
-    student_rank = complexity_rank(normalized_student)
+    optimal_rank = complexity_rank(projected_target)
+    student_rank = complexity_rank(projected_student)
     difference = student_rank - optimal_rank
     # Ten levels create nine intervals between the best and worst ranks.
     penalty = 0.0 if difference <= 0 else min(25.0, difference * (25.0 / 9.0))
@@ -227,10 +317,17 @@ def private_time_complexity_breakdown(
 
 
 def private_space_complexity_breakdown(
-    optimal_space: Optional[str], student_space: Optional[str]
+    optimal_space: Optional[str],
+    student_space: Optional[str],
+    *,
+    bounded_parameters: Iterable[str] = (),
 ) -> dict[str, Any]:
     """Apply the same private 1–10 rank-distance policy to auxiliary space."""
-    result = private_time_complexity_breakdown(optimal_space, student_space)
+    result = private_time_complexity_breakdown(
+        optimal_space,
+        student_space,
+        bounded_parameters=bounded_parameters,
+    )
     result["student_space_complexity"] = result.get("student_time_complexity")
     if result.get("status") == "SCORED":
         result["reason"] = "The detected auxiliary-space complexity was compared with the private benchmark for this problem."
@@ -238,14 +335,21 @@ def private_space_complexity_breakdown(
 
 
 def time_complexity_assessment(
-    optimal_time: Optional[str], student_time: Optional[str]
+    optimal_time: Optional[str],
+    student_time: Optional[str],
+    *,
+    bounded_parameters: Iterable[str] = (),
 ) -> dict[str, Any]:
     """Return the 25-mark time-complexity result without exposing targets.
 
     The returned value intentionally omits the target, its rank and the rank
     difference. Those values are private assessment data.
     """
-    private = private_time_complexity_breakdown(optimal_time, student_time)
+    private = private_time_complexity_breakdown(
+        optimal_time,
+        student_time,
+        bounded_parameters=bounded_parameters,
+    )
     return {
         "status": private["status"],
         "classification": private["classification"],
@@ -257,10 +361,17 @@ def time_complexity_assessment(
 
 
 def space_complexity_assessment(
-    optimal_space: Optional[str], student_space: Optional[str]
+    optimal_space: Optional[str],
+    student_space: Optional[str],
+    *,
+    bounded_parameters: Iterable[str] = (),
 ) -> dict[str, Any]:
     """Create a student-safe 25-mark auxiliary-space assessment."""
-    private = private_space_complexity_breakdown(optimal_space, student_space)
+    private = private_space_complexity_breakdown(
+        optimal_space,
+        student_space,
+        bounded_parameters=bounded_parameters,
+    )
     return {
         "status": private["status"],
         "classification": private["classification"],

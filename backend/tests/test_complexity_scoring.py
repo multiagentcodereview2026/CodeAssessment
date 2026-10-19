@@ -96,6 +96,29 @@ def test_multivariable_complexity_requires_problem_specific_review():
     assert "O(V + E)" not in str(assessment)
 
 
+def test_bounded_parameter_complexities_keep_exact_display_but_score_on_n_rank():
+    constraints = ["1 <= k <= 100", "1 <= n <= 1000"]
+    result = time_complexity_assessment(
+        "O(n·k)",
+        "O(k*n^2)",
+        bounded_parameters={"k"},
+    )
+    assert result["student_time_complexity"] == "O(n^2*k)"
+    assert result["status"] == "SCORED"
+    assert result["time_score"] == 19.444
+
+    space = space_complexity_assessment(
+        "O(k)",
+        "O(n*k)",
+        bounded_parameters={"k"},
+    )
+    assert space["student_space_complexity"] == "O(n*k)"
+    assert space["status"] == "SCORED"
+    assert space["space_score"] == 16.667
+
+    assert bounded_parameters_from_constraints(constraints) == {"k"}
+
+
 def test_no_private_target_means_no_complexity_penalty():
     assessment = time_complexity_assessment(None, "O(n^2)")
     assert assessment["status"] == "TARGET_NOT_CONFIGURED"

@@ -16,7 +16,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, or_, text
-from analysis.analyzer_service import analyze_submission_complexity
+from analysis.analyzer_service import analyze_submission_complexity, analyze_static_complexity
+from analysis.dynamic_profiler import profile_execution_results
+from config.settings import settings
 from scoring.rubric import complexity_dimension_percent
 from similarity_analysis import approach_label, approach_summary, structural_explanation, structural_fingerprint, structural_overlap
 from similarity_clustering import build_approach_groups, build_similarity_clusters, build_submission_groups
@@ -1213,9 +1215,9 @@ async def submit_and_evaluate_code(
             detail="No test cases are configured for this problem",
         )
     
-    # Docker execution decides correctness. Groq only sees the public problem
-    # information and source code; it never receives hidden cases or TC/SC
-    # targets. Starting both tasks here removes unnecessary sequential delay.
+    # Docker execution decides correctness. Complexity begins with a local AST
+    # pass; lower-confidence results can later use observed runtime evidence
+    # before an optional independent AI review.
     public_problem = {
         "title": problem.title,
         "statement": problem.description,
@@ -1232,10 +1234,14 @@ async def submit_and_evaluate_code(
         # containers at once and exhaust the host.
         stop_on_first_failure=False,
     ))
-    async def run_local_complexity_analysis():
+    static_complexity = analyze_static_complexity(payload.code, payload.language)
+
+    async def run_local_complexity_analysis(dynamic_complexity=None):
         evidence = await analyze_submission_complexity(
             source_code=payload.code,
             language=payload.language,
+            static_result=static_complexity,
+            dynamic_result=dynamic_complexity,
         )
 
         if evidence.final is None:
@@ -1246,17 +1252,37 @@ async def submit_and_evaluate_code(
                 "explanation": "No complexity result is available.",
             }
 
-        return asdict(evidence.final)
+        # Preserve the independent, code-derived estimates for the student's
+        # saved report.  This deliberately excludes the private problem
+        # benchmark used later by scoring.
+        result = asdict(evidence.final)
+        if evidence.static is not None:
+            result["ast_estimate"] = {
+                "time_complexity": evidence.static.time_complexity,
+                "space_complexity": evidence.static.space_complexity,
+                "status": evidence.static.status,
+                "method": evidence.static.method,
+            }
+        if evidence.ai_review is not None:
+            result["ai_estimate"] = {
+                "time_complexity": evidence.ai_review.get("ai_time_complexity"),
+                "space_complexity": evidence.ai_review.get("ai_space_complexity"),
+                "status": evidence.ai_review.get("status"),
+            }
+        if evidence.dynamic is not None:
+            result["runtime_estimate"] = {
+                "time_complexity": evidence.dynamic.time_complexity,
+                "space_complexity": evidence.dynamic.space_complexity,
+                "status": evidence.dynamic.status,
+                "method": evidence.dynamic.method,
+                "evidence_quality": evidence.dynamic.evidence_quality,
+            }
+        return result
 
-    complexity_task = asyncio.create_task(
-        run_local_complexity_analysis()
-    )
-
-    execution_outcome, complexity_outcome = await asyncio.gather(
-        execution_task,
-        complexity_task,
-        return_exceptions=True,
-    )
+    try:
+        execution_outcome = await execution_task
+    except Exception as exc:
+        execution_outcome = exc
 
     if isinstance(execution_outcome, Exception):
         logger.error("Sandbox execution failed: %s", execution_outcome)
@@ -1275,6 +1301,14 @@ async def submit_and_evaluate_code(
     # The agent workflow needs verdicts and counts, not the input/output of a
     # private judge case. Redact only after the execution task has completed.
     safe_exec_result = redact_hidden_execution(exec_result)
+    dynamic_complexity = None
+    if static_complexity.confidence < settings.COMPLEXITY_AST_DIRECT_CONFIDENCE:
+        dynamic_complexity = profile_execution_results(test_cases, exec_result)
+
+    try:
+        complexity_outcome = await run_local_complexity_analysis(dynamic_complexity)
+    except Exception as exc:
+        complexity_outcome = exc
     if isinstance(complexity_outcome, Exception):
         logger.warning(
             "Complexity analysis failed: %s",
@@ -1306,6 +1340,16 @@ async def submit_and_evaluate_code(
         "complexity_target": {
             "time": problem.target_time_complexity,
             "space": problem.target_space_complexity,
+            # Private scoring metadata. It never enters a model prompt or a
+            # student response; it only lets the scorer project fixed-size
+            # parameters such as k <= 100 onto its rank ladder.
+            "constraints": [
+                *(problem.constraints or []),
+                # Legacy imported problems can have an empty JSON constraints
+                # array while retaining the same published constraints in
+                # their statement.  This remains backend-only score metadata.
+                problem.description or "",
+            ],
         },
         "precomputed_complexity_analysis": precomputed_complexity_analysis,
         "assessment_flags": {},

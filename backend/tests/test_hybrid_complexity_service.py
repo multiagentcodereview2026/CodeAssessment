@@ -1,0 +1,187 @@
+import asyncio
+
+from agents.complexity import complexity_node
+from analysis import analyzer_service
+from analysis.models import ComplexityAnalysis
+from config.settings import settings
+
+
+SOURCE = """
+#include <iostream>
+int main() {
+    int n;
+    std::cin >> n;
+    int total = 0;
+    for (int i = 0; i < n; ++i) total += i;
+    return total;
+}
+"""
+
+
+def test_low_confidence_ast_is_ai_corroborated_before_becoming_analyzed(monkeypatch):
+    async def agreeing_provider(payload):
+        assert set(payload) == {"instruction", "language", "source_code"}
+        return {
+            "time_complexity": "O(n)",
+            "space_complexity": "O(1)",
+            "confidence": 0.82,
+            "evidence": ["The source has one input-bounded loop and scalar state."],
+            "status": "AGREEMENT_CANDIDATE",
+        }
+
+    monkeypatch.setattr(settings, "COMPLEXITY_AI_REVIEW_ENABLED", True)
+    monkeypatch.setattr(analyzer_service, "_invoke_complexity_reviewer", agreeing_provider)
+    monkeypatch.setattr(analyzer_service, "_review_cache", analyzer_service.ComplexityReviewCache(60))
+    monkeypatch.setattr(analyzer_service, "_review_limiter", analyzer_service.AIReviewRateLimiter(20, 1))
+
+    evidence = asyncio.run(analyzer_service.analyze_submission_complexity(SOURCE, "cpp"))
+
+    assert evidence.ai_review is not None
+    assert evidence.ai_review["status"] == "AGREEMENT"
+    assert evidence.final is not None
+    assert evidence.final.status == "ANALYZED"
+    assert evidence.final.method == "ast+ai-corroborated"
+
+
+def test_higher_confidence_ai_disagreement_becomes_analyzed_fallback(monkeypatch):
+    async def disagreeing_provider(payload):
+        assert "ast_evidence" not in payload
+        return {
+            "time_complexity": "O(n^2)",
+            "space_complexity": "O(n)",
+            "confidence": 0.99,
+            "evidence": ["The source appears to have nested input-bounded work."],
+            "status": "AGREEMENT_CANDIDATE",
+        }
+
+    monkeypatch.setattr(settings, "COMPLEXITY_AI_REVIEW_ENABLED", True)
+    monkeypatch.setattr(analyzer_service, "_invoke_complexity_reviewer", disagreeing_provider)
+    monkeypatch.setattr(analyzer_service, "_review_cache", analyzer_service.ComplexityReviewCache(60))
+    monkeypatch.setattr(analyzer_service, "_review_limiter", analyzer_service.AIReviewRateLimiter(20, 1))
+
+    evidence = asyncio.run(analyzer_service.analyze_submission_complexity(SOURCE, "cpp"))
+    analysis = {
+        "time_complexity": evidence.final.time_complexity,
+        "space_complexity": evidence.final.space_complexity,
+        "status": evidence.final.status,
+        "method": evidence.final.method,
+        "confidence": evidence.final.confidence,
+    }
+    scored = asyncio.run(
+        complexity_node(
+            {
+                "precomputed_complexity_analysis": analysis,
+                "execution_result": {"compile_status": "success"},
+                "complexity_target": {"time": "O(n^2)", "space": "O(n)"},
+            }
+        )
+    )
+
+    assert evidence.final.status == "ANALYZED"
+    assert evidence.final.method == "ai-fallback"
+    assert evidence.final.time_complexity == "O(n^2)"
+    assert scored["complexity_score"] is not None
+    assert scored["complexity_details"]["analysis_status"] != "REVIEW_REQUIRED"
+
+
+def test_missing_ast_estimate_is_saved_as_analysis_failed_and_is_not_scored(monkeypatch):
+    monkeypatch.setattr(
+        analyzer_service,
+        "analyze_source",
+        lambda **_kwargs: ComplexityAnalysis(
+            confidence=0.0,
+            method="ast",
+            status="REVIEW_REQUIRED",
+            signals=["parser-no-supported-structure"],
+            explanation="No supported structural estimate was available.",
+        ),
+    )
+
+    evidence = asyncio.run(analyzer_service.analyze_submission_complexity("unrecognized", "cpp"))
+    assert evidence.final is not None
+    assert evidence.final.status == "ANALYSIS_FAILED"
+    assert evidence.final.time_complexity is None
+    assert evidence.final.space_complexity is None
+
+    scored = asyncio.run(
+        complexity_node(
+            {
+                "precomputed_complexity_analysis": {
+                    "status": evidence.final.status,
+                    "method": evidence.final.method,
+                    "confidence": evidence.final.confidence,
+                }
+            }
+        )
+    )
+    assert scored["complexity_score"] is None
+    assert scored["complexity_details"]["analysis_status"] == "ANALYSIS_FAILED"
+
+
+def test_medium_confidence_ast_and_strong_runtime_agreement_skip_ai(monkeypatch):
+    calls = 0
+
+    async def should_not_run(_payload):
+        nonlocal calls
+        calls += 1
+        raise AssertionError("AI must not run when AST and runtime agree")
+
+    monkeypatch.setattr(settings, "COMPLEXITY_AI_REVIEW_ENABLED", True)
+    monkeypatch.setattr(analyzer_service, "_invoke_complexity_reviewer", should_not_run)
+    static = ComplexityAnalysis(
+        time_complexity="O(n)", space_complexity="O(1)", confidence=0.85,
+        method="ast", status="ANALYZED",
+    )
+    runtime = ComplexityAnalysis(
+        time_complexity="O(n)", confidence=0.65, method="runtime-profile",
+        status="ANALYZED", evidence_quality="strong",
+        dynamic_measurements=[{"input_size": 10, "runtime_ms": 1}],
+    )
+
+    evidence = asyncio.run(
+        analyzer_service.analyze_submission_complexity(
+            SOURCE, "cpp", static_result=static, dynamic_result=runtime,
+        )
+    )
+
+    assert calls == 0
+    assert evidence.final is not None
+    assert evidence.final.method == "static+dynamic"
+    assert evidence.final.time_complexity == "O(n)"
+
+
+def test_runtime_supported_ai_fallback_receives_raw_measurements_only(monkeypatch):
+    async def provider(payload):
+        assert "ast_evidence" not in payload
+        assert "detected_time_complexity" not in payload
+        assert payload["runtime_measurements"] == [{"input_size": 10, "runtime_ms": 1}]
+        return {
+            "time_complexity": "O(n log n)",
+            "space_complexity": "O(n)",
+            "confidence": 0.97,
+            "evidence": ["The source sorts n values before a linear scan."],
+        }
+
+    monkeypatch.setattr(settings, "COMPLEXITY_AI_REVIEW_ENABLED", True)
+    monkeypatch.setattr(analyzer_service, "_invoke_complexity_reviewer", provider)
+    monkeypatch.setattr(analyzer_service, "_review_cache", analyzer_service.ComplexityReviewCache(60))
+    monkeypatch.setattr(analyzer_service, "_review_limiter", analyzer_service.AIReviewRateLimiter(20, 1))
+    static = ComplexityAnalysis(
+        time_complexity="O(n^2)", space_complexity="O(1)", confidence=0.85,
+        method="ast", status="ANALYZED",
+    )
+    runtime = ComplexityAnalysis(
+        time_complexity="O(n log n)", confidence=0.65, method="runtime-profile",
+        status="ANALYZED", evidence_quality="strong",
+        dynamic_measurements=[{"input_size": 10, "runtime_ms": 1}],
+    )
+
+    evidence = asyncio.run(
+        analyzer_service.analyze_submission_complexity(
+            SOURCE, "cpp", static_result=static, dynamic_result=runtime,
+        )
+    )
+
+    assert evidence.final is not None
+    assert evidence.final.method == "ai-fallback"
+    assert evidence.final.time_complexity == "O(n log n)"

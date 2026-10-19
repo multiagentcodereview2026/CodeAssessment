@@ -32,11 +32,12 @@ def _estimate_growth(
         return None
 
     linear_ratio = n_ratio
-    quadratic_ratio = n_ratio ** 2
     log_ratio = max(1.0, math.log2(last["input_size"])) / max(
         1.0,
         math.log2(first["input_size"]),
     )
+    n_log_n_ratio = linear_ratio * log_ratio
+    quadratic_ratio = n_ratio ** 2
 
     if time_ratio <= log_ratio * 1.8:
         return "O(log n)"
@@ -44,10 +45,84 @@ def _estimate_growth(
     if time_ratio <= linear_ratio * 1.8:
         return "O(n)"
 
+    if time_ratio <= n_log_n_ratio * 1.8:
+        return "O(n log n)"
+
     if time_ratio <= quadratic_ratio * 1.8:
         return "O(n^2)"
 
     return "O(n^3)"
+
+
+def _input_size(value: Any) -> int:
+    """Return a conservative size proxy without parsing problem semantics.
+
+    Most stdin assignments begin with ``n``.  When they do not, token count is
+    a safer generic proxy than inventing an input generator.  The result is
+    used only as low-confidence runtime evidence.
+    """
+    tokens = str(value or "").split()
+    if not tokens:
+        return 0
+    try:
+        leading = int(tokens[0])
+    except (TypeError, ValueError):
+        leading = 0
+    return leading if leading > 0 else len(tokens)
+
+
+def profile_execution_results(
+    test_cases: list[dict[str, Any]],
+    execution_result: dict[str, Any],
+) -> ComplexityAnalysis:
+    """Create safe, observational runtime evidence from the judge run.
+
+    This intentionally does not manufacture larger problem inputs. It uses
+    only server-side cases already executed for the submission and is marked
+    insufficient unless there are at least three distinct, successful input
+    sizes with non-zero timings. Runtime evidence estimates time only; memory
+    readings from short isolated runs are too noisy to classify Big-O space.
+    """
+    results = execution_result.get("results") or []
+    measurements: list[dict[str, Any]] = []
+    for case, result in zip(test_cases, results):
+        measurements.append({
+            "input_size": _input_size(case.get("input")),
+            "runtime_ms": result.get("runtime_ms", 0),
+            "memory_kb": result.get("memory_kb", 0),
+            "status": result.get("status", "unknown"),
+        })
+
+    measurements.sort(key=lambda row: row.get("input_size", 0))
+    valid = [
+        row for row in measurements
+        if row["input_size"] > 0
+        and row["runtime_ms"] > 0
+        and str(row["status"]).lower() == "accepted"
+    ]
+    distinct_sizes = {row["input_size"] for row in valid}
+    estimated_time = _estimate_growth(valid) if len(distinct_sizes) >= 3 else None
+
+    if estimated_time is None:
+        return ComplexityAnalysis(
+            method="runtime-profile",
+            status="REVIEW_REQUIRED",
+            confidence=0.0,
+            dynamic_measurements=measurements,
+            evidence_quality="insufficient",
+            explanation="The completed judge run did not contain enough stable input-size measurements for runtime profiling.",
+        )
+
+    return ComplexityAnalysis(
+        time_complexity=estimated_time,
+        space_complexity=None,
+        confidence=0.65,
+        method="runtime-profile",
+        status="ANALYZED",
+        dynamic_measurements=measurements,
+        evidence_quality="strong",
+        explanation="Time complexity was estimated from observed runtime growth across completed judge cases.",
+    )
 
 
 async def profile_submission(

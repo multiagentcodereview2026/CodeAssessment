@@ -20,3 +20,6 @@ class ComplexityEvidence:
     static: ComplexityAnalysis | None = None
     dynamic: ComplexityAnalysis | None = None
     final: ComplexityAnalysis | None = None
+    # Kept in-process for optional audit/CLI reporting. Submission responses
+    # continue to serialize only ``final`` and never expose AI internals.
+    ai_review: dict[str, Any] | None = None

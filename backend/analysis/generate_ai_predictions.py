@@ -56,7 +56,6 @@ async def generate(dataset: str, output: str, errors_output: str) -> dict[str, A
                 HumanMessage(content=json.dumps({
                     "language": payload["language"],
                     "source_code": payload["source_code"],
-                    "ast_evidence": payload["ast_evidence"],
                 })),
             ])
             review = AIComplexityReview.model_validate_json(extract_clean_json(response.content))

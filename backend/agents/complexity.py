@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from agents.base import load_prompt, invoke_agent, sanitize_code_comments
 from scoring.complexity import (
+    bounded_parameters_from_constraints,
     normalize_complexity,
     private_time_complexity_breakdown,
     private_space_complexity_breakdown,
@@ -64,6 +65,45 @@ def unavailable_analysis(reason: str) -> Dict[str, Any]:
         "bottlenecks": ["Complexity analysis was unavailable."],
         "optimization_suggestion": "Retry the assessment to obtain algorithmic complexity analysis.",
         "reasoning": reason,
+    }
+
+
+def review_required_analysis(analysis: Dict[str, Any]) -> Dict[str, Any]:
+    """Withhold complexity marks when AST/AI evidence is unresolved."""
+    analysis_failed = analysis.get("status") == "ANALYSIS_FAILED"
+    status = "ANALYSIS_FAILED" if analysis_failed else "REVIEW_REQUIRED"
+    reason = (
+        "Complexity analysis failed: neither AST nor the optional AI corroboration produced a usable result. No complexity marks were awarded."
+        if analysis_failed
+        else "Time complexity needs corroborating evidence before it can be scored."
+    )
+    return {
+        "complexity_score": None,
+        "complexity_details": {
+            "time_complexity": analysis.get("time_complexity"),
+            "space_complexity": analysis.get("space_complexity"),
+            "time_score": None,
+            "time_score_max": 25,
+            "space_score": None,
+            "space_score_max": 25,
+            "classification": status,
+            "time_classification": status,
+            "space_classification": status,
+            "analysis_status": status,
+            "time_status": status,
+            "space_status": status,
+            "scoring_reason": reason,
+            "space_scoring_reason": reason.replace("Time complexity", "Space complexity"),
+            "bottlenecks": analysis.get("bottlenecks") or [],
+            "optimization_suggestion": analysis.get("optimization_suggestion") or "",
+            "reasoning": analysis.get("reasoning") or "",
+            "analysis_method": analysis.get("method") or "ast+ai-review",
+            "analysis_confidence": analysis.get("confidence"),
+            "ast_estimate": analysis.get("ast_estimate"),
+            "ai_estimate": analysis.get("ai_estimate"),
+            "runtime_estimate": analysis.get("runtime_estimate"),
+        },
+        "assessment_flags": {"benchmark_review_required": False},
     }
 
 
@@ -158,21 +198,28 @@ def score_complexity_analysis(
     """
     target_time = (private_target or {}).get("time")
     target_space = (private_target or {}).get("space")
+    bounded_parameters = bounded_parameters_from_constraints(
+        (private_target or {}).get("constraints"),
+    )
     private_time_assessment = private_time_complexity_breakdown(
         target_time,
         analysis.get("time_complexity"),
+        bounded_parameters=bounded_parameters,
     )
     private_space_assessment = private_space_complexity_breakdown(
         target_space,
         analysis.get("space_complexity"),
+        bounded_parameters=bounded_parameters,
     )
     time_assessment = time_complexity_assessment(
         target_time,
         analysis.get("time_complexity"),
+        bounded_parameters=bounded_parameters,
     )
     space_assessment = space_complexity_assessment(
         target_space,
         analysis.get("space_complexity"),
+        bounded_parameters=bounded_parameters,
     )
 
     safe_details = {
@@ -195,6 +242,11 @@ def score_complexity_analysis(
         "optimization_suggestion": analysis.get("optimization_suggestion") or "",
         "reasoning": analysis.get("reasoning") or "",
         "analysis_source": analysis.get("analysis_source", "unknown"),
+        "analysis_method": analysis.get("method") or "ast",
+        "analysis_confidence": analysis.get("confidence"),
+        "ast_estimate": analysis.get("ast_estimate"),
+        "ai_estimate": analysis.get("ai_estimate"),
+        "runtime_estimate": analysis.get("runtime_estimate"),
     }
 
     component_scores = [
@@ -235,6 +287,9 @@ async def complexity_node(state: EvaluationState) -> Dict[str, Any]:
             submission.get("source_code", ""),
             submission.get("language", ""),
         )
+
+    if analysis.get("status") in {"REVIEW_REQUIRED", "ANALYSIS_FAILED"}:
+        return review_required_analysis(analysis)
 
     scored = score_complexity_analysis(
         analysis,
