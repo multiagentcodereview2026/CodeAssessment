@@ -96,7 +96,7 @@ Submission processing completes within the original HTTP request. There is no du
 
 ### 7. Review history and instructor views
 
-History and saved result routes are restricted to the authenticated student. Instructor courses, assignments, enrollment, course analytics, and assignment summaries are persisted in PostgreSQL. Score summaries use the latest evaluated attempt per student/problem for averages and score distributions; total attempts are reported separately. Independent practice is excluded from instructor analytics. Similarity alerts and report generation are not fully database-backed yet.
+History and saved result routes are restricted to the authenticated student. Instructor courses, assignments, enrollment, course analytics, assignment summaries, and course CSV exports are backed by PostgreSQL. Score summaries use the latest evaluated attempt per student/problem for averages and score distributions; total attempts are reported separately. Independent practice is excluded from instructor analytics. Similarity review and detailed per-student report workflows remain limited.
 
 ### Request sequence
 
@@ -388,8 +388,8 @@ Dataset tools are available under `backend/dataset/` and the Compose `tools` pro
 ## Important implementation limits
 
 - **Account bootstrap:** legacy seeded students have no credentials until registered and linked using the same student ID and matching email. The development instructor seed must be run explicitly with private credentials.
-- **Instructor workflows:** course create/archive, enrollment/reactivation/deactivation, assignment create/archive, student course visibility, and assignment submissions are persisted. Course editing is API-backed but not yet exposed as a complete frontend form; assignment editing is limited to the API and disallows changing problem links after submissions exist.
-- **Analytics:** headline scores and distributions use latest evaluated attempts; report export, dimension filters, time-range filters, and complete per-student instructor reports remain unfinished. Similarity alerts are currently empty rather than fabricated, and similarity comparison is not a full stored peer-analysis workflow.
+- **Instructor workflows:** course create/edit/archive, enrollment/reactivation/deactivation, assignment create/edit/archive, student course visibility, and assignment submissions are persisted. Assignment title, due date, and problem links cannot be changed after submissions exist; status updates remain available.
+- **Analytics:** headline scores and distributions use latest evaluated attempts; course CSV export is available. Dimension filters, time-range filters, and complete per-student instructor reports remain unfinished. Similarity review is limited and does not provide a verified plagiarism finding.
 - **Frontend:** dashboard/course/assignment flows use real APIs. Some profile metadata, announcements, parts of feedback/recommendations, and some legacy pages still use local/mock state and need follow-up before calling the whole product production-ready.
 - **AI output:** fallback feedback is explicitly marked as fallback and may be generic. Revised code is unavailable when a task-specific rewrite cannot be generated; generated drafts are not verified until judged. Similarity is unavailable when there are no same-problem peer submissions or the database cannot supply them. Projections are estimates, not verified outcomes.
 - **Execution isolation:** Docker runners disable networking and apply resource restrictions. Student code is not executed if the engine is unavailable. The service still mounts the host Docker socket; this is a trusted-host development deployment and needs a stronger isolation boundary before public production use.
@@ -411,4 +411,4 @@ Dataset tools are available under `backend/dataset/` and the Compose `tools` pro
 | Add a language | Engine `app/languages.py`, runtime image, backend wrappers, and editor options. |
 | README absent from Git status | `README.md` is tracked in the repository. |
 
-This guide is based on source inspection. The full stack and test suites were not run during documentation preparation. No license file was present in the inspected repository.
+The full stack and tests are verified locally as recorded in [implementation status](docs/IMPLEMENTATION_STATUS.md). This is still a development deployment; see the limits above before exposing it to users.

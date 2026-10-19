@@ -6,6 +6,9 @@ volumes:
     name: codeassessment_phase12_execution-work
 
 services:
+  backend:
+    environment:
+      GROQ_API_KEY: ""
   execution-engine:
     environment:
       SANDBOX_VOLUME: codeassessment_phase12_execution-work

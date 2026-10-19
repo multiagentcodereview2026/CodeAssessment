@@ -1,29 +1,31 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  BookOpen,
-  Users,
-  CalendarCheck,
-  Plus,
-  ArrowRight,
-  GraduationCap,
-  Layers,
-  Trash2,
-  Settings2
-} from 'lucide-react';
+import { Plus, ArrowRight, Trash2, Pencil } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Modal } from '../common/Modal';
 import { DoubleConfirmDialog } from '../common/DoubleConfirmDialog';
 
 export const CoursesManagerView: React.FC = () => {
   const navigate = useNavigate();
-  const { courses, addCourse, deleteCourse } = useApp();
+  const { courses, addCourse, updateCourse, deleteCourse } = useApp();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCode, setNewCode] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newTerm, setNewTerm] = useState('Spring 2026');
+  const [editTarget, setEditTarget] = useState<(typeof courses)[number] | null>(null);
+  const [editCode, setEditCode] = useState('');
+  const [editTitle, setEditTitle] = useState('');
+  const [editTerm, setEditTerm] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState<(typeof courses)[number] | null>(null);
+
+  const openEditCourse = (course: (typeof courses)[number]) => {
+    setEditTarget(course);
+    setEditCode(course.code);
+    setEditTitle(course.title);
+    setEditTerm(course.term || '');
+  };
 
   const handleCreateCourse = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,6 +47,24 @@ export const CoursesManagerView: React.FC = () => {
       setNewTitle('');
     } catch {
       // The context reports the API error; keep the form open for retry.
+    }
+  };
+
+  const handleUpdateCourse = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editTarget || !editCode.trim() || !editTitle.trim()) return;
+    setIsSavingEdit(true);
+    try {
+      await updateCourse(editTarget.id, {
+        code: editCode.trim().toUpperCase(),
+        title: editTitle.trim(),
+        term: editTerm.trim()
+      });
+      setEditTarget(null);
+    } catch {
+      // AppContext shows the API error and leaves the form open for retry.
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -84,6 +104,14 @@ export const CoursesManagerView: React.FC = () => {
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono text-slate-400">{course.term}</span>
+                  <button
+                    onClick={() => openEditCourse(course)}
+                    title="Edit Course"
+                    aria-label={`Edit ${course.code}`}
+                    className="text-slate-400 hover:text-indigo-600 p-1 transition-colors cursor-pointer"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
                   <button
                     onClick={() => setArchiveTarget(course)}
                     title="Archive Course"
@@ -209,6 +237,31 @@ export const CoursesManagerView: React.FC = () => {
             >
               Create Course
             </button>
+          </div>
+        </form>
+      </Modal>
+      <Modal
+        isOpen={Boolean(editTarget)}
+        onClose={() => { if (!isSavingEdit) setEditTarget(null); }}
+        title="Edit Course"
+        subtitle="Changes are saved to your instructor account."
+      >
+        <form onSubmit={handleUpdateCourse} className="space-y-4 text-xs">
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">Course Code</label>
+            <input value={editCode} onChange={(event) => setEditCode(event.target.value)} required maxLength={40} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-mono text-xs" />
+          </div>
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">Course Title</label>
+            <input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} required maxLength={160} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs" />
+          </div>
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">Academic Term</label>
+            <input value={editTerm} onChange={(event) => setEditTerm(event.target.value)} maxLength={80} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-xs" />
+          </div>
+          <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+            <button type="button" onClick={() => setEditTarget(null)} disabled={isSavingEdit} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-bold transition-colors disabled:opacity-50">Cancel</button>
+            <button type="submit" disabled={isSavingEdit || !editCode.trim() || !editTitle.trim()} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md transition-all disabled:opacity-50">{isSavingEdit ? 'Saving…' : 'Save changes'}</button>
           </div>
         </form>
       </Modal>

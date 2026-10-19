@@ -81,6 +81,7 @@ interface AppContextType {
   studentProgress: StudentProgress;
   courses: CourseItem[];
   addCourse: (course: CourseItem) => void;
+  updateCourse: (id: string, updates: Pick<CourseItem, 'code' | 'title' | 'term'>) => Promise<void>;
   deleteCourse: (id: string) => void;
   studentRoster: StudentRosterItem[];
   selectedStudent: StudentRosterItem | null;
@@ -508,6 +509,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  const updateCourse = async (id: string, updates: Pick<CourseItem, 'code' | 'title' | 'term'>) => {
+    try {
+      const response = await auth.authFetch(`/api/instructor/courses/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          course_code: updates.code,
+          title: updates.title,
+          term: updates.term
+        })
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.detail || 'Course update failed');
+      }
+
+      const saved = await response.json();
+      setCourses((current) => current.map((course) => course.id === id ? {
+        ...course,
+        code: saved.course_code,
+        title: saved.title,
+        term: saved.term || ''
+      } : course));
+      showToast('Course changes saved', 'success');
+    } catch (error) {
+      console.error('Unable to update course:', error);
+      showToast(error instanceof Error ? error.message : 'Unable to update course. Please retry.', 'error');
+      throw error;
+    }
+  };
+
   const deleteCourse = async (id: string) => {
     const response = await auth.authFetch(`/api/instructor/courses/${encodeURIComponent(id)}`, {
       method: 'DELETE'
@@ -647,6 +679,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         studentProgress,
         courses,
         addCourse,
+        updateCourse,
         deleteCourse,
         studentRoster,
         selectedStudent,
