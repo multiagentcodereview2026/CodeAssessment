@@ -819,7 +819,7 @@ def _defined_function_names(source: str) -> set[str]:
     names = set(re.findall(r"\bdef\s+([a-z_]\w*)\s*\(", source))
     names.update(re.findall(r"\bfunction\s+([a-z_]\w*)\s*\(", source))
     names.update(re.findall(
-        r"(?m)^\s*(?:static\s+)?(?:[a-z_][\w:<>]*\s*[*&]?\s+)+([a-z_]\w*)\s*\([^;{}]*\)\s*\{",
+        r"(?:^|(?<=[;{}]))\s*(?:static\s+)?(?:[A-Za-z_][\w:<>]*\s*[*&]?\s+)+([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{",
         source,
     ))
     return names
@@ -867,7 +867,7 @@ def _function_bodies(source: str, name: str) -> list[str]:
                         break
 
     signature = re.compile(
-        rf"(?m)^\s*(?:static\s+)?(?:[a-z_][\w:<>]*\s*[*&]?\s+)+{re.escape(name)}\s*\([^;{{}}]*\)\s*\{{"
+        rf"(?:^|(?<=[;{{}}]))\s*(?:static\s+)?(?:[A-Za-z_][\w:<>]*\s*[*&]?\s+)+{re.escape(name)}\s*\([^;{{}}]*\)\s*\{{"
     )
     for match in signature.finditer(source):
         open_brace = source.find("{", match.start(), match.end())

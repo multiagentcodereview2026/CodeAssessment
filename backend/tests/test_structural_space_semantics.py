@@ -1,5 +1,7 @@
 """Regression tests for generic auxiliary-space evidence."""
 
+import pytest
+
 from analysis.static_analyzer import analyze_source
 
 
@@ -162,17 +164,33 @@ def test_sequential_scans_of_two_inputs_keep_additive_time_and_fixed_table_space
     assert "structural:sequential-independent-input-scans" in result.signals
 
 
-def test_disjoint_child_recursion_is_linear_not_exponential_in_strict_mode():
+@pytest.mark.parametrize("separator", [" ", "\n", "\n\n"])
+@pytest.mark.parametrize("function_name", ["visit", "CountEntries"])
+def test_disjoint_child_recursion_is_linear_not_exponential_in_strict_mode(separator, function_name):
     result = analyze_source(
-        "struct Entry { Entry* first; Entry* second; }; "
-        "int visit(Entry* item) { if (!item) return 0; "
-        "return 1 + visit(item->first) + visit(item->second); }",
+        "struct Entry { Entry* first; Entry* second; };" + separator
+        + f"int {function_name}(Entry* item) {{ if (!item) return 0; "
+        + f"return 1 + {function_name}(item->first) + {function_name}(item->second); }}",
         "cpp",
         mode="structural",
     )
     assert result.time_complexity == "O(n)"
     assert result.space_complexity == "O(n)"
     assert "structural:disjoint-child-recursion" in result.signals
+
+
+@pytest.mark.parametrize("arguments", ["item->first, item->first", "item->first, item->second"])
+def test_ordinary_helper_calls_do_not_create_recursive_child_traversal(arguments):
+    first, second = arguments.split(", ")
+    result = analyze_source(
+        "struct Entry { Entry* first; Entry* second; }; "
+        "int value(Entry* item) { return item ? 1 : 0; } "
+        f"int total(Entry* item) {{ return value({first}) + value({second}); }}",
+        "cpp",
+        mode="structural",
+    )
+    assert result.time_complexity == "O(1)"
+    assert "structural:disjoint-child-recursion" not in result.signals
 
 
 def test_single_progressing_recursion_is_linear_in_strict_mode():

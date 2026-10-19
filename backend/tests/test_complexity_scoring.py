@@ -3,6 +3,7 @@ import asyncio
 from agents.complexity import complexity_node
 from agents.complexity import infer_static_complexity
 from scoring.complexity import (
+    bounded_parameters_from_constraints,
     complexity_rank,
     normalize_complexity,
     private_time_complexity_breakdown,
