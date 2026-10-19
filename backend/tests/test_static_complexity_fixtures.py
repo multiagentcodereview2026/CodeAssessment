@@ -219,6 +219,33 @@ function scan(value) {
     assert "structural:constant-factor-loop-progress" in result.signals
 
 
+@pytest.mark.parametrize("ast_time", ["O(1)", "O(n)", "O(log n)"])
+def test_literal_factor_evidence_is_retained_for_parser_estimates(monkeypatch, ast_time):
+    from types import SimpleNamespace
+
+    import analysis.static_analyzer as analyzer
+    from analysis.models import ComplexityAnalysis
+
+    source = "function shrink(value) { while (value % 3 === 0) { value /= 3; } return value; }"
+    parser_result = ComplexityAnalysis(
+        ast_time, "O(1)", 0.95, "ast", "ANALYZED",
+        signals=["loop-depth:1", "logarithmic-step"],
+    )
+    monkeypatch.setattr(analyzer, "AST_AVAILABLE", True)
+    monkeypatch.setattr(
+        analyzer, "ASTComplexityAnalyzer",
+        lambda *args, **kwargs: SimpleNamespace(analyze=lambda: object()),
+    )
+    monkeypatch.setattr(analyzer, "infer_complexity_from_ir", lambda *args, **kwargs: parser_result)
+
+    result = analyzer.analyze_source(source, "javascript")
+    assert result.time_complexity == "O(log n)"
+    assert result.space_complexity == "O(1)"
+    assert result.confidence == parser_result.confidence
+    assert set(parser_result.signals) <= set(result.signals)
+    assert "structural:constant-factor-loop-progress" in result.signals
+
+
 def test_decimal_factor_loop_progress_is_recognized_without_name_rules():
     source = """
 int reduce(int value) {

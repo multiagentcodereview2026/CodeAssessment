@@ -2005,9 +2005,11 @@ def analyze_source(
                     ):
                         ast_result = _with_combined_linear_logarithmic_time(ast_result)
                     elif (
-                        normalize_complexity(ast_result.time_complexity) in {"O(1)", "O(n)"}
+                        normalize_complexity(ast_result.time_complexity) in {"O(1)", "O(n)", "O(log n)"}
                         and _has_constant_factor_progress_loop(source)
                     ):
+                        # Preserve the source evidence even when the parser
+                        # already inferred the logarithmic bound correctly.
                         ast_result = _with_logarithmic_time(ast_result)
                     # Some C/C++ snippets parse successfully but the generic
                     # IR engine can miss loops (especially compact C loops),
