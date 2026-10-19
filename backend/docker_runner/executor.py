@@ -1,14 +1,8 @@
 import asyncio
-import ast
 import inspect
 import json
 import logging
 import os
-import shutil
-import subprocess
-import sys
-import tempfile
-import time
 from typing import Any, Dict, List
 
 import requests
@@ -572,421 +566,6 @@ def _sync_request_docker(
     return None
 
 
-def execute_locally(
-    source_code: str,
-    language: str,
-    test_cases: List[Dict[str, Any]]
-) -> Dict[str, Any]:
-    """
-    Fallback execution for Python, C, C++, and Java
-    stdin/stdout programs.
-    """
-
-    lang = language.lower()
-
-    temp_dir = tempfile.mkdtemp()
-
-    try:
-
-        # ---------------------------------------------------------
-        # Python
-        # ---------------------------------------------------------
-        if lang in [
-            "python",
-            "python3",
-            "py"
-        ]:
-
-            python_code = wrap_python_leetcode(
-                source_code
-            )
-
-            runner_cmd = [
-                sys.executable,
-                "-c",
-                python_code
-            ]
-
-        # ---------------------------------------------------------
-        # C / C++
-        # ---------------------------------------------------------
-        elif lang in [
-            "cpp",
-            "c++",
-            "c"
-        ]:
-
-            compiler = (
-                "g++"
-                if "cpp" in lang or "c++" in lang
-                else "gcc"
-            )
-
-            ext = (
-                ".cpp"
-                if "cpp" in lang or "c++" in lang
-                else ".c"
-            )
-
-            src_path = os.path.join(
-                temp_dir,
-                f"solution{ext}"
-            )
-
-            bin_path = os.path.join(
-                temp_dir,
-                "solution.exe"
-                if os.name == "nt"
-                else "solution"
-            )
-
-            with open(
-                src_path,
-                "w",
-                encoding="utf-8"
-            ) as f:
-                f.write(source_code)
-
-            comp_proc = subprocess.run(
-                [
-                    compiler,
-                    "-O2",
-                    src_path,
-                    "-o",
-                    bin_path
-                ],
-                capture_output=True,
-                text=True
-            )
-
-            if comp_proc.returncode != 0:
-
-                return {
-                    "compile_status": "error",
-                    "compile_error": (
-                        comp_proc.stderr
-                        or "Compilation failed."
-                    ),
-                    "execution_status": "compilation_error",
-                    "exit_code": comp_proc.returncode,
-                    "stdout": "",
-                    "stderr": (
-                        comp_proc.stderr
-                        or "Compilation failed."
-                    ),
-                    "runtime_ms": 0,
-                    "memory_kb": 0,
-                    "passed_cases": 0,
-                    "failed_cases": len(test_cases),
-                    "total_cases": len(test_cases),
-                    "results": []
-                }
-
-            runner_cmd = [
-                bin_path
-            ]
-
-        # ---------------------------------------------------------
-        # Java
-        # ---------------------------------------------------------
-        elif lang in ["java"]:
-
-            src_path = os.path.join(
-                temp_dir,
-                "Main.java"
-            )
-
-            with open(
-                src_path,
-                "w",
-                encoding="utf-8"
-            ) as f:
-                f.write(source_code)
-
-            comp_proc = subprocess.run(
-                [
-                    "javac",
-                    src_path
-                ],
-                capture_output=True,
-                text=True
-            )
-
-            if comp_proc.returncode != 0:
-
-                return {
-                    "compile_status": "error",
-                    "compile_error": (
-                        comp_proc.stderr
-                        or "Compilation failed."
-                    ),
-                    "execution_status": "compilation_error",
-                    "exit_code": comp_proc.returncode,
-                    "stdout": "",
-                    "stderr": (
-                        comp_proc.stderr
-                        or "Compilation failed."
-                    ),
-                    "runtime_ms": 0,
-                    "memory_kb": 0,
-                    "passed_cases": 0,
-                    "failed_cases": len(test_cases),
-                    "total_cases": len(test_cases),
-                    "results": []
-                }
-
-            runner_cmd = [
-                "java",
-                "-cp",
-                temp_dir,
-                "Main"
-            ]
-
-        # ---------------------------------------------------------
-        # Unknown language
-        # ---------------------------------------------------------
-        else:
-
-            runner_cmd = [
-                sys.executable,
-                "-c",
-                source_code
-            ]
-
-    except Exception as e:
-
-        shutil.rmtree(
-            temp_dir,
-            ignore_errors=True
-        )
-
-        return {
-            "compile_status": "error",
-            "compile_error": str(e),
-            "execution_status": "compilation_error",
-            "exit_code": 1,
-            "stdout": "",
-            "stderr": str(e),
-            "runtime_ms": 0,
-            "memory_kb": 0,
-            "passed_cases": 0,
-            "failed_cases": len(test_cases),
-            "total_cases": len(test_cases),
-            "results": []
-        }
-
-    passed_count = 0
-    failed_count = 0
-
-    results = []
-
-    total_runtime_ms = 0
-
-    first_stdout = ""
-
-    for tc in test_cases:
-
-        tc_id = str(
-            tc.get(
-                "id",
-                "1"
-            )
-        )
-
-        tc_input = str(
-            tc.get(
-                "input",
-                ""
-            )
-        )
-
-        expected_output = str(
-            tc.get(
-                "expected_output",
-                tc.get(
-                    "output",
-                    ""
-                )
-            )
-        )
-
-        is_hidden = bool(
-            tc.get(
-                "is_hidden",
-                tc.get(
-                    "isHidden",
-                    False
-                )
-            )
-        )
-
-        start = time.time()
-
-        try:
-
-            proc = subprocess.Popen(
-                runner_cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-
-            out, err = proc.communicate(
-                input=tc_input,
-                timeout=2.5
-            )
-
-            elapsed_ms = max(
-                1,
-                int(
-                    (time.time() - start) * 1000
-                )
-            )
-
-            total_runtime_ms += elapsed_ms
-
-            actual_out = out
-
-            if not first_stdout and actual_out:
-                first_stdout = actual_out
-
-            # -----------------------------------------------------
-            # Runtime error
-            # -----------------------------------------------------
-            if proc.returncode != 0:
-
-                failed_count += 1
-
-                results.append({
-                    "test_case_id": tc_id,
-                    "status": "runtime_error",
-                    "runtime_ms": elapsed_ms,
-                    "actual_output": actual_out,
-                    "expected_output": expected_output,
-                    "is_hidden": is_hidden,
-                    "error_message": (
-                        err.strip()
-                        or f"Exit code {proc.returncode}"
-                    )
-                })
-
-            # -----------------------------------------------------
-            # Accepted
-            # -----------------------------------------------------
-            elif compare_outputs(
-                actual_out,
-                expected_output
-            ):
-
-                passed_count += 1
-
-                results.append({
-                    "test_case_id": tc_id,
-                    "status": "accepted",
-                    "runtime_ms": elapsed_ms,
-                    "actual_output": actual_out,
-                    "expected_output": expected_output,
-                    "is_hidden": is_hidden,
-                    "error_message": None
-                })
-
-            # -----------------------------------------------------
-            # Wrong answer
-            # -----------------------------------------------------
-            else:
-
-                failed_count += 1
-
-                results.append({
-                    "test_case_id": tc_id,
-                    "status": "wrong_answer",
-                    "runtime_ms": elapsed_ms,
-                    "actual_output": actual_out,
-                    "expected_output": expected_output,
-                    "is_hidden": is_hidden,
-                    "error_message": None
-                })
-
-        except subprocess.TimeoutExpired:
-
-            failed_count += 1
-
-            proc.kill()
-
-            results.append({
-                "test_case_id": tc_id,
-                "status": "time_limit_exceeded",
-                "runtime_ms": 2500,
-                "actual_output": "",
-                "expected_output": expected_output,
-                "is_hidden": is_hidden,
-                "error_message": (
-                    "Execution timed out (2.5s)"
-                )
-            })
-
-        except Exception as e:
-
-            failed_count += 1
-
-            results.append({
-                "test_case_id": tc_id,
-                "status": "system_error",
-                "runtime_ms": 0,
-                "actual_output": "",
-                "expected_output": expected_output,
-                "is_hidden": is_hidden,
-                "error_message": str(e)
-            })
-
-    status_str = (
-        "completed"
-        if failed_count == 0
-        else next(
-            (
-                str(result["status"])
-                for result in results
-                if result["status"] != "accepted"
-            ),
-            "wrong_answer"
-        )
-    )
-
-    shutil.rmtree(
-        temp_dir,
-        ignore_errors=True
-    )
-
-    return {
-        "compile_status": "success",
-        "compile_error": None,
-        "execution_status": status_str,
-        "exit_code": (
-            0
-            if failed_count == 0
-            else 1
-        ),
-        "stdout": (
-            first_stdout
-            or "Execution completed."
-        ),
-        "stderr": "",
-        "runtime_ms": (
-            total_runtime_ms
-            // max(
-                1,
-                len(test_cases)
-            )
-        ),
-        "memory_kb": 4096,
-        "passed_cases": passed_count,
-        "failed_cases": failed_count,
-        "total_cases": len(test_cases),
-        "results": results
-    }
-
-
 async def execute_code_sandboxed(
     source_code: str,
     language: str = "python",
@@ -996,10 +575,9 @@ async def execute_code_sandboxed(
     """
     Execute code in the Docker execution microservice.
 
-    If the Docker microservice cannot be reached, Python can use the small
-    local fallback.  Compiled languages must *not* do that: the backend image
-    intentionally has no compiler, so a local fallback would incorrectly tell
-    a student that their valid code failed to compile.
+    Student code is only executed by the isolated Docker execution service.
+    An unavailable service is reported as an infrastructure error for every
+    language; it is never run inside the API process.
     """
 
     if isinstance(
@@ -1074,15 +652,20 @@ async def execute_code_sandboxed(
             })
 
     else:
-
-        formatted_cases = [
-            {
-                "id": "1",
-                "input": "2 7 11 15\n9",
-                "expected_output": "[0, 1]",
-                "is_hidden": False
-            }
-        ]
+        return {
+            "compile_status": "unavailable",
+            "compile_error": "No test cases are configured for this problem.",
+            "execution_status": "system_error",
+            "exit_code": 1,
+            "stdout": "",
+            "stderr": "No test cases are configured for this problem.",
+            "runtime_ms": 0,
+            "memory_kb": 0,
+            "passed_cases": 0,
+            "failed_cases": 0,
+            "total_cases": 0,
+            "results": [],
+        }
 
     # -------------------------------------------------------------
     # Python LeetCode-style submissions need the wrapper.
@@ -1300,36 +883,20 @@ async def execute_code_sandboxed(
             "revealed_feedback_case": data.get("revealed_feedback_case"),
         }
 
-    # -------------------------------------------------------------
-    # 2. Local execution fallback
-    # -------------------------------------------------------------
-    # The backend container is not a compiler host.  Do not convert an
-    # execution-engine outage into a misleading "g++ not found" student
-    # compiler error for C, C++, or Java submissions.
-    if language.lower() in {"c", "cpp", "c++", "java"}:
-        return {
-            "compile_status": "unavailable",
-            "compile_error": (
-                "The isolated code-execution service is temporarily unavailable. "
-                "Please retry your submission."
-            ),
-            "execution_status": "system_error",
-            "exit_code": 1,
-            "stdout": "",
-            "stderr": "",
-            "runtime_ms": 0,
-            "memory_kb": 0,
-            "passed_cases": 0,
-            "failed_cases": 0,
-            "total_cases": len(formatted_cases),
-            "results": [],
-        }
-
-    local_res = await asyncio.to_thread(
-        execute_locally,
-        source_code,
-        language,
-        formatted_cases
-    )
-
-    return local_res
+    return {
+        "compile_status": "unavailable",
+        "compile_error": (
+            "The isolated code-execution service is temporarily unavailable. "
+            "Please retry your submission."
+        ),
+        "execution_status": "system_error",
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "",
+        "runtime_ms": 0,
+        "memory_kb": 0,
+        "passed_cases": 0,
+        "failed_cases": 0,
+        "total_cases": len(formatted_cases),
+        "results": [],
+    }

@@ -1,4 +1,19 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: codeassessment
+      POSTGRES_DB: codeassessment
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the root .env file}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend
@@ -9,29 +24,41 @@ services:
       - VITE_API_PROXY_TARGET=http://backend:8000
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    command: ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"]
     env_file:
       - path: ./backend/.env
         required: false
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the root .env file}
+      - POSTGRES_USER=codeassessment
+      - POSTGRES_DB=codeassessment
       - DOCKER_ENGINE_URL=http://execution-engine:8001/execute
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-98ec009d3bdfd8076694e80e194a8f9c15bf28328faecb4578e0ea5225828236}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in the root .env file}
       - EXECUTION_CPU_LIMIT=1.0
       - EXECUTION_MEMORY_LIMIT=256m
       - EXECUTION_TIMEOUT_SECONDS=5
       - PUBLIC_ONLY_EXECUTION=${PUBLIC_ONLY_EXECUTION:-false}
       - DOCKER_ENGINE_REQUEST_TIMEOUT_SECONDS=120
     depends_on:
+      postgres:
+        condition: service_healthy
       execution-engine:
         condition: service_healthy
+    entrypoint: ["sh", "-c", "if [ -z \"$$DATABASE_URL\" ]; then export DATABASE_URL=\"postgresql+psycopg://codeassessment:$$POSTGRES_PASSWORD@postgres:5432/codeassessment\"; fi; alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
 
   dataset-importer:
     build:
@@ -39,7 +66,7 @@ services:
       dockerfile: Dockerfile
     profiles: ["tools"]
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-}
     volumes:
       - ../datasets/apps:/datasets:ro
     command: ["python", "-m", "dataset.import_apps", "--dataset-path", "/datasets/apps-first-100", "--limit", "100"]
@@ -59,7 +86,7 @@ services:
       dockerfile: Dockerfile
     profiles: ["tools"]
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-}
     volumes:
       - ../datasets/code_assessment_1000:/codecontests:ro
     command: ["python", "-m", "dataset.import_codecontests", "--dataset-path", "/codecontests/dataset.jsonl"]
@@ -70,7 +97,7 @@ services:
       dockerfile: Dockerfile
     profiles: ["tools"]
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-}
     volumes:
       - ../datasets/newfacade-staging:/newfacade:ro
     command: ["python", "-m", "dataset.import_newfacade", "--dataset-path", "/newfacade/normalized-newfacade-stdio-complexity.jsonl", "--require-complexity"]
@@ -124,7 +151,7 @@ services:
       dockerfile: Dockerfile
     profiles: ["tools"]
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-}
     volumes:
       - ../datasets/newfacade-staging:/newfacade:ro
     command: ["python", "-m", "dataset.migrate_problem_complexities", "--dataset-path", "/newfacade/normalized-newfacade-stdio-complexity.jsonl"]
@@ -186,5 +213,7 @@ services:
     profiles: ["tools"]
 
 volumes:
+  postgres-data:
+    name: codeassessment_postgres-data
   execution-work:
     name: ${EXECUTION_SANDBOX_VOLUME:-codeassessment_execution-work}

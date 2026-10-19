@@ -357,7 +357,7 @@ export const ProblemWorkspace: React.FC = () => {
     setActiveTestTab(0);
 
     try {
-      const res = await fetch('/api/submissions/run', {
+      const res = await authFetch('/api/submissions/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

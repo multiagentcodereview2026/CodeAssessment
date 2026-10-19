@@ -2,7 +2,7 @@
 
 An explainable, multi-agent code assessment platform for programming education. Students solve problems, execute code, and receive scores with improvement feedback. Instructors explore assignments, student progress, analytics, and reports.
 
-The interface also uses the names **CodeVedha** and **Kodacharya**. The project combines working backend features with demo interfaces and fallback AI responses.
+The interface also uses the name **CodeVedha**. The project combines persisted backend workflows with deterministic fallback AI responses when a model provider is unavailable.
 
 ## Contents
 
@@ -22,8 +22,8 @@ The interface also uses the names **CodeVedha** and **Kodacharya**. The project 
 
 - **Student workspace:** problem catalogue, Monaco editor, public test runs, submissions, feedback, and history.
 - **Assessment:** correctness, complexity, style, and similarity analysis, followed by explanations, recommendations, revised code, and score projections.
-- **Instructor interface:** problems, courses, roster, analytics, similarity review, and reports. Some management features use mock or browser state.
-- **Execution:** Python, C, C++, Java, and JavaScript through a separate execution service.
+- **Instructor interface:** problems, courses, roster, analytics, similarity review, and reports. Feature coverage and data sources are summarized in [implementation status](docs/IMPLEMENTATION_STATUS.md).
+- **Execution:** Python, C, C++, and Java through a separate isolated execution service. Code is never run in the backend process.
 - **Storage:** PostgreSQL with Docker Compose; SQLite for local backend development.
 - **Datasets:** import and normalization tools for APPS, CodeContests, and NewFacade.
 
@@ -50,6 +50,8 @@ FastAPI backend :8000 ──── PostgreSQL
 
 ## Complete project workflow
 
+For current implementation coverage and environment-specific verification status, see [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
+
 ### 1. Start services and prepare data
 
 Docker Compose starts PostgreSQL, the execution service, the backend, and the frontend. The backend creates missing database tables and inserts missing built-in instructor problems and their judge cases. Additional practice problems come from dataset imports or an existing database. Restarting does not overwrite existing instructor assignments.
@@ -62,7 +64,7 @@ The frontend sends `/api` requests through Vite to FastAPI. FastAPI owns problem
 
 The student catalogue calls `/api/problems`; the instructor catalogue calls `/api/instructor-problems`. Opening a problem calls `/api/problems/{id}` for its statement, constraints, examples, starter code, and public cases. Private judge cases stay server-side.
 
-JWT signing requires `JWT_SECRET_KEY` with at least 32 characters. Instructor APIs require an authenticated instructor profile and scope results to its owned courses. Student submission/history/analytics APIs derive identity from the authenticated student profile; a submitted student ID is not trusted. This remains a development deployment, not a hardened production identity provider.
+JWT signing requires a configured `JWT_SECRET_KEY` with at least 32 characters; there is no built-in signing-key fallback. Instructor APIs require an authenticated instructor profile and scope results to its owned courses. Student execution/submission/history/analytics APIs derive identity from the authenticated student profile; a submitted student ID is not trusted. This remains a development deployment, not a hardened production identity provider.
 
 ### 3. Write code and run public tests
 
@@ -76,7 +78,7 @@ The backend execution client prepares supported solution wrappers, calls the exe
 
 The backend asks the execution engine to run all cases, including hidden cases, without stopping after the first failure. The engine resolves the language, compiles when necessary, executes cases with bounded concurrency, and reports results. Docker runners apply network, filesystem, process, CPU, and memory restrictions.
 
-Programs must follow the selected problem's input/output format. The backend has wrappers for some function/class-style solutions, but these are not universal. Local-process fallback paths also exist when engine/Docker execution is unavailable; see the implementation limits below.
+Programs must follow the selected problem's input/output format. The backend has wrappers for some function/class-style solutions, but these are not universal. If the isolated engine is unavailable, run and submit return an infrastructure error and do not execute code elsewhere.
 
 ### 5. Evaluate and explain
 
@@ -205,32 +207,33 @@ git clone https://github.com/multiagentcodereview2026/CodeAssessment.git
 cd CodeAssessment
 ```
 
-Create `backend/.env` (optional for Docker Compose; used for Groq settings):
+Create the root Compose environment file and backend AI configuration:
+
+```powershell
+Copy-Item .env.example .env
+Copy-Item backend/.env.example backend/.env
+```
+
+Replace `POSTGRES_PASSWORD` and `JWT_SECRET_KEY` in `.env` with different random values (at least 32 characters for the JWT key). Do not commit either file. A Groq key is optional; without one, agents use deterministic fallback responses.
 
 ```dotenv
 GROQ_API_KEY=
-GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_MODEL=openai/gpt-oss-120b
 ```
 
-Set a private JWT signing key in the shell before starting the backend. PowerShell example:
+Pull the images used by the active execution service, then start the application and check health:
 
 ```powershell
-$env:JWT_SECRET_KEY = (python -c "import secrets; print(secrets.token_urlsafe(48))").Trim()
 docker compose up --build -d
+docker compose ps
+Invoke-RestMethod http://localhost:8000/health
 ```
-
-Keep this environment variable available for subsequent `docker compose` commands. Do not commit the key. For a host-run backend, export the same variable in the backend process environment.
-
-Optionally set `POSTGRES_PASSWORD` in a root `.env` to override the Compose development password.
-
-Pull the images used by the active execution service, then start the application:
 
 ```bash
 docker pull python:3.11-slim
 docker pull gcc:13
 docker pull eclipse-temurin:17-jdk
 docker pull node:20-slim
-docker compose up --build -d
 ```
 
 | Service | Address |
@@ -289,7 +292,8 @@ On Windows, activate with `.venv\Scripts\activate`. A host-run backend needs a r
 | --- | --- |
 | `GROQ_API_KEY`, `GROQ_MODEL` | Model credentials and selection |
 | `JWT_SECRET_KEY` | Required to issue/verify sessions; at least 32 characters; keep private |
-| `DATABASE_URL` | Export in the backend process; local default is `sqlite:///./codeassessment_v2.db` |
+| `POSTGRES_PASSWORD` | Required root Compose secret for the bundled PostgreSQL service |
+| `DATABASE_URL` | Optional root `.env` override for an external database; otherwise Compose uses its persistent local PostgreSQL 16 service. Host-run backend defaults to `sqlite:///./codeassessment_v2.db`. |
 | `DOCKER_ENGINE_URL` | Local default: `http://localhost:8001/execute`; Compose sets the service URL |
 | `DOCKER_ENGINE_REQUEST_TIMEOUT_SECONDS` | Execution HTTP timeout; 120 seconds |
 | `VITE_API_PROXY_TARGET` | Frontend development proxy; defaults to `http://127.0.0.1:8000` |
@@ -313,7 +317,7 @@ Compose supplies the database/engine connection settings. The built frontend req
 | POST | `/api/instructor/problems` | Create a question and link it to a course assignment |
 | PUT/DELETE | `/api/instructor/problems/{problem_id}` | Edit or remove an owned question before student submissions exist |
 | GET | `/api/problems/{problem_id}` | Statement and public cases |
-| POST | `/api/submissions/run` | Execute public or supplied cases |
+| POST | `/api/submissions/run` | Authenticated student execution against public or supplied cases |
 | POST | `/api/submissions/submit` | Execute, assess, and save |
 | GET | `/api/submissions?student_id=...` | Saved history |
 | GET | `/api/submissions/{submission_id}` | Saved result and source |
@@ -327,10 +331,11 @@ Compose supplies the database/engine connection settings. The built frontend req
 | GET/POST/PATCH | `/api/instructor/assignments` | List/create/update owned assignments |
 | GET | `/api/instructor/courses/{course_id}/analytics` | Course-scoped analytics |
 
-Example run without a stored problem:
+Example run without a stored problem (include the bearer token returned by login):
 
 ```bash
 curl -X POST http://localhost:8000/api/submissions/run \
+  -H 'Authorization: Bearer <access-token>' \
   -H 'Content-Type: application/json' \
   -d '{"language":"python","code":"print(sum(map(int, input().split())))","test_cases":[{"input":"2 3","expected_output":"5","is_hidden":false}]}'
 ```
@@ -387,14 +392,14 @@ Dataset tools are available under `backend/dataset/` and the Compose `tools` pro
 - **Analytics:** headline scores and distributions use latest evaluated attempts; report export, dimension filters, time-range filters, and complete per-student instructor reports remain unfinished. Similarity alerts are currently empty rather than fabricated, and similarity comparison is not a full stored peer-analysis workflow.
 - **Frontend:** dashboard/course/assignment flows use real APIs. Some profile metadata, announcements, parts of feedback/recommendations, and some legacy pages still use local/mock state and need follow-up before calling the whole product production-ready.
 - **AI output:** fallbacks may be generic. The revision fallback is a fixed C++ Two Sum solution. Similarity has no comparison corpus, and projections are estimates rather than verified outcomes.
-- **Execution isolation:** Docker runners disable networking and apply resource restrictions, but both execution layers contain local-process fallback paths. An unavailable sandbox does not necessarily stop execution. The service also mounts the host Docker socket.
+- **Execution isolation:** Docker runners disable networking and apply resource restrictions. Student code is not executed if the engine is unavailable. The service still mounts the host Docker socket; this is a trusted-host development deployment and needs a stronger isolation boundary before public production use.
 - **Deployment:** Compose runs the Vite development server and permissive CORS. It is a development setup.
 
 ## Troubleshooting and maintenance
 
 | Issue or change | Where to look |
 | --- | --- |
-| Missing environment file | Create `backend/.env` before starting Compose. |
+| Missing environment/secrets | Copy `.env.example` to `.env`, configure both required secrets, and copy `backend/.env.example` to `backend/.env`. |
 | Empty practice catalogue | Import practice data; check instructor catalogue separately. |
 | Generic feedback | Check Groq configuration and backend fallback logs. |
 | Slow or failed execution | Inspect backend/engine logs, runtime images, timeouts, and shared volume name. |
@@ -404,6 +409,6 @@ Dataset tools are available under `backend/dataset/` and the Compose `tools` pro
 | Change a page | `frontend/src/App.jsx` and the mounted component. |
 | Change scoring or workflow | `backend/agents/`, `scoring/`, and `workflow/`. |
 | Add a language | Engine `app/languages.py`, runtime image, backend wrappers, and editor options. |
-| README absent from Git status | `.gitignore` explicitly ignores `README.md`; adjust the rule when adding it. |
+| README absent from Git status | `README.md` is tracked in the repository. |
 
 This guide is based on source inspection. The full stack and test suites were not run during documentation preparation. No license file was present in the inspected repository.

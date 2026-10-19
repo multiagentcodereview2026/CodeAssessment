@@ -1097,7 +1097,11 @@ async def generate_problem_hints(
 # ==========================================
 
 @app.post("/api/submissions/run", response_model=QuickRunResponse)
-async def quick_run_code(payload: QuickRunRequest, db: Session = Depends(get_db)):
+async def quick_run_code(
+    payload: QuickRunRequest,
+    db: Session = Depends(get_db),
+    student: models.Student = Depends(get_current_student),
+):
     """Executes code against test cases in the sandbox without triggering AI evaluation."""
     test_cases = payload.test_cases
     if payload.problem_id:

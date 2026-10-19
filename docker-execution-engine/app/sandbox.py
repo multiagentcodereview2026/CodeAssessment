@@ -41,51 +41,6 @@ def is_docker_available() -> bool:
         return False
 
 
-def run_local_process_command(
-    cmd_list: list[str],
-    cwd: str,
-    timeout_seconds: int,
-    input_str: str | None = None,
-    max_output_bytes: int = 1048576
-) -> tuple[int, str, str, bool]:
-    process = None
-    stdout_data = ""
-    stderr_data = ""
-    timed_out = False
-
-    try:
-        process = subprocess.Popen(
-            cmd_list,
-            cwd=cwd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-
-        try:
-            stdout_data, stderr_data = process.communicate(
-                input=input_str,
-                timeout=timeout_seconds
-            )
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            process.kill()
-            try:
-                stdout_data, stderr_data = process.communicate(timeout=1)
-            except Exception:
-                pass
-    except Exception as exc:
-        return 1, "", str(exc), False
-
-    if len(stdout_data) > max_output_bytes:
-        stdout_data = stdout_data[:max_output_bytes]
-    if len(stderr_data) > max_output_bytes:
-        stderr_data = stderr_data[:max_output_bytes]
-
-    return process.returncode if process else 1, stdout_data, stderr_data, timed_out
-
-
 def run_container_command(
     cmd_list: list[str],
     container_name: str,
@@ -249,6 +204,16 @@ def execute_in_sandbox(
     # service container. When the engine runs in Compose, use a named volume
     # shared with the short-lived runner containers instead.
     use_docker = is_docker_available()
+    if not use_docker:
+        return SandboxRunResult(
+            status=VERDICT_SYSTEM_ERROR,
+            runtime_ms=0,
+            memory_kb=0,
+            compile_success=False,
+            compile_stderr="Docker execution sandbox is unavailable; student code was not run.",
+            actual_output=None,
+            stderr="Docker execution sandbox is unavailable; student code was not run."
+        )
     owns_workspace = workspace is None
     sandbox_volume = os.getenv("SANDBOX_VOLUME", "").strip()
     if workspace:
@@ -390,63 +355,6 @@ def execute_in_sandbox(
                 max_output_bytes=max_output_bytes
             )
             elapsed_ms = int((time.monotonic() - start_time) * 1000)
-        else:
-            # Local Process Fallback (strictly guarded to prevent unconfined host code execution)
-            allow_unsafe = os.getenv("ALLOW_UNSAFE_HOST_EXECUTION", "false").lower() == "true"
-            if not allow_unsafe:
-                return SandboxRunResult(
-                    status=VERDICT_SYSTEM_ERROR,
-                    runtime_ms=0,
-                    memory_kb=0,
-                    compile_success=False,
-                    compile_stderr="Docker execution sandbox is unavailable and unconfined host execution is disabled.",
-                    actual_output=None,
-                    stderr="Docker execution sandbox is unavailable and unconfined host execution is disabled."
-                )
-
-            if lang_config.compile_cmd:
-                local_compile = list(lang_config.compile_cmd)
-                if shutil.which(local_compile[0]):
-                    returncode, stdout_data, stderr_data, timed_out = run_local_process_command(
-                        cmd_list=local_compile,
-                        cwd=temp_dir,
-                        timeout_seconds=15,
-                        input_str=None,
-                        max_output_bytes=max_output_bytes
-                    )
-                    if timed_out or returncode != 0:
-                        return SandboxRunResult(
-                            status=VERDICT_COMPILATION_ERROR,
-                            runtime_ms=0,
-                            memory_kb=0,
-                            compile_success=False,
-                            compile_stderr=stderr_data or stdout_data or "Local compilation failed",
-                            actual_output=None,
-                            stderr=stderr_data
-                        )
-
-            local_run = list(lang_config.run_cmd)
-            # Normalize python command on Windows if python3 is not in PATH
-            if local_run and local_run[0] == "python3" and not shutil.which("python3"):
-                import sys
-                local_run[0] = sys.executable
-
-            start_time = time.monotonic()
-            formatted_input = (
-                input_data
-                if input_data.endswith("\n")
-                else f"{input_data}\n"
-            )
-
-            returncode, stdout_data, stderr_data, timed_out = run_local_process_command(
-                cmd_list=local_run,
-                cwd=temp_dir,
-                timeout_seconds=timeout_sec,
-                input_str=formatted_input,
-                max_output_bytes=max_output_bytes
-            )
-            elapsed_ms = int((time.monotonic() - start_time) * 1000)
-
         clean_stderr = ""
         if stderr_data:
             lines = [

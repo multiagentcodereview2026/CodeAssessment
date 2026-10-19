@@ -1,8 +1,14 @@
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+
+if not os.getenv("DATABASE_URL"):
+    load_dotenv(Path(__file__).resolve().parent / ".env")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./codeassessment_v2.db")
 

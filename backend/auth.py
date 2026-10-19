@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -13,6 +14,7 @@ from jose import jwt
 
 from pwdlib import PasswordHash
 from pwdlib.exceptions import UnknownHashError
+from dotenv import load_dotenv
 
 from sqlalchemy.orm import Session
 
@@ -22,6 +24,9 @@ from database import get_db
 
 
 SECRET_KEY_ENV = "JWT_SECRET_KEY"
+
+if not os.getenv(SECRET_KEY_ENV):
+    load_dotenv(Path(__file__).resolve().parent / ".env")
 
 ALGORITHM = "HS256"
 
@@ -52,13 +57,10 @@ def verify_password(
         return False
 
 
-DEFAULT_DEV_SECRET = "codeassessment-development-secret-key-32chars-minimum"
-
-
 def get_jwt_secret() -> str:
     secret_key = os.getenv(SECRET_KEY_ENV, "").strip()
     if not secret_key:
-        return DEFAULT_DEV_SECRET
+        raise RuntimeError(f"{SECRET_KEY_ENV} must be configured before authentication is used")
     if len(secret_key) < 32:
         raise RuntimeError(f"{SECRET_KEY_ENV} must contain at least 32 characters")
     return secret_key

@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Explainable Multi-Agent AI Code Evaluator"
     DEBUG: bool = True
 
-    DATABASE_URL: str = "sqlite:///./evaluator.db"
+    DATABASE_URL: str = "sqlite:///./codeassessment_v2.db"
 
     # Groq Configuration
     GROQ_API_KEY: str = ""

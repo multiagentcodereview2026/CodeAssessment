@@ -1,5 +1,6 @@
 import os
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -8,6 +9,12 @@ from database import Base
 import models  # noqa: F401
 
 config = context.config
+if not os.getenv("DATABASE_URL"):
+    env_file = Path(__file__).resolve().parents[1] / ".env"
+    if env_file.exists():
+        from dotenv import load_dotenv
+
+        load_dotenv(env_file)
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
