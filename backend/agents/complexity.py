@@ -133,9 +133,12 @@ async def analyze_student_complexity(
         ComplexityOutput,
         unavailable_analysis("The complexity analysis model was unavailable, so no complexity was inferred."),
     )
+    analysis_source = result.get("analysis_source", "fallback")
     if not result.get("time_complexity") and not result.get("space_complexity"):
         result = infer_static_complexity(source_code)
+        analysis_source = "static_fallback"
     return {
+        "analysis_source": analysis_source,
         "time_complexity": normalize_complexity(result.get("time_complexity")),
         "space_complexity": normalize_complexity(result.get("space_complexity")),
         "bottlenecks": result.get("bottlenecks") or [],
@@ -191,6 +194,7 @@ def score_complexity_analysis(
         "bottlenecks": analysis.get("bottlenecks") or [],
         "optimization_suggestion": analysis.get("optimization_suggestion") or "",
         "reasoning": analysis.get("reasoning") or "",
+        "analysis_source": analysis.get("analysis_source", "unknown"),
     }
 
     component_scores = [

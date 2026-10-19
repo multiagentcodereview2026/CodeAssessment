@@ -88,3 +88,29 @@ def test_legacy_schema_migration_adds_and_backfills_auth_links(tmp_path):
     assert linked_user_id == 1
 
     engine.dispose()
+
+
+def test_fresh_database_migration_is_repeatable(tmp_path):
+    backend_dir = Path(__file__).resolve().parents[1]
+    database_path = tmp_path / "fresh.sqlite"
+    database_url = URL.create("sqlite", database=str(database_path)).render_as_string(
+        hide_password=False
+    )
+    environment = os.environ.copy()
+    environment["DATABASE_URL"] = database_url
+    command = [sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", "head"]
+
+    first_run = subprocess.run(command, cwd=backend_dir, env=environment, capture_output=True, text=True)
+    assert first_run.returncode == 0, first_run.stdout + first_run.stderr
+    second_run = subprocess.run(command, cwd=backend_dir, env=environment, capture_output=True, text=True)
+    assert second_run.returncode == 0, second_run.stdout + second_run.stderr
+
+    engine = sa.create_engine(database_url)
+    inspector = inspect(engine)
+    assert {"users", "students", "problems", "submissions", "assignments"}.issubset(
+        inspector.get_table_names()
+    )
+    with engine.connect() as connection:
+        version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert version == "20261016_0006"
+    engine.dispose()

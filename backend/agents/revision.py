@@ -66,7 +66,7 @@ async def revision_node(state: EvaluationState) -> Dict[str, Any]:
     fallback = unavailable_revision(state)
 
     result = await invoke_agent(prompt, payload, RevisionOutput, fallback)
-    used_fallback = result is fallback
+    used_fallback = result.get("analysis_source") != "groq"
     # Protect older prompts/model responses from the known unrelated Two Sum
     # template. A suggestion is only useful when it belongs to this task.
     task_context = " ".join((

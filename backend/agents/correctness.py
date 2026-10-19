@@ -1,11 +1,11 @@
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from agents.base import load_prompt, invoke_agent
 from workflow.state import EvaluationState
 
 
 class CorrectnessOutput(BaseModel):
-    correctness_score: float
+    correctness_score: Optional[float]
     passed_cases: int
     failed_cases: int
     compilation_success: bool
@@ -14,15 +14,21 @@ class CorrectnessOutput(BaseModel):
     summary: str
 
 
-def calculate_correctness_score(exec_res: Dict[str, Any]) -> float:
+def calculate_correctness_score(exec_res: Dict[str, Any]) -> Optional[float]:
     """
     Calculate correctness deterministically from sandbox execution results.
 
     The LLM does NOT decide this score.
     """
 
-    if exec_res.get("compile_status") != "success":
+    compile_status = str(exec_res.get("compile_status") or "").lower()
+    execution_status = str(exec_res.get("execution_status") or "").lower()
+    if compile_status in {"unavailable", "system_error"} or execution_status == "system_error":
+        return None
+    if compile_status in {"error", "compilation_error"} or execution_status == "compilation_error":
         return 0.0
+    if compile_status != "success":
+        return None
 
     results = exec_res.get("results") or []
 
@@ -36,7 +42,7 @@ def calculate_correctness_score(exec_res: Dict[str, Any]) -> float:
         total = len(results)
 
         if total == 0:
-            return 0.0
+            return None
 
         return round((passed / total) * 100, 2)
 
@@ -46,7 +52,7 @@ def calculate_correctness_score(exec_res: Dict[str, Any]) -> float:
     total = int(exec_res.get("total_cases", passed + failed) or 0)
 
     if total <= 0:
-        return 0.0
+        return None
 
     return round((passed / total) * 100, 2)
 

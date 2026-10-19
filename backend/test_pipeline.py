@@ -1,8 +1,16 @@
 import asyncio
+import pytest
 from workflow.graph import evaluation_graph
 from workflow.state import EvaluationState
 
-async def test_langgraph_pipeline_dry_run():
+@pytest.mark.asyncio
+async def test_langgraph_pipeline_dry_run(monkeypatch):
+    # Keep this graph test deterministic and offline even when a developer has
+    # a provider key in their local environment.
+    import agents.base as agent_base
+
+    monkeypatch.setattr(agent_base, "llm", None)
+    monkeypatch.setattr(agent_base.settings, "GROQ_API_KEY", "")
     initial_state: EvaluationState = {
         "user": {"student_id": "24BD1A058Z", "name": "Vignesh"},
         "problem": {
@@ -53,7 +61,9 @@ async def test_langgraph_pipeline_dry_run():
     assert 0 <= result["overall_score"] <= 100
     assert result["feedback"] is not None
     assert "strengths" in result["feedback"]
-    assert result["improved_code"] is not None
+    # Revision is requested separately after a saved submission; the scoring
+    # graph must not fabricate a replacement code draft in its offline path.
+    assert result["improved_code"] is None
     assert result["projected_score"] is not None
     print("\n==========================================")
     print(" [SUCCESS] LangGraph Multi-Agent Pipeline Passed!")

@@ -1,5 +1,7 @@
 import os
+import subprocess
 import sys
+import pytest
 
 sys.path.insert(
     0,
@@ -11,16 +13,20 @@ sys.path.insert(
 )
 
 from app.languages import get_language_config
+from app.languages import LANGUAGES
 from app.models import VERDICT_ACCEPTED
 from app.models import VERDICT_COMPILATION_ERROR
+from app.models import VERDICT_OUTPUT_LIMIT_EXCEEDED
+from app.models import VERDICT_SYSTEM_ERROR
 from app.models import VERDICT_WRONG_ANSWER
 from app.queue_worker import aggregate_verdict
-from app.schemas import TestCaseResultResponse
+from app import sandbox
+from app.schemas import TestCaseResultResponse as CaseResultResponse
 
 
 def test_schema_hidden_redaction():
 
-    res = TestCaseResultResponse(
+    res = CaseResultResponse(
         test_case_id="tc_101",
         status="ACCEPTED",
         runtime_ms=12,
@@ -54,8 +60,52 @@ def test_language_config():
     assert get_language_config("c") is not None
     assert get_language_config("cpp") is not None
     assert get_language_config("java") is not None
+    assert get_language_config("javascript") is not None
+    assert set(LANGUAGES) == {"python", "c", "cpp", "java", "javascript"}
     assert get_language_config("unknown") is None
     print("[PASS] test_language_config")
+
+
+def test_output_capture_is_bounded(monkeypatch):
+    monkeypatch.setattr(sandbox.subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0))
+    result = sandbox.run_container_command(
+        [sys.executable, "-c", "import sys; sys.stdout.write('x' * 2000000)"],
+        "test-container",
+        timeout_seconds=5,
+        max_output_bytes=1024,
+    )
+    code, stdout, stderr, timed_out, output_limited = result
+    assert output_limited is True
+    assert len(stdout.encode()) + len(stderr.encode()) <= 1024
+    assert timed_out is False
+
+
+def test_execution_fails_closed_when_docker_is_unavailable(monkeypatch):
+    monkeypatch.setattr(sandbox, "is_docker_available", lambda: False)
+    monkeypatch.setattr(sandbox.tempfile, "mkdtemp", lambda **kwargs: pytest.fail("workspace must not be created"))
+    result = sandbox.execute_in_sandbox("print('should not run')", get_language_config("python"), "", "")
+    assert result.status == VERDICT_SYSTEM_ERROR
+    assert result.actual_output is None
+    assert "was not run" in result.stderr
+
+
+def test_sandbox_commands_apply_isolation_and_read_only_runner_mount(monkeypatch):
+    commands = []
+
+    def fake_run_container_command(cmd_list, **kwargs):
+        commands.append(cmd_list)
+        return 0, "", "", False, False
+
+    monkeypatch.setattr(sandbox, "is_docker_available", lambda: True)
+    monkeypatch.setattr(sandbox, "run_container_command", fake_run_container_command)
+    result = sandbox.execute_in_sandbox("int main(){return 0;}", get_language_config("cpp"), "", "")
+    assert result.status == VERDICT_ACCEPTED
+    assert len(commands) == 2
+    runner = commands[1]
+    for option in ("--network", "none", "--read-only", "--pids-limit", "--memory", "--cpus", "--cap-drop", "ALL", "--security-opt", "no-new-privileges"):
+        assert option in runner
+    mount_index = runner.index("-v") + 1
+    assert runner[mount_index].endswith(":ro")
 
 
 def main():

@@ -529,9 +529,18 @@ app = FastAPI(
     version="1.0.0"
 )
 
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ALLOW_ORIGINS",
+        "http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1197,6 +1206,12 @@ async def submit_and_evaluate_code(
                 test_cases = []
         elif isinstance(tc_raw, list):
             test_cases = tc_raw
+
+    if not test_cases:
+        raise HTTPException(
+            status_code=400,
+            detail="No test cases are configured for this problem",
+        )
     
     # Docker execution decides correctness. Groq only sees the public problem
     # information and source code; it never receives hidden cases or TC/SC

@@ -105,15 +105,13 @@ def student_rubric_score(
         },
         STUDENT_RUBRIC_WEIGHTS,
     )
-    correctness_percent = _clamp(correctness) or 0.0
-    correctness_factor = correctness_percent / 100.0
-    score_before_cap = round(raw_score * correctness_factor, 1)
-    accepted = correctness_percent >= 100.0
-    score_cap = None if accepted else NON_ACCEPTED_SCORE_CAP
+    correctness_percent = _clamp(correctness)
+    score_before_cap = raw_score
+    accepted = None if correctness_percent is None else correctness_percent >= 100.0
+    score_cap = NON_ACCEPTED_SCORE_CAP if accepted is False else None
     final_score = min(score_before_cap, score_cap) if score_cap is not None else score_before_cap
     breakdown["correctness_gate"] = {
         "raw_score": raw_score,
-        "correctness_factor": round(correctness_factor, 4),
         "score_before_cap": score_before_cap,
         "score_cap": score_cap,
         "final_score": final_score,

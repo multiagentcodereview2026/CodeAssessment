@@ -6,8 +6,8 @@ from workflow.state import EvaluationState
 
 
 class SimilarityOutput(BaseModel):
-    similarity_score: float
-    originality_score: float
+    similarity_score: float | None
+    originality_score: float | None
     risk_level: str
     similar_submission_ids: List[str]
     reasoning: str
@@ -41,8 +41,8 @@ def calculate_jaccard_similarity(code_a: str, code_b: str) -> float:
     return round((intersection / union) * 100.0, 2)
 
 
-def get_peer_submissions(problem_id: str, current_student_id: str | None = None, limit: int = 50) -> List[Dict[str, str]]:
-    """Query recent peer submissions from the database for the given problem."""
+def get_peer_submissions(problem_id: str, current_student_id: str | None = None, limit: int = 50) -> List[Dict[str, str]] | None:
+    """Query peer submissions; return None when the database is unavailable."""
     try:
         from database import SessionLocal
         import models
@@ -59,7 +59,7 @@ def get_peer_submissions(problem_id: str, current_student_id: str | None = None,
         finally:
             db.close()
     except Exception:
-        return []
+        return None
 
 
 async def similarity_node(state: EvaluationState) -> Dict[str, Any]:
@@ -72,6 +72,27 @@ async def similarity_node(state: EvaluationState) -> Dict[str, Any]:
     # Fetch peer submissions from database
     peers = get_peer_submissions(problem_id, current_student)
 
+    if not peers:
+        comparison_status = "database_unavailable" if peers is None else "no_peer_submissions"
+        reasoning = (
+            "Peer submissions could not be loaded, so originality was not assessed."
+            if peers is None
+            else "There are no other submissions for this problem to compare."
+        )
+        details = {
+            "similarity_score": None,
+            "originality_score": None,
+            "risk_level": "Unavailable",
+            "similar_submission_ids": [],
+            "reasoning": reasoning,
+            "flag_for_review": False,
+            "comparison_available": False,
+            "comparison_status": comparison_status,
+            "comparison_count": 0,
+            "analysis_source": "unavailable",
+        }
+        return {"similarity_score": None, "similarity_details": details}
+
     max_sim = 0.0
     matching_ids: List[str] = []
 
@@ -83,7 +104,7 @@ async def similarity_node(state: EvaluationState) -> Dict[str, Any]:
             matching_ids.append(peer["submission_id"])
 
     # Determine risk level and scores based on concrete comparison
-    similarity_score = max_sim if peers else 10.0
+    similarity_score = max_sim
     originality_score = max(0.0, round(100.0 - similarity_score, 2))
 
     if similarity_score >= 80.0:
@@ -122,6 +143,9 @@ async def similarity_node(state: EvaluationState) -> Dict[str, Any]:
     result["originality_score"] = originality_score
     result["similar_submission_ids"] = matching_ids
     result["flag_for_review"] = flag_for_review
+    result["comparison_available"] = True
+    result["comparison_status"] = "compared"
+    result["comparison_count"] = len(peers)
 
     return {
         "similarity_score": similarity_score,

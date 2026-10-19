@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 import uuid
 
@@ -47,12 +48,28 @@ def run_container_command(
     timeout_seconds: int,
     input_str: str | None = None,
     max_output_bytes: int = 1048576
-) -> tuple[int, str, str, bool]:
-
+) -> tuple[int, str, str, bool, bool]:
     process = None
-    stdout_data = ""
-    stderr_data = ""
+    stdout_data = bytearray()
+    stderr_data = bytearray()
     timed_out = False
+    output_limited = threading.Event()
+    output_lock = threading.Lock()
+    output_bytes = 0
+
+    def drain(stream, destination: bytearray) -> None:
+        nonlocal output_bytes
+        while True:
+            chunk = stream.read(8192)
+            if not chunk:
+                return
+            with output_lock:
+                remaining = max(0, max_output_bytes - output_bytes)
+                if remaining:
+                    destination.extend(chunk[:remaining])
+                output_bytes += len(chunk)
+                if output_bytes > max_output_bytes:
+                    output_limited.set()
 
     try:
         process = subprocess.Popen(
@@ -60,47 +77,60 @@ def run_container_command(
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=False,
         )
+        stdout_reader = threading.Thread(target=drain, args=(process.stdout, stdout_data), daemon=True)
+        stderr_reader = threading.Thread(target=drain, args=(process.stderr, stderr_data), daemon=True)
+        stdout_reader.start()
+        stderr_reader.start()
 
         try:
-            stdout_data, stderr_data = process.communicate(
-                input=input_str,
-                timeout=timeout_seconds
-            )
-        except subprocess.TimeoutExpired:
-            timed_out = True
+            if input_str is not None:
+                process.stdin.write(input_str.encode("utf-8"))
+                process.stdin.flush()
+            process.stdin.close()
+        except (BrokenPipeError, OSError):
+            pass
+
+        deadline = time.monotonic() + timeout_seconds
+        while process.poll() is None:
+            if output_limited.is_set():
+                break
+            remaining_seconds = deadline - time.monotonic()
+            if remaining_seconds <= 0:
+                timed_out = True
+                break
+            time.sleep(min(0.02, remaining_seconds))
+
+        if timed_out or output_limited.is_set():
             try:
                 subprocess.run(
-                    [
-                        "docker",
-                        "kill",
-                        container_name
-                    ],
+                    ["docker", "kill", container_name],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
-                    check=False
+                    timeout=2,
+                    check=False,
                 )
             except Exception:
                 pass
-
-            try:
-                stdout_data, stderr_data = process.communicate(
-                    timeout=2
-                )
-            except Exception:
+            if process.poll() is None:
                 process.kill()
+            process.wait(timeout=2)
 
+        stdout_reader.join(timeout=2)
+        stderr_reader.join(timeout=2)
     except Exception as exc:
-        return 1, "", str(exc), False
+        if process and process.poll() is None:
+            process.kill()
+        return 1, "", str(exc), False, False
 
-    if len(stdout_data) > max_output_bytes:
-        stdout_data = stdout_data[:max_output_bytes]
-
-    if len(stderr_data) > max_output_bytes:
-        stderr_data = stderr_data[:max_output_bytes]
-
-    return process.returncode if process else 1, stdout_data, stderr_data, timed_out
+    return (
+        process.returncode if process else 1,
+        stdout_data.decode("utf-8", errors="replace"),
+        stderr_data.decode("utf-8", errors="replace"),
+        timed_out,
+        output_limited.is_set(),
+    )
 
 
 def prepare_submission_workspace(code: str, lang_config: LanguageConfig) -> dict | None:
@@ -278,13 +308,24 @@ def execute_in_sandbox(
                     lang_config.docker_image
                 ] + lang_config.compile_cmd
 
-                returncode, stdout_data, stderr_data, timed_out = run_container_command(
+                returncode, stdout_data, stderr_data, timed_out, output_limited = run_container_command(
                     cmd_list=compile_cmd,
                     container_name=compile_name,
                     timeout_seconds=15,
                     input_str=None,
                     max_output_bytes=max_output_bytes
                 )
+
+                if output_limited:
+                    return SandboxRunResult(
+                        status=VERDICT_OUTPUT_LIMIT_EXCEEDED,
+                        runtime_ms=0,
+                        memory_kb=0,
+                        compile_success=False,
+                        compile_stderr="Compiler produced too much output.",
+                        actual_output=None,
+                        stderr=stderr_data,
+                    )
 
                 if timed_out or returncode != 0:
                     return SandboxRunResult(
@@ -347,7 +388,7 @@ def execute_in_sandbox(
                 else f"{input_data}\n"
             )
 
-            returncode, stdout_data, stderr_data, timed_out = run_container_command(
+            returncode, stdout_data, stderr_data, timed_out, output_limited = run_container_command(
                 cmd_list=run_cmd,
                 container_name=run_name,
                 timeout_seconds=runner_timeout_sec + int(get_env_limit("EXECUTION_DOCKER_STARTUP_GRACE_SECONDS", "5")),
@@ -366,6 +407,17 @@ def execute_in_sandbox(
                 and "Pulling" not in line
             ]
             clean_stderr = "\n".join(lines).strip()
+
+        if output_limited:
+            return SandboxRunResult(
+                status=VERDICT_OUTPUT_LIMIT_EXCEEDED,
+                runtime_ms=elapsed_ms,
+                memory_kb=0,
+                compile_success=True,
+                compile_stderr=None,
+                actual_output=stdout_data,
+                stderr=clean_stderr or "Program produced too much output",
+            )
 
         if timed_out or returncode == 124:
             return SandboxRunResult(

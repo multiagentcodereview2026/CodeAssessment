@@ -64,10 +64,10 @@ def extract_clean_json(text: str) -> str:
     return text.strip()
 
 async def invoke_agent(system_prompt: str, user_payload: Dict[str, Any], schema: type[BaseModel], fallback_dict: Dict[str, Any]) -> Dict[str, Any]:
-    """Invoke Groq LLM with strict JSON validation and fallback handling."""
+    """Invoke Groq with strict validation and a machine-readable source label."""
     if not llm or not settings.GROQ_API_KEY:
         logger.info("Using deterministic fallback logic (No GROQ_API_KEY provided)")
-        return fallback_dict
+        return {**fallback_dict, "analysis_source": "fallback"}
 
     try:
         messages = [
@@ -78,10 +78,15 @@ async def invoke_agent(system_prompt: str, user_payload: Dict[str, Any], schema:
         content = extract_clean_json(response.content)
         
         validated = schema.model_validate_json(content)
-        return validated.model_dump()
-    except Exception as e:
+        return {**validated.model_dump(), "analysis_source": "groq"}
+    except Exception as exc:
         # AI feedback is optional.  Preserve deterministic AST/execution
         # results and return immediately instead of retrying a rate-limited
-        # provider request until the whole submission times out.
-        logger.warning(f"Groq unavailable; using deterministic fallback: {e}")
-        return fallback_dict
+        # provider request until the whole submission times out. Log only the
+        # exception class: provider errors can contain URLs, request payloads,
+        # or other sensitive context.
+        logger.warning(
+            "Groq request or response validation failed (%s); using deterministic fallback",
+            type(exc).__name__,
+        )
+        return {**fallback_dict, "analysis_source": "fallback"}

@@ -189,7 +189,7 @@ async def explainability_node(state: EvaluationState) -> Dict[str, Any]:
     fallback = build_evidence_feedback(state)
 
     result = await invoke_agent(prompt, payload, ExplainabilityOutput, fallback)
-    used_fallback = result is fallback
+    used_fallback = result.get("analysis_source") != "groq"
     result = dict(result)
     # A failed execution is the student's first task.  Preserve precise,
     # deterministic evidence ahead of optional style advice even if an AI

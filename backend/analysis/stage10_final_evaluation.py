@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,36 @@ def _read(path: str) -> dict[str, Any]:
 
 def _test_rate(report: dict[str, Any]) -> float | None:
     test = report.get("splits", {}).get("test", {})
-    return test.get("exact_rate")
+    rate = test.get("exact_rate")
+    if isinstance(rate, bool) or not isinstance(rate, (int, float)):
+        return None
+    rate = float(rate)
+    return rate if math.isfinite(rate) and 0.0 <= rate <= 1.0 else None
+
+
+def _report_ready(report: dict[str, Any]) -> bool:
+    """Require nonempty, complete, labeled data and a valid test metric."""
+    dataset_rows = report.get("dataset_rows")
+    analyzed_rows = report.get("analyzed_rows")
+    if (
+        isinstance(dataset_rows, bool)
+        or not isinstance(dataset_rows, int)
+        or dataset_rows <= 0
+        or isinstance(analyzed_rows, bool)
+        or not isinstance(analyzed_rows, int)
+        or analyzed_rows != dataset_rows
+    ):
+        return False
+    if report.get("missing_reference_source") != 0 or report.get("missing_labels") != 0:
+        return False
+    test = report.get("splits", {}).get("test", {})
+    test_rows = test.get("rows")
+    return (
+        isinstance(test_rows, int)
+        and not isinstance(test_rows, bool)
+        and test_rows > 0
+        and _test_rate(report) is not None
+    )
 
 
 def evaluate(baseline: str, unseen: str, adversarial: str) -> dict[str, Any]:
@@ -26,17 +56,9 @@ def evaluate(baseline: str, unseen: str, adversarial: str) -> dict[str, Any]:
         "unseen": _read(unseen),
         "adversarial": _read(adversarial),
     }
-    holdouts_valid = all(
-        reports[name].get("analyzed_rows", 0) == reports[name].get("dataset_rows", 0)
-        and reports[name].get("missing_reference_source", 0) == 0
-        and reports[name].get("missing_labels", 0) == 0
-        for name in ("unseen", "adversarial")
-    )
-    baseline_ready = (
-        reports["baseline"].get("analyzed_rows", 0) > 0
-        and reports["baseline"].get("missing_reference_source", 0) == 0
-        and reports["baseline"].get("missing_labels", 0) == 0
-    )
+    readiness = {name: _report_ready(report) for name, report in reports.items()}
+    holdouts_valid = readiness["unseen"] and readiness["adversarial"]
+    baseline_ready = readiness["baseline"]
     return {
         "stage": "10",
         "baseline": {
@@ -48,12 +70,12 @@ def evaluate(baseline: str, unseen: str, adversarial: str) -> dict[str, Any]:
         "unseen": {
             "rows": reports["unseen"].get("dataset_rows", 0),
             "test_exact_rate": _test_rate(reports["unseen"]),
-            "ready": holdouts_valid,
+            "ready": readiness["unseen"],
         },
         "adversarial": {
             "rows": reports["adversarial"].get("dataset_rows", 0),
             "test_exact_rate": _test_rate(reports["adversarial"]),
-            "ready": holdouts_valid,
+            "ready": readiness["adversarial"],
         },
         "holdouts_valid": holdouts_valid,
         "status": "READY_FOR_FINAL_REVIEW" if baseline_ready and holdouts_valid else "HOLD",

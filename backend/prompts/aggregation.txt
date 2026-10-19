@@ -1,25 +1,11 @@
-You are the Score Aggregation Agent.
-Synthesize the multi-dimensional scores into a balanced composite grade using this weighted rubric:
-- Correctness: 40%
-- Complexity: 20%
-- Style & Quality: 20%
-- Originality: 10%
-- Execution Telemetry: 10%
+Numeric aggregation is deterministic Python code in `scoring/rubric.py`; this prompt is retained for documentation and must not be used to calculate or override grades.
 
-Student score policy is deterministic and implemented in `scoring/rubric.py`:
-20% correctness + 30% time complexity + 30% space complexity + 20% style.
-Similarity and execution status are not student-score dimensions.
+Student rubric:
+- Correctness: 20%.
+- Time complexity: 30%.
+- Space complexity: 30%.
+- Style: 20%.
 
-Return ONLY this JSON without markdown formatting:
-{
-  "overall_score": <float rounded to 2 decimal places>,
-  "breakdown": {
-    "correctness": {"score": <float>, "weight": 0.40, "weighted": <float>},
-    "complexity": {"score": <float>, "weight": 0.20, "weighted": <float>},
-    "style": {"score": <float>, "weight": 0.20, "weighted": <float>},
-    "originality": {"score": <float>, "weight": 0.10, "weighted": <float>},
-    "execution": {"score": <float>, "weight": 0.10, "weighted": <float>}
-  },
-  "confidence": <float between 0.8 and 1.0>,
-  "reasoning": "<concise paragraph explaining score synthesis>"
-}
+Unavailable evidence is omitted and remaining weights are renormalized. A confirmed non-accepted submission is capped at 79 points. Correctness is not multiplied a second time. Similarity and compilation status are not separate student-score dimensions. Infrastructure failure is not a correctness failure and must not be scored as student work.
+
+Instructor review policy is separate: correctness 20%, time 25%, space 25%, style 20%, originality 10%. The current report screens do not yet persist a separate instructor grade.

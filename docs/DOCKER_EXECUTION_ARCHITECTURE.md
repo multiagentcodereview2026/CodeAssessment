@@ -6,7 +6,7 @@ This guide describes the Docker stack, its exact repository locations, service l
 
 ~~~text
 Browser
-  | http://localhost:5173
+  | http://localhost:8080
   v
 frontend (Vite / React)
   | browser requests beginning with /api
@@ -88,7 +88,7 @@ The root docker-compose.yml is the normal startup file. The nested docker-execut
 Only these URLs are visible on the Windows host:
 
 ~~~text
-http://localhost:5173          frontend UI
+http://localhost:8080          frontend UI
 http://localhost:8000/health   backend health
 ~~~
 
@@ -209,7 +209,7 @@ execute_code_sandboxed() prepares the code/test payload and POSTs it to the addr
 http://execution-engine:8001/execute
 ~~~
 
-If the engine cannot be reached, the backend has a limited local fallback. Production judging must use the Docker engine; the fallback is not a secure multi-language judge.
+If the engine cannot be reached, execution fails closed and the backend does not run student code locally.
 
 ### Execution-engine functions
 
@@ -298,10 +298,11 @@ File: docker-execution-engine/app/languages.py
 | C | gcc:13 | solution.c | gcc -O2 solution.c -o solution | ./solution |
 | C++ | gcc:13 | solution.cpp | g++ -O2 solution.cpp -o solution | ./solution |
 | Java | eclipse-temurin:17-jdk | Main.java | javac Main.java | java Main |
+| JavaScript | node:20-slim | solution.js | none | node solution.js |
 
 For compiled languages, the worker compiles once in a disposable workspace, then runs the generated executable for the remaining test cases.
 
-The engine registry currently contains a Node/JavaScript entry, but JavaScript is not a tested/released platform feature. Keep JavaScript disabled in the UI until it is explicitly tested. HTML/CSS/JavaScript projects require a future browser sandbox rather than this stdin/stdout system.
+JavaScript uses Node.js 20 in the same stdin/stdout execution model. HTML/CSS/JavaScript browser projects require a separate browser sandbox.
 
 ## 8. Sandbox isolation and limits
 
@@ -387,16 +388,7 @@ problem_test_cases.memory_limit_mb
 
 Some legacy cases may remain in problems.test_cases JSON. problem_test_cases is the preferred normalised judge source.
 
-Current local Docker database count:
-
-~~~text
-1,890 problems
-5,670 public test cases
-186,774 hidden test cases
-22 submissions
-~~~
-
-Those values are in the local Docker volume, not Git.
+Database counts change as data is imported and submissions are added. Query the live database with the commands below instead of relying on a hard-coded count. Hidden tests are stored in PostgreSQL and must not be committed as a dataset or displayed to students.
 
 ### Direct safe database access
 
@@ -502,14 +494,13 @@ Done:
 - one repository now contains the Docker execution engine;
 - frontend, backend, PostgreSQL, and engine are linked;
 - public/hidden test selection and redaction are linked;
-- four current product languages are configured;
+- five current product languages are configured;
 - isolated Docker execution, compile errors, verdicts, and bounded concurrency are implemented;
 - private backup instructions exist.
 
 Not part of current work:
 
-- a real user/account database; students has only basic records and current login is mock/basic;
-- released JavaScript judging;
+- production account lifecycle and identity operations;
 - HTML/CSS/JavaScript browser project evaluation;
 - exact CPU-time/peak-memory complexity measurement.
 

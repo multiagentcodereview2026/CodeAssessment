@@ -32,6 +32,29 @@ def test_correctness_supports_summary_only_execution_results():
     assert calculate_correctness_score(execution) == 75.0
 
 
+def test_correctness_does_not_grade_infrastructure_failure_as_student_work():
+    assert calculate_correctness_score({
+        "compile_status": "unavailable",
+        "execution_status": "system_error",
+    }) is None
+
+
+def test_correctness_reports_no_test_evidence_as_unavailable():
+    assert calculate_correctness_score({
+        "compile_status": "success",
+        "passed_cases": 0,
+        "failed_cases": 0,
+        "total_cases": 0,
+    }) is None
+
+
+def test_compile_failure_is_a_deterministic_zero_correctness_score():
+    assert calculate_correctness_score({
+        "compile_status": "error",
+        "execution_status": "compilation_error",
+    }) == 0.0
+
+
 def test_hidden_execution_details_are_not_sent_to_the_llm():
     safe_execution = sanitize_execution_for_llm(
         {
@@ -151,7 +174,7 @@ def test_student_aggregation_does_not_replace_a_zero_score_with_a_default():
 
     # Only correctness (20%) and style (20%) are available. Similarity never
     # participates in a student score, so the available rubric is normalized.
-    assert result["overall_score"] == 0.0
+    assert result["overall_score"] == 45.0
     assert "execution" not in result["score_breakdown"]
     assert "originality" not in result["score_breakdown"]
 

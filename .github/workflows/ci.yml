@@ -41,3 +41,26 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - run: python -m pip install -r requirements.txt
       - run: python -m pytest -q
+
+  execution-engine:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docker-execution-engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: docker-execution-engine/requirements.txt
+      - run: python -m pip install -r requirements.txt pytest
+      - name: Pull supported language runtimes
+        run: |
+          docker pull python:3.11-slim
+          docker pull gcc:13
+          docker pull eclipse-temurin:17-jdk
+          docker pull node:20-slim
+      - run: python -m pytest -q tests/test_sandbox.py tests/test_revealed_feedback_case.py
+      - name: Run isolated language integration tests
+        run: python -m pytest -q tests/test_live_execution.py

@@ -23,7 +23,7 @@ The interface also uses the name **CodeVedha**. The project combines persisted b
 - **Student workspace:** problem catalogue, Monaco editor, public test runs, submissions, feedback, and history.
 - **Assessment:** correctness, complexity, style, and similarity analysis, followed by explanations, recommendations, revised code, and score projections.
 - **Instructor interface:** problems, courses, roster, analytics, similarity review, and reports. Feature coverage and data sources are summarized in [implementation status](docs/IMPLEMENTATION_STATUS.md).
-- **Execution:** Python, C, C++, and Java through a separate isolated execution service. Code is never run in the backend process.
+- **Execution:** Python, C, C++, Java, and JavaScript through a separate isolated execution service. Code is never run in the backend process.
 - **Storage:** PostgreSQL with Docker Compose; SQLite for local backend development.
 - **Datasets:** import and normalization tools for APPS, CodeContests, and NewFacade.
 
@@ -82,13 +82,13 @@ Programs must follow the selected problem's input/output format. The backend has
 
 ### 5. Evaluate and explain
 
-Execution results, source, language, student information, and the problem statement/constraints form `EvaluationState`. LangGraph runs the ten stages described below. Correctness comes from test results; complexity, style, and similarity branch in parallel before aggregation and teaching feedback.
+Execution results, source, language, student information, and the problem statement/constraints form `EvaluationState`. The core LangGraph has eight nodes: supervisor, correctness, complexity and style (parallel), aggregation, explainability, recommendation, and score projection. Similarity review and revised-code generation are separate workflows; revision is requested from a saved result.
 
 The shared agent helper loads prompts, calls Groq, parses JSON, and validates the response. If a call is unavailable or invalid, that agent uses its fallback. The correctness agent removes selected hidden-case details before constructing its model payload.
 
 ### 6. Save and display the result
 
-After the graph finishes, the backend removes hidden-case input, expected output, actual output, and stderr from per-case execution records before persistence and response. It generates a `SUB-XXXXXXXX` ID and saves source, component scores, execution results, feedback, recommendations, revised code, and score projection.
+After the graph finishes, the backend removes hidden-case input, expected output, actual output, and stderr from per-case execution records before persistence and response. It generates a `SUB-XXXXXXXX` ID and saves source, component scores, execution results, feedback, recommendations, and score projection. Revised code is generated on demand from the saved submission and is explicitly labeled unverified until the judge checks it.
 
 The frontend receives the assessment and shows the result. `EVALUATED` means the pipeline finished; it does not mean every case passed or every agent successfully called the model. Suggested revised code is not re-executed by this workflow.
 
@@ -136,14 +136,14 @@ flowchart TD
     S[Supervisor] --> C[Correctness]
     C --> X[Complexity]
     C --> Y[Style]
-    C --> Z[Similarity]
     X --> A[Aggregation]
     Y --> A
-    Z --> A
     A --> E[Explainability]
     E --> R[Recommendation]
-    R --> V[Revision]
-    V --> P[Score projection]
+    R --> P[Score projection]
+    P --> END[Saved assessment]
+    END -. on-demand .-> V[Revision + verification]
+    END -. instructor workflow .-> Z[Similarity review]
 ```
 
 | Stage | Role |
@@ -152,7 +152,7 @@ flowchart TD
 | Correctness | Calculates the passing-case percentage and explains failures. |
 | Complexity | Infers time/space complexity and compares it with explicit problem requirements. |
 | Style | Evaluates readability and code quality. |
-| Similarity | Produces a similarity estimate; the active agent does not retrieve peer submissions. |
+| Similarity | Separate instructor review workflow compares permitted peer submissions; similarity is not included in the student rubric. |
 | Aggregation | Calculates the overall score from available components. |
 | Explainability | Turns assessment evidence into feedback. |
 | Recommendation | Suggests learning actions. |
@@ -165,17 +165,17 @@ Prompts live in `backend/prompts/`, implementations in `backend/agents/`, and gr
 
 | Component | Base weight |
 | --- | ---: |
-| Correctness | 40% |
-| Complexity | 20% |
-| Style | 20% |
-| Originality (`100 − similarity`) | 10% |
-| Execution (compilation success) | 10% |
+| Student correctness | 20% |
+| Student time complexity | 30% |
+| Student space complexity | 30% |
+| Student style | 20% |
 
-- **Correctness:** accepted cases ÷ evaluated cases × 100; compilation failure gives zero.
-- **Complexity:** supported Big-O classes are ranked; each rank worse than the expected class subtracts 20 from 100. When both are available, time contributes 70% and space 30%.
-- **Overall:** weighted average, rounded to one decimal. Unavailable components are excluded and remaining weights are renormalized.
+- **Correctness:** accepted cases ÷ evaluated cases × 100; a confirmed compilation failure gives zero. No tests or an infrastructure failure means correctness evidence is unavailable, not zero.
+- **Complexity:** the analyzer estimates time and space separately against problem metadata. Unavailable dimensions are excluded and available weights are renormalized.
+- **Overall student score:** the declared 20/30/30/20 weights are applied once, then the total is rounded to one decimal. A confirmed non-accepted solution is capped at 79; correctness is not multiplied a second time. Missing components are excluded and remaining weights are renormalized.
+- **Instructor rubric:** code defines separate weights of correctness 20%, time 25%, space 25%, style 20%, and originality 10%. The current instructor review screens do not yet use this helper to produce a separate persisted instructor grade; similarity is shown as review evidence, not as a verified plagiarism finding.
 
-For correctness 80, complexity 60, style 90, originality 85, and successful compilation, the overall score is **80.5**. Correctness and overall scores are calculated in Python; model output supplies supporting assessment and explanations.
+For correctness 80, time 80, space 60, and style 90, the student score is **76.0/100**. Correctness and overall scores are calculated in Python; model output supplies supporting assessment and explanations but cannot override numeric scores.
 
 ## Data and frontend structure
 
@@ -381,7 +381,7 @@ python -m pip install -r requirements.txt
 python -m pytest tests/test_sandbox.py -q
 ```
 
-Live execution tests require Docker and language images. Some older backend tests reference missing modules, including `auth`, so full test collection may fail.
+Live execution tests require Docker and language images. The engine CI job pulls all configured runtime images and asserts accepted and wrong-answer behavior for every supported language, along with compile, runtime, and timeout failures. Local checks skip those live tests when Docker is unavailable.
 
 Dataset tools are available under `backend/dataset/` and the Compose `tools` profile. Their mounts expect external dataset directories; prepare data and check paths before importing. Database dumps can contain hidden cases and should stay outside Git. See [backup and restore instructions](database/README.md).
 
@@ -391,7 +391,7 @@ Dataset tools are available under `backend/dataset/` and the Compose `tools` pro
 - **Instructor workflows:** course create/archive, enrollment/reactivation/deactivation, assignment create/archive, student course visibility, and assignment submissions are persisted. Course editing is API-backed but not yet exposed as a complete frontend form; assignment editing is limited to the API and disallows changing problem links after submissions exist.
 - **Analytics:** headline scores and distributions use latest evaluated attempts; report export, dimension filters, time-range filters, and complete per-student instructor reports remain unfinished. Similarity alerts are currently empty rather than fabricated, and similarity comparison is not a full stored peer-analysis workflow.
 - **Frontend:** dashboard/course/assignment flows use real APIs. Some profile metadata, announcements, parts of feedback/recommendations, and some legacy pages still use local/mock state and need follow-up before calling the whole product production-ready.
-- **AI output:** fallbacks may be generic. The revision fallback is a fixed C++ Two Sum solution. Similarity has no comparison corpus, and projections are estimates rather than verified outcomes.
+- **AI output:** fallback feedback is explicitly marked as fallback and may be generic. Revised code is unavailable when a task-specific rewrite cannot be generated; generated drafts are not verified until judged. Similarity is unavailable when there are no same-problem peer submissions or the database cannot supply them. Projections are estimates, not verified outcomes.
 - **Execution isolation:** Docker runners disable networking and apply resource restrictions. Student code is not executed if the engine is unavailable. The service still mounts the host Docker socket; this is a trusted-host development deployment and needs a stronger isolation boundary before public production use.
 - **Deployment:** Compose runs the Vite development server and permissive CORS. It is a development setup.
 

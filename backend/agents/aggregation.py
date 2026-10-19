@@ -14,5 +14,4 @@ async def aggregation_node(state: EvaluationState) -> Dict[str, Any]:
     return {
         "overall_score": overall,
         "score_breakdown": breakdown,
-        "confidence": 0.94,
     }
