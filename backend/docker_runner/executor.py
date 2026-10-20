@@ -516,6 +516,15 @@ def compare_outputs(actual: str, expected: str) -> bool:
     except Exception:
         pass
 
+    # The platform's stdin/stdout contract represents lists as
+    # whitespace-separated values. Nested-list solutions commonly print one
+    # item per line, whereas historical expected-output records often flatten
+    # the same values onto one line. Accept identical token sequences after
+    # the exact and structured-JSON comparisons above; values, order, and
+    # cardinality must still be identical.
+    if act.split() == exp.split():
+        return True
+
     return False
 
 

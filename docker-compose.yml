@@ -172,6 +172,9 @@ services:
       # This grace covers Docker Desktop's container creation only. The
       # program itself is still stopped by its own 2-second judge limit.
       - EXECUTION_DOCKER_STARTUP_GRACE_SECONDS=20
+      # Off by default: when enabled for local diagnosis, public test-case
+      # stdin/stdout/stderr is logged while hidden case data stays redacted.
+      - EXECUTION_DEBUG_LOGS=${EXECUTION_DEBUG_LOGS:-0}
       # This must be the Docker daemon volume name (not Compose's YAML alias),
       # because the engine invokes nested `docker run` commands via the socket.
       - SANDBOX_VOLUME=${EXECUTION_SANDBOX_VOLUME:-codeassessment_execution-work}

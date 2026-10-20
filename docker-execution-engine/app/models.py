@@ -21,3 +21,7 @@ class SandboxRunResult:
     compile_stderr: str | None
     actual_output: str | None
     stderr: str | None
+    # Kept for engine diagnostics only. It is deliberately not returned in
+    # student-facing test-case responses, because a raw process value is not
+    # actionable feedback by itself.
+    exit_code: int | None = None

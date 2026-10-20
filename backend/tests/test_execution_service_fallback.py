@@ -5,6 +5,11 @@ import pytest
 from docker_runner import executor
 
 
+def test_backend_output_comparison_accepts_nested_rows_as_whitespace_tokens():
+    assert executor.compare_outputs("1 2\n3 10\n12 16\n", "1 2 3 10 12 16")
+    assert not executor.compare_outputs("1 2\n3 10\n12 16", "1 2 3 10 12 17")
+
+
 @pytest.mark.parametrize("language", ["python", "cpp", "java"])
 def test_runner_outage_never_executes_student_code_on_backend(monkeypatch, language):
     calls = 0

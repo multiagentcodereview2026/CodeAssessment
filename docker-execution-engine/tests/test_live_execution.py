@@ -57,6 +57,51 @@ def test_python_timeout_is_reported():
     assert result.status == VERDICT_TIME_LIMIT_EXCEEDED
 
 
+def test_cpp_merge_intervals_nested_stdin_and_whitespace_output():
+    """Regression for LeetCode 56-style nested-list judge input.
+
+    The program reads the documented recursive length-prefixed stdin contract
+    and prints one merged interval per line. The stored expected result uses a
+    flattened whitespace representation, which must compare as equivalent.
+    """
+    code = r'''
+#include <algorithm>
+#include <iostream>
+#include <vector>
+using namespace std;
+int main() {
+    int count;
+    if (!(cin >> count)) return 0;
+    vector<vector<int>> intervals(count);
+    for (auto& interval : intervals) {
+        int length; cin >> length;
+        interval.resize(length);
+        for (int& value : interval) cin >> value;
+    }
+    sort(intervals.begin(), intervals.end());
+    vector<vector<int>> merged;
+    for (const auto& interval : intervals) {
+        if (merged.empty() || merged.back()[1] < interval[0]) merged.push_back(interval);
+        else merged.back()[1] = max(merged.back()[1], interval[1]);
+    }
+    for (const auto& interval : merged) cout << interval[0] << ' ' << interval[1] << '\n';
+}
+'''
+    request = ExecuteRequest(
+        code=code,
+        language="cpp",
+        test_cases=[
+            {"id": "merge-1", "input": "4\n2\n1 2\n2\n2 3\n2\n3 4\n2\n4 5", "expected_output": "1 5"},
+            {"id": "merge-2", "input": "6\n2\n1 2\n2\n3 5\n2\n6 7\n2\n8 10\n2\n12 16\n2\n4 9", "expected_output": "1 2 3 10 12 16"},
+            {"id": "merge-3", "input": "4\n2\n1 3\n2\n2 6\n2\n8 10\n2\n15 18", "expected_output": "1 6 8 10 15 18"},
+        ],
+    )
+    result = asyncio.run(process_execution_request(request))
+    assert result.status == VERDICT_ACCEPTED
+    assert result.tests_passed == 3
+    assert all(case.status == VERDICT_ACCEPTED for case in result.results)
+
+
 def test_output_limit_is_reported(monkeypatch):
     monkeypatch.setenv("EXECUTION_MAX_OUTPUT_BYTES", "1024")
     code = "while True: print('x' * 4096)"

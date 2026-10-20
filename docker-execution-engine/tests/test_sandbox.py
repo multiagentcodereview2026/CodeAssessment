@@ -21,6 +21,7 @@ from app.models import VERDICT_SYSTEM_ERROR
 from app.models import VERDICT_WRONG_ANSWER
 from app.queue_worker import aggregate_verdict
 from app import sandbox
+from app.sandbox import outputs_match
 from app.schemas import TestCaseResultResponse as CaseResultResponse
 
 
@@ -78,6 +79,18 @@ def test_output_capture_is_bounded(monkeypatch):
     assert output_limited is True
     assert len(stdout.encode()) + len(stderr.encode()) <= 1024
     assert timed_out is False
+
+
+def test_output_comparison_accepts_whitespace_separated_nested_values():
+    # Nested list rows may be printed on separate lines even when a stored
+    # expected result is represented as one whitespace-separated line.
+    assert outputs_match("1 2\n3 10\n12 16\n", "1 2 3 10 12 16")
+    assert outputs_match("1\n2\n3", "1 2 3")
+
+
+def test_output_comparison_rejects_different_nested_values_or_order():
+    assert not outputs_match("1 2\n3 10\n12 16", "1 2 3 10 12 17")
+    assert not outputs_match("3 10\n1 2\n12 16", "1 2 3 10 12 16")
 
 
 def test_execution_fails_closed_when_docker_is_unavailable(monkeypatch):

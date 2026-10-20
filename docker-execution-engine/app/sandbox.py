@@ -5,6 +5,7 @@ import tempfile
 import threading
 import time
 import uuid
+import json
 
 from app.languages import LanguageConfig
 from app.models import SandboxRunResult
@@ -23,6 +24,29 @@ def normalize_output(value: str) -> str:
     text = (value or "").replace("\r\n", "\n").replace("\r", "\n")
     text = text.rstrip("\n")
     return "\n".join(line.rstrip(" \t") for line in text.split("\n"))
+
+
+def outputs_match(actual: str, expected: str) -> bool:
+    """Compare judge output using the platform's whitespace-delimited contract.
+
+    Problem results such as nested lists are documented as whitespace-separated
+    values. A correct program may therefore print every nested row on its own
+    line while stored expected output keeps all tokens on one line. Preserve an
+    exact normalized match first, support structurally equivalent JSON, and
+    finally compare non-whitespace tokens. This does *not* accept different
+    values, ordering, or list lengths.
+    """
+    normalized_actual = normalize_output(actual)
+    normalized_expected = normalize_output(expected)
+    if normalized_actual == normalized_expected:
+        return True
+
+    try:
+        return json.loads(normalized_actual) == json.loads(normalized_expected)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        pass
+
+    return normalized_actual.split() == normalized_expected.split()
 
 
 def get_env_limit(key: str, default_val: str) -> str:
@@ -325,6 +349,7 @@ def execute_in_sandbox(
                         compile_stderr="Compiler produced too much output.",
                         actual_output=None,
                         stderr=stderr_data,
+                        exit_code=returncode,
                     )
 
                 if timed_out or returncode != 0:
@@ -335,7 +360,8 @@ def execute_in_sandbox(
                         compile_success=False,
                         compile_stderr=stderr_data or stdout_data or "Compilation failed",
                         actual_output=None,
-                        stderr=stderr_data
+                        stderr=stderr_data,
+                        exit_code=returncode,
                     )
 
             run_name = f"run_{uuid.uuid4().hex[:8]}"
@@ -423,6 +449,7 @@ def execute_in_sandbox(
                 compile_stderr=None,
                 actual_output=stdout_data,
                 stderr=clean_stderr or "Program produced too much output",
+                exit_code=returncode,
             )
 
         if timed_out or returncode == 124:
@@ -433,7 +460,8 @@ def execute_in_sandbox(
                 compile_success=True,
                 compile_stderr=None,
                 actual_output=stdout_data,
-                stderr=clean_stderr or "Execution timed out"
+                stderr=clean_stderr or "Execution timed out",
+                exit_code=returncode,
             )
 
         if returncode == 137:
@@ -444,7 +472,8 @@ def execute_in_sandbox(
                 compile_success=True,
                 compile_stderr=None,
                 actual_output=stdout_data,
-                stderr=clean_stderr
+                stderr=clean_stderr,
+                exit_code=returncode,
             )
 
         if returncode != 0:
@@ -455,20 +484,11 @@ def execute_in_sandbox(
                 compile_success=True,
                 compile_stderr=None,
                 actual_output=stdout_data,
-                stderr=clean_stderr or f"Exit code {returncode}"
+                stderr=clean_stderr or f"Exit code {returncode}",
+                exit_code=returncode,
             )
 
-        normalized_actual = normalize_output(stdout_data)
-        normalized_expected = normalize_output(expected_output)
-
-        is_accepted = normalized_actual == normalized_expected
-        if not is_accepted:
-            try:
-                import json
-                if json.loads(normalized_actual) == json.loads(normalized_expected):
-                    is_accepted = True
-            except Exception:
-                pass
+        is_accepted = outputs_match(stdout_data, expected_output)
         status = (
             VERDICT_ACCEPTED
             if is_accepted
@@ -482,7 +502,8 @@ def execute_in_sandbox(
             compile_success=True,
             compile_stderr=None,
             actual_output=stdout_data,
-            stderr=stderr_data
+            stderr=stderr_data,
+            exit_code=returncode,
         )
 
     except Exception as exc:

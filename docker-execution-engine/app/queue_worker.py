@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import time
 
@@ -20,6 +21,40 @@ from app.schemas import ExecutionResultResponse
 from app.schemas import FailedTestCaseSummaryResponse
 from app.schemas import RevealedFeedbackCaseResponse
 from app.schemas import TestCaseResultResponse
+
+
+# The worker executes inside Uvicorn. Use its configured application logger so
+# opt-in local diagnostics reach `docker compose logs` instead of being lost on
+# an otherwise unconfigured module logger.
+logger = logging.getLogger("uvicorn.error")
+
+
+def debug_execution_case(tc, res: SandboxRunResult, case_ordinal: int) -> None:
+    """Log exact public-case execution data only when explicitly enabled.
+
+    Hidden test inputs and outputs are never written to logs. Set
+    EXECUTION_DEBUG_LOGS=1 temporarily when diagnosing a local judge issue.
+    """
+    if os.getenv("EXECUTION_DEBUG_LOGS", "").strip().lower() not in {"1", "true", "yes"}:
+        return
+    if tc.is_hidden:
+        logger.info(
+            "judge debug case=%s hidden=true status=%s compile_success=%s exit_code=%s",
+            case_ordinal, res.status, res.compile_success, res.exit_code,
+        )
+        return
+    logger.info(
+        "judge debug case=%s hidden=false status=%s compile_success=%s exit_code=%s stdin=%r expected=%r stdout=%r stderr=%r compile_stderr=%r",
+        case_ordinal,
+        res.status,
+        res.compile_success,
+        res.exit_code,
+        tc.input,
+        tc.expected_output,
+        res.actual_output,
+        res.stderr,
+        res.compile_stderr,
+    )
 
 
 VERDICT_PRECEDENCE = [
@@ -189,6 +224,7 @@ async def process_execution_request(req: ExecuteRequest) -> ExecutionResultRespo
 
     for tc, res in completed_cases:
         case_ordinal = case_positions.get(id(tc), len(case_positions)) + 1
+        debug_execution_case(tc, res, case_ordinal)
 
         if not res.compile_success:
             compile_success = False
