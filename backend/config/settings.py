@@ -11,9 +11,11 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "openai/gpt-oss-120b"
     # Rewrites can be large (the response includes the full source file), so
-    # allow enough time for generation and retry transient provider failures.
+    # allow enough time for generation. Assessment completion must not wait on
+    # a rate-limited optional provider: deterministic feedback is available as
+    # a safe fallback, so retries are opt-in rather than the default.
     GROQ_TIMEOUT_SECONDS: int = 90
-    GROQ_MAX_RETRIES: int = 2
+    GROQ_MAX_RETRIES: int = 0
 
     # Hybrid complexity review: AST may answer directly only when its
     # structural evidence is strong. Lower-confidence AST output is checked
