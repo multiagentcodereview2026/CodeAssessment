@@ -2,6 +2,7 @@ import asyncio
 
 from agents.complexity import complexity_node
 from analysis import analyzer_service
+from analysis.dynamic_profiler import profile_execution_results
 from analysis.models import ComplexityAnalysis
 from config.settings import settings
 
@@ -185,3 +186,41 @@ def test_runtime_supported_ai_fallback_receives_raw_measurements_only(monkeypatc
     assert evidence.final is not None
     assert evidence.final.method == "ai-fallback"
     assert evidence.final.time_complexity == "O(n log n)"
+
+
+def test_observational_judge_timings_do_not_veto_confident_static_analysis(monkeypatch):
+    """Container-per-case timings are not controlled complexity benchmarks."""
+    monkeypatch.setattr(settings, "COMPLEXITY_AI_REVIEW_ENABLED", False)
+    observed = profile_execution_results(
+        [
+            {"input": "2 1 2"},
+            {"input": "4 1 2 3 4"},
+            {"input": "8 1 2 3 4 5 6 7 8"},
+        ],
+        {
+            "results": [
+                {"status": "accepted", "runtime_ms": 10},
+                {"status": "accepted", "runtime_ms": 12},
+                {"status": "accepted", "runtime_ms": 14},
+            ],
+        },
+    )
+    static = ComplexityAnalysis(
+        time_complexity="O(n^2 log n)",
+        space_complexity="O(1)",
+        confidence=0.85,
+        method="ast",
+        status="ANALYZED",
+    )
+
+    evidence = asyncio.run(
+        analyzer_service.analyze_submission_complexity(
+            SOURCE, "cpp", static_result=static, dynamic_result=observed,
+        )
+    )
+
+    assert observed.evidence_quality == "limited"
+    assert evidence.final is not None
+    assert evidence.final.status == "ANALYZED"
+    assert evidence.final.method == "static-authoritative"
+    assert evidence.final.time_complexity == "O(n^2 log n)"

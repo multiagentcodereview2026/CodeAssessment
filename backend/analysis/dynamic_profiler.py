@@ -78,10 +78,12 @@ def profile_execution_results(
     """Create safe, observational runtime evidence from the judge run.
 
     This intentionally does not manufacture larger problem inputs. It uses
-    only server-side cases already executed for the submission and is marked
-    insufficient unless there are at least three distinct, successful input
-    sizes with non-zero timings. Runtime evidence estimates time only; memory
-    readings from short isolated runs are too noisy to classify Big-O space.
+    only server-side cases already executed for the submission. Those runs can
+    include container startup, host scheduling, and heterogeneous case shapes,
+    so their observed growth is *limited* corroborating evidence, never a
+    strong enough measurement to overturn a confident structural analysis.
+    Runtime evidence estimates time only; memory readings from short isolated
+    runs are too noisy to classify Big-O space.
     """
     results = execution_result.get("results") or []
     measurements: list[dict[str, Any]] = []
@@ -120,8 +122,11 @@ def profile_execution_results(
         method="runtime-profile",
         status="ANALYZED",
         dynamic_measurements=measurements,
-        evidence_quality="strong",
-        explanation="Time complexity was estimated from observed runtime growth across completed judge cases.",
+        evidence_quality="limited",
+        explanation=(
+            "A tentative runtime-growth estimate was observed across completed "
+            "judge cases. It is not a controlled benchmark measurement."
+        ),
     )
 
 
