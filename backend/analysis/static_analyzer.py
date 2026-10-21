@@ -2251,7 +2251,14 @@ def _semantic_fast_path(source: str, language: str) -> ComplexityAnalysis | None
             return ComplexityAnalysis(
                 time_complexity, space_complexity,
                 confidence=0.85, method="ast", status="ANALYZED",
-                signals=["semantic:stdin-main-program"],
+                signals=[
+                    "semantic:stdin-main-program",
+                    *(
+                        ["structural:stdin-input-buffer-excluded-from-auxiliary-space"]
+                        if input_backed_storage
+                        else []
+                    ),
+                ],
             )
 
     # Roman to Integer: O(n) time, O(1) constant character map

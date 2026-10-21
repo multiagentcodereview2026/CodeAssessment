@@ -283,7 +283,10 @@ async def review_with_limits(
         review = await review_complexity(
             source_code, language, ast_result, invoke, runtime_measurements,
         )
-        if review.status == "AGREEMENT":
+        # A valid fallback is still an externally-derived decision. Cache it
+        # too, otherwise repeat submissions of identical code can receive
+        # different model wording and therefore different persisted estimates.
+        if review.status in {"AGREEMENT", "AI_FALLBACK", "NEEDS_REVIEW"}:
             cache.put(key, review)
         return review
     finally:

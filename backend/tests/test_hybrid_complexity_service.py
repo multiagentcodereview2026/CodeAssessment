@@ -85,6 +85,71 @@ def test_higher_confidence_ai_disagreement_becomes_analyzed_fallback(monkeypatch
     assert scored["complexity_details"]["analysis_status"] != "REVIEW_REQUIRED"
 
 
+def test_ai_fallback_cannot_replace_authoritative_stdin_input_space(monkeypatch):
+    async def provider(_payload):
+        return {
+            "time_complexity": "O(n^3)",
+            "space_complexity": "O(n)",
+            "confidence": 0.99,
+            "evidence": ["The code has three nested loops and stores its input."],
+        }
+
+    monkeypatch.setattr(settings, "COMPLEXITY_AI_REVIEW_ENABLED", True)
+    monkeypatch.setattr(analyzer_service, "_invoke_complexity_reviewer", provider)
+    monkeypatch.setattr(analyzer_service, "_review_cache", analyzer_service.ComplexityReviewCache(60))
+    monkeypatch.setattr(analyzer_service, "_review_limiter", analyzer_service.AIReviewRateLimiter(20, 1))
+    static = ComplexityAnalysis(
+        time_complexity="O(n^2)",
+        space_complexity="O(1)",
+        confidence=0.85,
+        method="ast",
+        status="ANALYZED",
+        signals=["structural:stdin-input-buffer-excluded-from-auxiliary-space"],
+    )
+
+    evidence = asyncio.run(
+        analyzer_service.analyze_submission_complexity(
+            SOURCE, "cpp", static_result=static,
+        )
+    )
+
+    assert evidence.final is not None
+    assert evidence.final.time_complexity == "O(n^3)"
+    assert evidence.final.space_complexity == "O(1)"
+    assert evidence.final.method == "ai-fallback+ast-space"
+
+
+def test_identical_ai_fallback_review_is_cached(monkeypatch):
+    calls = 0
+
+    async def provider(_payload):
+        nonlocal calls
+        calls += 1
+        return {
+            "time_complexity": "O(n^3)",
+            "space_complexity": "O(n)",
+            "confidence": 0.99,
+            "evidence": ["Nested loops dominate the work."],
+        }
+
+    monkeypatch.setattr(settings, "COMPLEXITY_AI_REVIEW_ENABLED", True)
+    monkeypatch.setattr(analyzer_service, "_invoke_complexity_reviewer", provider)
+    monkeypatch.setattr(analyzer_service, "_review_cache", analyzer_service.ComplexityReviewCache(60))
+    monkeypatch.setattr(analyzer_service, "_review_limiter", analyzer_service.AIReviewRateLimiter(20, 1))
+    static = ComplexityAnalysis(
+        time_complexity="O(n^2)", space_complexity="O(1)", confidence=0.85,
+        method="ast", status="ANALYZED",
+    )
+
+    first = asyncio.run(analyzer_service.analyze_submission_complexity(SOURCE, "cpp", static_result=static))
+    second = asyncio.run(analyzer_service.analyze_submission_complexity(SOURCE, "cpp", static_result=static))
+
+    assert calls == 1
+    assert first.final is not None and second.final is not None
+    assert first.final.time_complexity == second.final.time_complexity == "O(n^3)"
+    assert first.final.space_complexity == second.final.space_complexity == "O(n)"
+
+
 def test_missing_ast_estimate_is_saved_as_analysis_failed_and_is_not_scored(monkeypatch):
     monkeypatch.setattr(
         analyzer_service,

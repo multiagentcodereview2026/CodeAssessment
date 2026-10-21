@@ -682,6 +682,45 @@ export const ProblemWorkspace: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    const handleWorkspaceShortcut = (event: KeyboardEvent) => {
+      if (event.key !== 'F11' || event.repeat || event.altKey || event.metaKey) return;
+
+      // Keep normal form controls available for accessibility and browser
+      // shortcuts. Monaco is intentionally exempt so these shortcuts work
+      // while a student is actively editing code.
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const insideMonaco = Boolean(target?.closest('.monaco-editor'));
+      const isOtherEditableControl = Boolean(
+        target?.closest('input, textarea, select, [contenteditable="true"]')
+      );
+      if (isOtherEditableControl && !insideMonaco) return;
+
+      if (event.ctrlKey && !event.shiftKey) {
+        event.preventDefault();
+        if (!isRunning && !isSubmitting && !isProblemLoading && remoteProblem) {
+          void handleRunCode();
+        }
+        return;
+      }
+
+      if (event.shiftKey && !event.ctrlKey) {
+        event.preventDefault();
+        // Match the disabled Submit button: a student cannot bypass the
+        // required successful public run with a keyboard shortcut.
+        if (!isRunning && !isSubmitting && !isProblemLoading && canSubmit) {
+          void handleSubmitCode();
+        }
+      }
+    };
+
+    // Monaco handles editor keystrokes internally and can stop their normal
+    // bubbling path. Capture phase sees the shortcut before Monaco consumes
+    // it, while the editable-control guard above keeps other forms untouched.
+    window.addEventListener('keydown', handleWorkspaceShortcut, true);
+    return () => window.removeEventListener('keydown', handleWorkspaceShortcut, true);
+  }, [canSubmit, isProblemLoading, isRunning, isSubmitting, remoteProblem, handleRunCode, handleSubmitCode]);
+
   const activeRunCase = runOutput?.results[activeTestTab] || runOutput?.results[0];
   const displayInput = (rawInput: string) => formatInputForDisplay(rawInput, selectedProblem.inputSchema);
   const descriptionWithoutMachineFormat = selectedProblem.description
@@ -943,6 +982,7 @@ export const ProblemWorkspace: React.FC = () => {
                 <button
                   onClick={handleRunCode}
                   disabled={isRunning || isSubmitting || isProblemLoading || !remoteProblem}
+                  title="Run public test cases (Ctrl + F11)"
                   className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
                 >
                   <Play className={`w-3.5 h-3.5 ${isRunning ? 'animate-spin' : 'text-emerald-400'}`} />
@@ -951,7 +991,7 @@ export const ProblemWorkspace: React.FC = () => {
                 <button
                   onClick={handleSubmitCode}
                   disabled={isRunning || isSubmitting || isProblemLoading || !canSubmit}
-                  title={canSubmit ? 'Submit this code for a full assessment.' : 'Run this code and pass all sample cases to enable submission.'}
+                  title={canSubmit ? 'Submit this code for a full assessment (Shift + F11).' : 'Run this code and pass all sample cases to enable submission.'}
                   className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-slate-900 active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isSubmitting ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}

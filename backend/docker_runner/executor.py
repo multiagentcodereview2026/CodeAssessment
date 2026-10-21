@@ -544,6 +544,14 @@ def _sync_request_docker(
 
             data = response.json()
 
+            # The engine can accept HTTP requests before its nested Docker
+            # daemon connection is ready. Treat that transient engine result
+            # exactly like a transport outage so the caller can retry the
+            # same submission rather than saving a false compiler failure.
+            compile_stderr = str(data.get("compile_stderr", "") or "").lower()
+            if "docker execution sandbox is unavailable" in compile_stderr:
+                return None
+
             for result in data.get(
                 "results",
                 []
@@ -709,10 +717,12 @@ async def execute_code_sandboxed(
     data = await asyncio.to_thread(_sync_request_docker, payload)
 
     # A runner can be briefly unavailable while Docker is starting a language
-    # container.  Retry once before deciding that the execution service is
-    # unavailable.  This is deliberately a service retry, not a resubmission.
-    if not data:
-        await asyncio.sleep(0.5)
+    # container. Retry the same request with bounded backoff before deciding
+    # the execution service is unavailable. This is not a resubmission.
+    for delay_seconds in (0.5, 1.0):
+        if data:
+            break
+        await asyncio.sleep(delay_seconds)
         data = await asyncio.to_thread(_sync_request_docker, payload)
 
     if data and "results" in data:

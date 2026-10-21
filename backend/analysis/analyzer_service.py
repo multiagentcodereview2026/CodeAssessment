@@ -73,6 +73,24 @@ def _strong_runtime(result: ComplexityAnalysis | None) -> bool:
     )
 
 
+def _has_authoritative_space_evidence(result: ComplexityAnalysis | None) -> bool:
+    """Whether a static space result is backed by a direct allocation fact.
+
+    Input buffers are not auxiliary storage under this application's scoring
+    convention.  When the analyzer can prove that a collection is filled
+    directly from stdin, an optional AI review may refine time complexity but
+    must not replace this deterministic space conclusion.  This keeps a
+    byte-identical submission from receiving different space marks merely
+    because an external model phrases memory usage differently.
+    """
+    return bool(
+        result
+        and result.space_complexity
+        and "structural:stdin-input-buffer-excluded-from-auxiliary-space"
+        in (result.signals or [])
+    )
+
+
 async def analyze_submission_complexity(
     source_code: str,
     language: str,
@@ -154,17 +172,37 @@ async def analyze_submission_complexity(
                 explanation="AST complexity evidence was corroborated by an independent AI review.",
             )
         elif review.status == "AI_FALLBACK":
+            preserve_static_space = _has_authoritative_space_evidence(static_result)
             evidence.final = ComplexityAnalysis(
                 time_complexity=review.time_complexity,
-                space_complexity=review.space_complexity,
+                space_complexity=(
+                    static_result.space_complexity
+                    if preserve_static_space and static_result is not None
+                    else review.space_complexity
+                ),
                 confidence=review.confidence,
-                method="ai-fallback",
+                method=(
+                    "ai-fallback+ast-space"
+                    if preserve_static_space
+                    else "ai-fallback"
+                ),
                 status="ANALYZED",
-                signals=[*(static_result.signals if static_result else []), "ai-fallback:lower-confidence-ast"],
+                signals=[
+                    *(static_result.signals if static_result else []),
+                    "ai-fallback:lower-confidence-ast",
+                    *(
+                        ["ast-space-preserved:authoritative-input-buffer"]
+                        if preserve_static_space
+                        else []
+                    ),
+                ],
                 dynamic_measurements=runtime_measurements,
                 evidence_quality="ai-fallback",
                 explanation=(
-                    "A code-only AI review supplied a higher-confidence estimate "
+                    "A code-only AI review supplied a higher-confidence time estimate "
+                    "than the lower-confidence AST analysis."
+                    if preserve_static_space
+                    else "A code-only AI review supplied a higher-confidence estimate "
                     "than the lower-confidence AST analysis."
                 ),
             )
