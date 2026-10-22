@@ -229,7 +229,7 @@ export interface Assignment {
   avgScore: number | null;
   dueDate: string;
   status: 'Active' | 'Upcoming' | 'Closed';
-  revisionPolicy?: 'HINTS_ONLY' | 'EXPLAIN_CHANGES' | 'VERIFIED_REFERENCE';
+  revisionPolicy?: 'HINTS_ONLY' | 'EXPLAIN_CHANGES' | 'VERIFIED_REFERENCE' | 'GUIDED_STEPS';
 }
 
 export interface SimilarityAlert {

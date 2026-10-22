@@ -234,7 +234,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 avgScore: assignment.avg_score == null ? null : Number(assignment.avg_score),
                 dueDate: assignment.due_date ? new Date(assignment.due_date).toLocaleDateString() : 'No due date',
                 status: assignment.status === 'ACTIVE' ? 'Active' : assignment.status === 'UPCOMING' ? 'Upcoming' : 'Closed'
-                ,revisionPolicy: assignment.revision_policy || 'VERIFIED_REFERENCE'
+                ,revisionPolicy: assignment.revision_policy || 'GUIDED_STEPS'
               })));
             }
           }
@@ -570,7 +570,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           problem_ids: newAssignment.problemIds || [],
           due_date: newAssignment.dueDate ? new Date(newAssignment.dueDate).toISOString() : null,
           status: newAssignment.status.toUpperCase()
-          ,revision_policy: newAssignment.revisionPolicy || 'VERIFIED_REFERENCE'
+          ,revision_policy: newAssignment.revisionPolicy || 'GUIDED_STEPS'
         })
       });
 
@@ -591,7 +591,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         avgScore: null,
         dueDate: newAssignment.dueDate,
         status: newAssignment.status
-        ,revisionPolicy: created.revision_policy || newAssignment.revisionPolicy || 'VERIFIED_REFERENCE'
+        ,revisionPolicy: created.revision_policy || newAssignment.revisionPolicy || 'GUIDED_STEPS'
       };
 
       setAssignments(prev => [savedAssignment, ...prev]);

@@ -19,7 +19,7 @@ export const AssignmentsManagerView: React.FC = () => {
   const [description, setDescription] = useState('');
   const [selectedCourseId, setSelectedCourseId] = useState(searchParams.get('courseId') || '');
   const [dueDate, setDueDate] = useState('');
-  const [revisionPolicy, setRevisionPolicy] = useState<'HINTS_ONLY' | 'EXPLAIN_CHANGES' | 'VERIFIED_REFERENCE'>('VERIFIED_REFERENCE');
+  const [revisionPolicy, setRevisionPolicy] = useState<'HINTS_ONLY' | 'EXPLAIN_CHANGES' | 'VERIFIED_REFERENCE' | 'GUIDED_STEPS'>('GUIDED_STEPS');
   const [selectedProblemIds, setSelectedProblemIds] = useState<string[]>([]);
   const [problemOptions, setProblemOptions] = useState<ProblemOption[]>([]);
   const [problemsLoading, setProblemsLoading] = useState(true);
@@ -80,7 +80,7 @@ export const AssignmentsManagerView: React.FC = () => {
       setTitle('');
       setDescription('');
       setDueDate('');
-      setRevisionPolicy('VERIFIED_REFERENCE');
+      setRevisionPolicy('GUIDED_STEPS');
       setSelectedProblemIds([]);
     } catch {
       // AppContext displays the API error and leaves the draft available to retry.
@@ -98,7 +98,7 @@ export const AssignmentsManagerView: React.FC = () => {
   const [editHasSubmissions, setEditHasSubmissions] = useState(false);
   const [editProblemIds, setEditProblemIds] = useState<string[]>([]);
   const [editCourseId, setEditCourseId] = useState('');
-  const [editRevisionPolicy, setEditRevisionPolicy] = useState<'HINTS_ONLY' | 'EXPLAIN_CHANGES' | 'VERIFIED_REFERENCE'>('VERIFIED_REFERENCE');
+  const [editRevisionPolicy, setEditRevisionPolicy] = useState<'HINTS_ONLY' | 'EXPLAIN_CHANGES' | 'VERIFIED_REFERENCE' | 'GUIDED_STEPS'>('GUIDED_STEPS');
 
   const openEditModal = (assignment: Assignment & { courseId?: number }) => {
     setEditAssignmentId(String(assignment.id));
@@ -218,6 +218,7 @@ export const AssignmentsManagerView: React.FC = () => {
             <select value={editRevisionPolicy} onChange={(event) => setEditRevisionPolicy(event.target.value as typeof editRevisionPolicy)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5">
               <option value="HINTS_ONLY">Hints only — no generated revision</option>
               <option value="EXPLAIN_CHANGES">Explain changes — no full code</option>
+              <option value="GUIDED_STEPS">Guided steps — one improvement per submission</option>
               <option value="VERIFIED_REFERENCE">Verified reference code after assessment</option>
             </select>
             <span className="mt-1 block text-xs font-normal text-slate-500">This setting may be changed after submissions; problem content remains locked.</span>
@@ -226,6 +227,7 @@ export const AssignmentsManagerView: React.FC = () => {
             <select value={revisionPolicy} onChange={(event) => setRevisionPolicy(event.target.value as typeof revisionPolicy)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5">
               <option value="HINTS_ONLY">Hints only — no generated revision</option>
               <option value="EXPLAIN_CHANGES">Explain changes — no full code</option>
+              <option value="GUIDED_STEPS">Guided steps — one improvement per submission</option>
               <option value="VERIFIED_REFERENCE">Verified reference code after assessment</option>
             </select>
             <span className="mt-1 block text-xs font-normal text-slate-500">Use stricter options for graded work; independent practice keeps verified references available.</span>

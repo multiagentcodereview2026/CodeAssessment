@@ -81,7 +81,7 @@ from schemas import (
 from docker_runner.executor import execute_code_sandboxed
 from agents.complexity import analyze_student_complexity, unavailable_analysis
 from agents.base import llm, extract_clean_json
-from agents.revision import revision_node
+from agents.revision import guided_revision_node, revision_node
 from agents.revision_verification import summarize_revision_verification, unverified_revision
 from workflow.graph import evaluation_graph
 from workflow.state import EvaluationState
@@ -524,6 +524,59 @@ async def verify_generated_revision(revision, language, test_cases):
         logger.warning("Generated revision verification failed: %s", error)
         safe["verification"] = unverified_revision("The judge was unavailable, so this generated draft could not be verified.")
     return safe
+
+
+def normalized_submission_fingerprint(source_code: str) -> str:
+    """Compare attempts without treating whitespace-only edits as progress."""
+    normalized = re.sub(r"\s+", "", str(source_code or ""))
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def guided_revision_stage(db: Session, submission: models.Submission) -> str:
+    """Choose the next coaching stage from evidence, never from score alone."""
+    execution = submission.execution_result or {}
+    compile_status = str(execution.get("compile_status") or "").lower()
+    passed = int(execution.get("passed_cases") or 0)
+    total = int(execution.get("total_cases") or 0)
+    accepted = compile_status == "success" and total > 0 and passed == total
+
+    # Public-only mode is useful for local demonstrations, but passing public
+    # examples is not enough evidence to reveal a reference-quality rewrite.
+    # Keep the learner on a guided stage until full evaluation is enabled.
+    public_only_mode = os.getenv("PUBLIC_ONLY_EXECUTION", "false").lower() in {"1", "true", "yes"}
+
+    if accepted and not public_only_mode:
+        complexity = submission.complexity_details or {}
+        time_class = str(complexity.get("time_classification") or "").upper()
+        space_class = str(complexity.get("space_classification") or "").upper()
+        has_refinement = (
+            (submission.style_score is not None and submission.style_score < 99.9)
+            or time_class not in {"", "OPTIMAL"}
+            or space_class not in {"", "OPTIMAL"}
+        )
+        return "REFINEMENT" if has_refinement else "NO_CHANGE"
+
+    if compile_status != "success":
+        return "FOUNDATION"
+
+    attempts = db.query(models.Submission.code).filter(
+        models.Submission.student_id == submission.student_id,
+        models.Submission.problem_id == submission.problem_id,
+        models.Submission.assignment_id.is_(None) if submission.assignment_id is None
+        else models.Submission.assignment_id == submission.assignment_id,
+    ).all()
+    distinct_attempts = {
+        normalized_submission_fingerprint(code)
+        for (code,) in attempts
+    }
+    count = len(distinct_attempts)
+    if count <= 1:
+        return "ALGORITHM"
+    if count == 2:
+        return "STRUCTURE"
+    if count == 3:
+        return "OPTIMIZE"
+    return "CONVERGE"
 
 app = FastAPI(
     title="Explainable Multi-Agent AI Code Evaluator (Production API)",
@@ -1466,9 +1519,15 @@ async def regenerate_submission_revision(
     ).first()
     if not problem:
         raise HTTPException(status_code=404, detail="Problem not found")
-    policy = getattr(submission.assignment, "revision_policy", "VERIFIED_REFERENCE") if submission.assignment_id else "VERIFIED_REFERENCE"
+    policy = getattr(submission.assignment, "revision_policy", "GUIDED_STEPS") if submission.assignment_id else "GUIDED_STEPS"
     if policy == "HINTS_ONLY":
         raise HTTPException(status_code=403, detail="Your instructor has enabled hints only for this assignment.")
+
+    if policy == "GUIDED_STEPS":
+        stage = guided_revision_stage(db, submission)
+        saved = submission.improved_code if isinstance(submission.improved_code, dict) else {}
+        if saved.get("revision_policy") == "GUIDED_STEPS" and saved.get("stage") == stage:
+            return {"improved_code": saved}
 
     state: EvaluationState = {
         "problem": {
@@ -1482,6 +1541,15 @@ async def regenerate_submission_revision(
         "complexity_details": submission.complexity_details,
         "style_details": (submission.feedback or {}).get("style_details") if isinstance(submission.feedback, dict) else None,
     }
+    if policy == "GUIDED_STEPS":
+        revision = (await guided_revision_node(state, stage)).get("improved_code") or {}
+        revision = dict(revision)
+        revision["revision_policy"] = "GUIDED_STEPS"
+        revision["stage"] = stage
+        submission.improved_code = revision
+        db.commit()
+        return {"improved_code": revision}
+
     revision = (await revision_node(state)).get("improved_code") or {}
     if revision.get("revision_source") != "ai" or not revision.get("improved_code"):
         # AI code generation is optional.  Preserve task-specific guidance so

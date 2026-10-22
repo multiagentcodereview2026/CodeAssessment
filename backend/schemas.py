@@ -344,7 +344,7 @@ class AssignmentCreate(BaseModel):
     problem_ids: List[str] = Field(min_length=1)
     due_date: Optional[datetime] = None
     status: Literal["ACTIVE", "UPCOMING", "CLOSED"] = "ACTIVE"
-    revision_policy: Literal["HINTS_ONLY", "EXPLAIN_CHANGES", "VERIFIED_REFERENCE"] = "VERIFIED_REFERENCE"
+    revision_policy: Literal["HINTS_ONLY", "EXPLAIN_CHANGES", "VERIFIED_REFERENCE", "GUIDED_STEPS"] = "GUIDED_STEPS"
 
     @field_validator("title")
     @classmethod
@@ -370,7 +370,7 @@ class AssignmentUpdate(BaseModel):
     due_date: Optional[datetime] = None
     status: Optional[Literal["ACTIVE", "UPCOMING", "CLOSED"]] = None
     problem_ids: Optional[List[str]] = None
-    revision_policy: Optional[Literal["HINTS_ONLY", "EXPLAIN_CHANGES", "VERIFIED_REFERENCE"]] = None
+    revision_policy: Optional[Literal["HINTS_ONLY", "EXPLAIN_CHANGES", "VERIFIED_REFERENCE", "GUIDED_STEPS"]] = None
 
     @field_validator("title")
     @classmethod
@@ -403,7 +403,7 @@ class AssignmentResponse(BaseModel):
     course_id: int
     due_date: Optional[datetime] = None
     status: str
-    revision_policy: str = "VERIFIED_REFERENCE"
+    revision_policy: str = "GUIDED_STEPS"
     created_at: datetime
     problems: List[str] = []
 

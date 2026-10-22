@@ -176,7 +176,7 @@ class Assignment(Base):
     course_id = Column(Integer, ForeignKey("courses.id"), nullable=False, index=True)
     due_date = Column(DateTime, nullable=True)
     status = Column(String(50), default="ACTIVE")  # ACTIVE, CLOSED, UPCOMING
-    revision_policy = Column(String(32), nullable=False, default="VERIFIED_REFERENCE")
+    revision_policy = Column(String(32), nullable=False, default="GUIDED_STEPS")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
