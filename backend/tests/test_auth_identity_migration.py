@@ -112,5 +112,5 @@ def test_fresh_database_migration_is_repeatable(tmp_path):
     )
     with engine.connect() as connection:
         version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert version == "20261016_0006"
+    assert version == "20261022_0008"
     engine.dispose()
