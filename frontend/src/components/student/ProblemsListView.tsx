@@ -96,7 +96,7 @@ export const ProblemsListView: React.FC = () => {
           slug: problem.id,
           title: problem.title,
           difficulty: ['Easy', 'Medium', 'Hard'].includes(problem.difficulty) ? problem.difficulty : 'Medium',
-          tags: [problem.category || 'Algorithms'],
+          tags: Array.isArray(problem.topic_tags) && problem.topic_tags.length ? problem.topic_tags : [problem.category || 'Algorithms'],
           acceptanceRate: '—',
           description: problem.description || '',
           examples: [],
@@ -138,7 +138,7 @@ export const ProblemsListView: React.FC = () => {
           slug: problem.id,
           title: problem.title,
           difficulty: ['Easy', 'Medium', 'Hard'].includes(problem.difficulty) ? problem.difficulty : 'Medium',
-          tags: [problem.category || 'Algorithms'],
+          tags: Array.isArray(problem.topic_tags) && problem.topic_tags.length ? problem.topic_tags : [problem.category || 'Algorithms'],
           acceptanceRate: '—',
           description: problem.description || '',
           examples: problem.examples || [],
@@ -315,7 +315,7 @@ export const ProblemsListView: React.FC = () => {
     try {
       const body = {
         title: formTitle.trim(), description: formDescription.trim(), difficulty: formDifficulty,
-        category: parsedTags[0] || 'Algorithms', target_time_complexity: formTimeComp.trim(),
+        category: parsedTags[0] || 'Algorithms', topic_tags: parsedTags, target_time_complexity: formTimeComp.trim(),
         target_space_complexity: formSpaceComp.trim(),
         starter_codes: editingProblemId ? instructorProblems.find((problem) => problem.id === editingProblemId)?.starterCode || {} : {},
         test_cases: formTestCases.map((tc) => ({ input: tc.input.trim(), expected_output: tc.output.trim(), is_hidden: tc.isHidden })),
@@ -377,8 +377,8 @@ export const ProblemsListView: React.FC = () => {
   const studentPracticeTopics = Array.from(new Set(orderedPracticeProblems.flatMap((problem) => problem.tags))).sort();
   const studentPracticeLanguages = Array.from(new Set(orderedPracticeProblems.flatMap((problem) => Object.keys(problem.starterCode || {}).map((language) => language.toLowerCase())))).sort();
   const visibleStudentPractice = orderedPracticeProblems.filter((problem, index) => {
-    const matchesNumber = /^\d+$/.test(normalizedStudentSearch) && Number(normalizedStudentSearch) === index + 1;
-    const matchesText = !normalizedStudentSearch || `${problem.title} ${problem.tags.join(' ')}`.toLowerCase().includes(normalizedStudentSearch);
+    const matchesNumber = /^\d+$/.test(normalizedStudentSearch) && questionOrder(problem.id) === Number(normalizedStudentSearch);
+    const matchesText = !normalizedStudentSearch || `${problem.id} ${problem.title} ${problem.tags.join(' ')}`.toLowerCase().includes(normalizedStudentSearch);
     return (matchesNumber || matchesText) &&
       (difficultyFilter === 'all' || problem.difficulty.toLowerCase() === difficultyFilter) &&
       (selectedTag === 'all' || problem.tags.includes(selectedTag)) &&

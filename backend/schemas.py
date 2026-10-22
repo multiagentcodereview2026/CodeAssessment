@@ -51,6 +51,7 @@ class ProblemListItem(BaseModel):
     title: str
     difficulty: str
     category: str
+    topic_tags: List[str] = Field(default_factory=list)
     is_instructor_assigned: bool = False
     course_code: Optional[str] = None
     due_date: Optional[str] = None
@@ -72,6 +73,7 @@ class ProblemDetail(BaseModel):
     title: str
     difficulty: str
     category: str
+    topic_tags: List[str] = Field(default_factory=list)
     description: str
     examples: List[Dict[str, str]]
     constraints: List[str]
@@ -99,6 +101,7 @@ class InstructorProblemCreate(BaseModel):
     description: str
     difficulty: Literal["Easy", "Medium", "Hard"]
     category: str
+    topic_tags: List[str] = Field(default_factory=list)
     target_time_complexity: str
     target_space_complexity: str
     starter_codes: Dict[str, str] = {}

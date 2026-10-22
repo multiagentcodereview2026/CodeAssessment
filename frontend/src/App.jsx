@@ -110,6 +110,7 @@ function AppRoutes() {
             <Route path="progress" element={<AnalyticsProgressView />} />
             <Route path="feedback" element={<FeedbackRecommendationsView />} />
             <Route path="recommendations" element={<FeedbackRecommendationsView />} />
+            <Route path="roadmap" element={<Navigate to="/feedback?tab=roadmap" replace />} />
             <Route path="profile" element={<StudentProfileView />} />
             <Route path="settings" element={<SettingsView />} />
           </Route>

@@ -117,6 +117,19 @@ class Student(Base):
     user = relationship("User", back_populates="student_profile")
     submissions = relationship("Submission", back_populates="student")
     enrollments = relationship("Enrollment", back_populates="student", cascade="all, delete-orphan")
+    roadmap = relationship("StudentRoadmap", back_populates="student", cascade="all, delete-orphan", uselist=False)
+
+
+class StudentRoadmap(Base):
+    __tablename__ = "student_roadmaps"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(String(100), ForeignKey("students.student_id"), nullable=False, unique=True, index=True)
+    is_enrolled = Column(Boolean, nullable=False, default=False, server_default="false")
+    started_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    student = relationship("Student", back_populates="roadmap")
 
 class Problem(Base):
     __tablename__ = "problems"
@@ -125,6 +138,9 @@ class Problem(Base):
     title = Column(String(200), nullable=False)
     difficulty = Column(String(50), default="Easy") # Easy, Medium, Hard
     category = Column(String(100), default="Arrays & Hashing")
+    # A problem may teach several algorithms. Category remains the legacy
+    # display label and the fallback for existing catalogue rows.
+    topic_tags = Column(JSON, nullable=True)
     description = Column(Text, nullable=False)
     examples = Column(JSON, nullable=False) # list of {input, output, explanation}
     constraints = Column(JSON, nullable=False) # list of constraint strings

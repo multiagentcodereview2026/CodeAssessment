@@ -22,6 +22,7 @@ from config.settings import settings
 from scoring.rubric import complexity_dimension_percent
 from similarity_analysis import approach_label, approach_summary, structural_explanation, structural_fingerprint, structural_overlap
 from similarity_clustering import build_approach_groups, build_similarity_clusters, build_submission_groups
+from recommendation_engine import build_recommendations, build_roadmap, normalize_topics
 
 import models
 from auth import (
@@ -818,6 +819,7 @@ def list_problems(db: Session = Depends(get_db)):
         "title": problem.title,
         "difficulty": problem.difficulty,
         "category": problem.category,
+        "topic_tags": normalize_topics(problem.topic_tags, problem.category),
     } for problem in problems]
 
 
@@ -859,6 +861,7 @@ def list_instructor_problems(
             result.append({
                 "id": problem.id, "title": problem.title, "difficulty": problem.difficulty,
                 "category": problem.category, "is_instructor_assigned": True,
+                "topic_tags": normalize_topics(problem.topic_tags, problem.category),
                 "assignment_id": assignment.id,
                 "course_code": assignment.course.course_code,
                 "due_date": utc_isoformat(assignment.due_date) if assignment.due_date else None,
@@ -876,6 +879,7 @@ def list_instructor_problems(
         result.append({
             "id": problem.id, "title": problem.title, "difficulty": problem.difficulty,
             "category": problem.category, "is_instructor_assigned": True,
+            "topic_tags": normalize_topics(problem.topic_tags, problem.category),
             "assignment_id": assignment.id,
             "course_code": assignment.course.course_code,
             "due_date": utc_isoformat(assignment.due_date) if assignment.due_date else None,
@@ -897,6 +901,7 @@ def instructor_problem_payload(db: Session, problem: models.Problem, assignment:
         "title": problem.title,
         "difficulty": problem.difficulty,
         "category": problem.category,
+        "topic_tags": normalize_topics(problem.topic_tags, problem.category),
         "description": problem.description,
         "examples": problem.examples or [],
         "constraints": problem.constraints or [],
@@ -923,6 +928,7 @@ def create_instructor_problem(
         title=payload.title,
         difficulty=payload.difficulty,
         category=payload.category,
+        topic_tags=normalize_topics(payload.topic_tags, payload.category),
         description=payload.description,
         examples=[],
         constraints=[],
@@ -1003,6 +1009,7 @@ def update_instructor_problem(
         problem.title = payload.title
         problem.difficulty = payload.difficulty
         problem.category = payload.category
+        problem.topic_tags = normalize_topics(payload.topic_tags, payload.category)
         problem.description = payload.description
         problem.starter_codes = payload.starter_codes
         problem.target_time_complexity = payload.target_time_complexity
@@ -1094,6 +1101,7 @@ def get_problem(
     return {
         "id": problem.id, "title": problem.title, "difficulty": problem.difficulty,
         "category": problem.category, "description": problem.description,
+        "topic_tags": normalize_topics(problem.topic_tags, problem.category),
         "examples": problem.examples, "constraints": problem.constraints,
         "starter_codes": problem.starter_codes, "test_cases": public_cases,
         **({
@@ -1712,43 +1720,87 @@ def get_student_recommendations(
     db: Session = Depends(get_db),
     student: models.Student = Depends(get_current_student),
 ):
-    """Evidence-based recommendations from independent practice only."""
+    """Deterministic recommendations from independent-practice best scores.
+
+    This endpoint deliberately does not call an AI agent.  It makes topic
+    averages reproducible and only recommends catalogue problems sharing the
+    selected algorithm/topic tag.
+    """
     submissions = db.query(models.Submission).filter(
         models.Submission.student_id == student.student_id,
         models.Submission.assignment_id == None,
         models.Submission.status == "EVALUATED",
         models.Submission.overall_score.isnot(None),
     ).all()
-    latest = latest_assessed_attempts(submissions, preserve_assignment=False)
-    problems = db.query(models.Problem).filter(models.Problem.is_public_practice == True).order_by(models.Problem.id).all()
-    problem_by_id = {problem.id: problem for problem in problems}
-    scores_by_topic: dict[str, list[float]] = {}
-    mastered = set()
-    for submission in latest:
-        problem = problem_by_id.get(submission.problem_id)
-        if problem is None:
-            continue
-        scores_by_topic.setdefault(problem.category or "Uncategorized", []).append(submission.overall_score)
-        if submission.overall_score >= 70:
-            mastered.add(submission.problem_id)
-    topics = [
-        {"topic": topic, "average_score": round(sum(scores) / len(scores), 1), "assessed_problems": len(scores), "reason": f"Your independent-practice average in {topic} is {round(sum(scores) / len(scores), 1)}%."}
-        for topic, scores in scores_by_topic.items()
-        if scores and sum(scores) / len(scores) < 70
-    ]
-    topics.sort(key=lambda item: (item["average_score"], -item["assessed_problems"], item["topic"]))
-    selected_topics = [item["topic"] for item in topics[:3]]
-    candidates = [problem for problem in problems if problem.id not in mastered and (not selected_topics or problem.category in selected_topics)]
-    if not latest:
-        candidates = problems[:3]
-        reason = "Starter recommendation: complete practice assessments to personalize this list."
-    else:
-        reason = "Recommended from your independent-practice topic evidence."
+    # Roadmap/practice suggestions must come from the reusable public problem
+    # bank, never an instructor-created course question. Instructor-created
+    # IDs are deliberately namespaced even if a future migration publishes one.
+    problems = db.query(models.Problem).filter(
+        models.Problem.is_public_practice == True,
+        ~models.Problem.id.like("instructor-%"),
+    ).order_by(models.Problem.id).all()
+    result = build_recommendations(problems, submissions)
     return {
-        "topics": topics[:3],
-        "problems": [{"id": problem.id, "title": problem.title, "difficulty": problem.difficulty, "category": problem.category, "reason": reason} for problem in candidates[:3]],
-        "scope": "independent_practice_only",
+        "topics": result["topics"],
+        "priority_topics": result["priority_topics"],
+        "problems": result["problems"],
+        "scope": "independent_practice_only_best_score_per_problem",
     }
+
+
+def _roadmap_payload(db: Session, student: models.Student) -> dict[str, Any]:
+    """Build the optional DSA roadmap solely from official saved evidence."""
+    enrollment = db.query(models.StudentRoadmap).filter(
+        models.StudentRoadmap.student_id == student.student_id,
+    ).first()
+    submissions = db.query(models.Submission).filter(
+        models.Submission.student_id == student.student_id,
+        models.Submission.assignment_id == None,
+        models.Submission.status == "EVALUATED",
+        models.Submission.overall_score.isnot(None),
+    ).all()
+    problems = db.query(models.Problem).filter(
+        models.Problem.is_public_practice == True,
+        ~models.Problem.id.like("instructor-%"),
+    ).order_by(models.Problem.id).all()
+    result = build_roadmap(problems, submissions)
+    return {
+        **result,
+        "enrolled": bool(enrollment and enrollment.is_enrolled),
+        "scope": "independent_practice_only_best_score_per_problem_bank_only",
+    }
+
+
+@app.get("/api/student/roadmap")
+def get_student_roadmap(
+    db: Session = Depends(get_db),
+    student: models.Student = Depends(get_current_student),
+):
+    """Read the optional deterministic DSA roadmap without restricting practice."""
+    return _roadmap_payload(db, student)
+
+
+@app.post("/api/student/roadmap/start")
+def start_student_roadmap(
+    db: Session = Depends(get_db),
+    student: models.Student = Depends(get_current_student),
+):
+    """Opt into roadmap guidance; students can still freely practise any topic."""
+    enrollment = db.query(models.StudentRoadmap).filter(
+        models.StudentRoadmap.student_id == student.student_id,
+    ).first()
+    if enrollment is None:
+        enrollment = models.StudentRoadmap(
+            student_id=student.student_id,
+            is_enrolled=True,
+            started_at=datetime.utcnow(),
+        )
+        db.add(enrollment)
+    elif not enrollment.is_enrolled:
+        enrollment.is_enrolled = True
+        enrollment.started_at = enrollment.started_at or datetime.utcnow()
+    db.commit()
+    return _roadmap_payload(db, student)
 
 @app.get("/api/instructor/overview")
 def get_instructor_overview(

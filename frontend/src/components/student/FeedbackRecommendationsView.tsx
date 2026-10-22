@@ -1,43 +1,41 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  MessageSquareText,
-  Calendar,
-  Search,
   BookOpen,
   Target,
-  Code2,
-  X
+  Code2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/useAuth';
 import { DifficultyBadge } from '../common/Badge';
 import { Difficulty } from '../../types';
+import { DsaRoadmapView } from './DsaRoadmapView';
 
-type PracticeProblem = { id: string; title: string; difficulty: string; category: string; reason?: string };
+type PracticeProblem = { id: string; title: string; difficulty: string; category: string; topic_tags?: string[]; topic?: string; reason?: string };
 type TopicProgress = { name: string; averageScore: number | null; attempts: number; color: string; nextAction: string };
-type RecommendationTopic = { topic: string; average_score: number; assessed_problems: number; reason: string };
+type RecommendationTopic = { topic: string; average_score: number | null; assessed_problems: number; reason: string };
 type RecommendationProblem = PracticeProblem & { reason: string };
 const TOPIC_COLORS = ['#10b981', '#3b82f6', '#06b6d4', '#8b5cf6', '#f59e0b', '#ef4444'];
 
 export const FeedbackRecommendationsView: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams] = useSearchParams();
-  const { submissions, openAssessmentResult, openProblemWorkspace, activeAssessment } = useApp();
+  const { submissions, openProblemWorkspace } = useApp();
   const { authFetch } = useAuth();
 
-  // Tab State: 'feedback' | 'recommendations' (Strict binary toggle)
-  const initialTab = searchParams.get('tab') === 'practice' ? 'recommendations' : 'feedback';
-  const [activeTab, setActiveTab] = useState<'feedback' | 'recommendations'>(initialTab);
-  const [search, setSearch] = useState('');
   const [practiceCatalogue, setPracticeCatalogue] = useState<PracticeProblem[]>([]);
   const [catalogueLoading, setCatalogueLoading] = useState(true);
   const [catalogueError, setCatalogueError] = useState('');
   const [catalogueRetry, setCatalogueRetry] = useState(0);
   const [selectedTopic, setSelectedTopic] = useState('');
+  const roadmapTab = new URLSearchParams(location.search).get('tab') === 'roadmap';
+  const setWorkspaceTab = (tab: 'practice' | 'roadmap') => {
+    const params = new URLSearchParams(location.search);
+    if (tab === 'roadmap') params.set('tab', 'roadmap'); else params.delete('tab');
+    navigate({ pathname: '/feedback', search: params.toString() ? `?${params}` : '' });
+  };
   const evaluatedSubmissions = useMemo(() => submissions.filter(submission => submission.evaluationStatus === 'EVALUATED'), [submissions]);
-  const [recommendationData, setRecommendationData] = useState<{ topics: RecommendationTopic[]; problems: RecommendationProblem[] }>({ topics: [], problems: [] });
+  const [recommendationData, setRecommendationData] = useState<{ topics: RecommendationTopic[]; priorityTopics: string[]; problems: RecommendationProblem[] }>({ topics: [], priorityTopics: [], problems: [] });
   const [recommendationError, setRecommendationError] = useState('');
 
   useEffect(() => {
@@ -51,6 +49,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
         if (cancelled) return;
         setRecommendationData({
           topics: Array.isArray(data.topics) ? data.topics : [],
+          priorityTopics: Array.isArray(data.priority_topics) ? data.priority_topics : [],
           problems: Array.isArray(data.problems) ? data.problems : []
         });
       } catch (error) {
@@ -60,16 +59,6 @@ export const FeedbackRecommendationsView: React.FC = () => {
     void loadRecommendations();
     return () => { cancelled = true; };
   }, [authFetch, evaluatedSubmissions.length]);
-
-  const revisionPlan = activeAssessment.scoreProjection.focusAreas.map((area, index) => ({
-    title: area,
-    detail: activeAssessment.suggestedImprovements[index] || 'Apply the recommendation and resubmit to update your assessment.',
-    status: index === 0 ? 'Priority' : index === 1 ? 'Next' : 'Refinement'
-  }));
-
-  useEffect(() => {
-    setActiveTab(new URLSearchParams(location.search).get('tab') === 'practice' ? 'recommendations' : 'feedback');
-  }, [location.search]);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +74,10 @@ export const FeedbackRecommendationsView: React.FC = () => {
           id: String(problem.id),
           title: String(problem.title || problem.id),
           difficulty: String(problem.difficulty || 'Medium'),
-          category: String(problem.category || 'Algorithms')
+          category: String(problem.category || 'Algorithms'),
+          topic_tags: Array.isArray(problem.topic_tags) && problem.topic_tags.length
+            ? problem.topic_tags.map(String)
+            : [String(problem.category || 'Algorithms')]
         })));
       } catch (error) {
         if (!cancelled) setCatalogueError(error instanceof Error ? error.message : 'Practice problems could not be loaded.');
@@ -97,91 +89,23 @@ export const FeedbackRecommendationsView: React.FC = () => {
     return () => { cancelled = true; };
   }, [authFetch, catalogueRetry]);
 
-  const topicProgress = useMemo<TopicProgress[]>(() => {
-    const attemptsByCategory = new Map<string, Map<string, number>>();
-    const categoryByProblem = new Map(practiceCatalogue.map(problem => [problem.id, problem.category]));
-    // Keep only each problem's latest score so repeated submissions do not
-    // give one problem disproportionate weight in the category average.
-    const latestProblemScores = new Map<string, number>();
-    for (const submission of evaluatedSubmissions) {
-      if (!latestProblemScores.has(submission.problemId)) latestProblemScores.set(submission.problemId, submission.score);
-    }
-    for (const [problemId, score] of latestProblemScores) {
-      const category = categoryByProblem.get(problemId);
-      if (!category) continue;
-      if (!attemptsByCategory.has(category)) attemptsByCategory.set(category, new Map());
-      attemptsByCategory.get(category)!.set(problemId, score);
-    }
-    const categoryProblemCounts = new Map<string, number>();
-    for (const problem of practiceCatalogue) categoryProblemCounts.set(problem.category, (categoryProblemCounts.get(problem.category) || 0) + 1);
-    const categories = [...categoryProblemCounts.keys()];
-    return categories.map((name, index) => {
-      const attempts = attemptsByCategory.get(name);
-      const mastery = attempts?.size
-        ? Math.round([...attempts.values()].reduce((total, score) => total + score, 0) / attempts.size)
-        : null;
-      return {
-        name,
-        averageScore: mastery,
-        attempts: attempts?.size || 0,
-        color: TOPIC_COLORS[index % TOPIC_COLORS.length],
-        nextAction: mastery == null
-          ? 'Start a problem in this topic to establish your progress.'
-          : mastery < 70
-            ? 'Your recent average is below 70. Practice another problem in this topic.'
-            : 'Your recent average is 70 or higher. Try a harder problem in this topic.'
-      };
-    }).sort((a, b) => {
-      if (a.averageScore == null && b.averageScore != null) return 1;
-      if (b.averageScore == null && a.averageScore != null) return -1;
-      if (a.averageScore != null && b.averageScore != null && a.averageScore !== b.averageScore) return a.averageScore - b.averageScore;
-      return (categoryProblemCounts.get(b.name) || 0) - (categoryProblemCounts.get(a.name) || 0) || a.name.localeCompare(b.name);
-    });
-  }, [practiceCatalogue, evaluatedSubmissions]);
+  const topicProgress = useMemo<TopicProgress[]>(() => recommendationData.topics.map((topic, index) => ({
+    name: topic.topic,
+    averageScore: topic.average_score == null ? null : Math.round(topic.average_score),
+    attempts: topic.assessed_problems,
+    color: TOPIC_COLORS[index % TOPIC_COLORS.length],
+    nextAction: topic.reason,
+  })), [recommendationData.topics]);
 
-  const recommendedTopics = recommendationData.topics.length > 0
-    ? recommendationData.topics.map((topic, index) => ({
-      name: topic.topic,
-      averageScore: Math.round(topic.average_score),
-      attempts: topic.assessed_problems,
-      color: TOPIC_COLORS[index % TOPIC_COLORS.length],
-      nextAction: topic.reason
-    }))
-    : topicProgress.slice(0, 3);
-  const attemptedProblemIds = new Set(evaluatedSubmissions.map(submission => submission.problemId));
+  const recommendedTopics = recommendationData.priorityTopics
+    .map(name => topicProgress.find(topic => topic.name === name))
+    .filter((topic): topic is TopicProgress => Boolean(topic));
   const practiceProblems = useMemo(() => {
-    const matching = practiceCatalogue.filter(problem => !selectedTopic || problem.category === selectedTopic);
-    const unattempted = matching.filter(problem => !attemptedProblemIds.has(problem.id));
-    const candidates = unattempted.length ? unattempted : matching;
-    const recommendationById = new Map(recommendationData.problems.map((problem, index) => [problem.id, { ...problem, index }]));
-    const ranked = candidates.map(problem => {
-      const recommendation = recommendationById.get(problem.id);
-      return { ...problem, reason: recommendation?.reason, recommendationIndex: recommendation?.index ?? Number.MAX_SAFE_INTEGER };
-    }).sort((a, b) => a.recommendationIndex - b.recommendationIndex);
-    if (ranked.length > 0) return ranked.slice(0, 6);
-    return selectedTopic ? [] : recommendationData.problems.slice(0, 6);
-  }, [practiceCatalogue, selectedTopic, evaluatedSubmissions, recommendationData.problems]);
-
-  const handleSelectTab = (tab: 'feedback' | 'recommendations') => {
-    setActiveTab(tab);
-    const params = new URLSearchParams(location.search);
-    if (tab === 'recommendations') params.set('tab', 'practice');
-    else params.delete('tab');
-    navigate({ pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' }, { replace: true });
-  };
-
-  const latestSubmission = evaluatedSubmissions[0];
-
-  const filteredSubmissions = evaluatedSubmissions.filter((s) =>
-    s.problemTitle.toLowerCase().includes(search.toLowerCase()) ||
-    (s.feedbackSummary && s.feedbackSummary.toLowerCase().includes(search.toLowerCase())) ||
-    s.language.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const handleOpenReport = (subId: string) => {
-    openAssessmentResult(subId);
-    navigate(`/submissions/${encodeURIComponent(subId)}`);
-  };
+    const matching = selectedTopic
+      ? recommendationData.problems.filter(problem => problem.topic === selectedTopic)
+      : recommendationData.problems.filter(problem => recommendationData.priorityTopics.includes(problem.topic || ''));
+    return matching.slice(0, 6);
+  }, [selectedTopic, recommendationData]);
 
   const handleStartPractice = (probId: string) => {
     openProblemWorkspace(probId);
@@ -195,10 +119,10 @@ export const FeedbackRecommendationsView: React.FC = () => {
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-indigo-700">Learning workspace</p>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            Feedback &amp; practice
+            Feedback &amp; learning
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Review your recent assessments and choose what to work on next.
+            Choose targeted practice or follow the optional self-learning DSA roadmap.
           </p>
         </div>
 
@@ -208,193 +132,9 @@ export const FeedbackRecommendationsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Segmented View Controls (Either 'AI Feedback' or 'Practice & Topics') */}
-      <div className="flex flex-col gap-4 border-b border-slate-200 md:flex-row md:items-end md:justify-between">
-        {/* Binary 2-Tab Switcher */}
-        <div className="flex w-full gap-6 md:w-auto">
-          <button
-            onClick={() => handleSelectTab('feedback')}
-            className={`flex items-center gap-2 border-b-2 px-1 pb-3 text-sm font-semibold transition-colors cursor-pointer ${
-              activeTab === 'feedback'
-                ? 'border-indigo-600 text-indigo-700'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <MessageSquareText className="h-4 w-4" />
-            <span>Assessment feedback</span>
-            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs font-medium tabular-nums text-slate-600">
-              {evaluatedSubmissions.length}
-            </span>
-          </button>
+      <div className="flex gap-2 border-b border-slate-200"><button onClick={() => setWorkspaceTab('practice')} className={`border-b-2 px-4 py-3 text-sm font-semibold ${!roadmapTab ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>Practice &amp; topics</button><button onClick={() => setWorkspaceTab('roadmap')} className={`border-b-2 px-4 py-3 text-sm font-semibold ${roadmapTab ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>DSA Roadmap</button></div>
 
-          <button
-            onClick={() => handleSelectTab('recommendations')}
-            className={`flex items-center gap-2 border-b-2 px-1 pb-3 text-sm font-semibold transition-colors cursor-pointer ${
-              activeTab === 'recommendations'
-                ? 'border-indigo-600 text-indigo-700'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Target className="h-4 w-4" />
-            <span>Practice &amp; topics</span>
-            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs font-medium tabular-nums text-slate-600">
-              {practiceProblems.length}
-            </span>
-          </button>
-        </div>
-
-        {/* Search Bar (Only shown on Feedback tab) */}
-        {activeTab === 'feedback' && (
-          <div className="relative w-full md:w-80">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search feedback notes or code..."
-              className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* TAB 1: AI FEEDBACK */}
-      {activeTab === 'feedback' && (
-        <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div>
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Continue learning</span>
-                {latestSubmission ? <>
-                  <h3 className="mt-1 text-base font-bold text-slate-900">Continue with {latestSubmission.problemTitle}</h3>
-                  <p className="mt-1 text-xs text-slate-500 leading-relaxed">Your latest saved assessment scored {latestSubmission.score}/100. Open its report for the feedback and next steps from that evaluation.</p>
-                </> : <>
-                  <h3 className="mt-1 text-base font-bold text-slate-900">Start your first practice problem</h3>
-                  <p className="mt-1 text-xs text-slate-500 leading-relaxed">Your saved evaluations and topic progress will appear here after you submit a solution.</p>
-                </>}
-              </div>
-              {latestSubmission ? <div className="flex gap-2">
-                <button onClick={() => handleOpenReport(latestSubmission.id)} className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50">
-                  <BookOpen className="h-4 w-4" /><span>View latest report</span>
-                </button>
-                <button onClick={() => handleStartPractice(latestSubmission.problemId)} className="flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
-                  <Code2 className="h-4 w-4" /><span>Practice again</span>
-                </button>
-              </div> : <button onClick={() => navigate('/problems')} className="flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
-                <Code2 className="h-4 w-4" /><span>Browse problems</span>
-              </button>}
-            </div>
-          </div>
-
-          {revisionPlan.length > 0 && <div className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div>
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Suggested next steps</span>
-                <h3 className="mt-1 text-base font-bold text-slate-900">
-                  {activeAssessment.scoreProjection.isExpected
-                    ? `Expected: ${activeAssessment.problemTitle} can move from ${activeAssessment.scoreProjection.currentScore} to ${activeAssessment.scoreProjection.projectedScore}`
-                    : `Improve ${activeAssessment.problemTitle}, then submit again for a verified score`}
-                </h3>
-                <p className="mt-1 text-xs text-slate-500 leading-relaxed">Focus areas are based on your latest assessment.</p>
-              </div>
-              <button onClick={() => handleStartPractice(activeAssessment.problemId)} className="flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
-                <Code2 className="h-4 w-4" /><span>Revise solution</span>
-              </button>
-            </div>
-            <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
-              {revisionPlan.map(item => <div key={item.title} className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700">{item.status}</span>
-                <h4 className="mt-1 text-sm font-semibold text-slate-900">{item.title}</h4>
-                <p className="mt-1 text-xs leading-relaxed text-slate-600">{item.detail}</p>
-              </div>)}
-            </div>
-          </div>}
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MessageSquareText className="w-5 h-5 text-indigo-600" />
-              <h3 className="text-base font-semibold text-slate-900">Recent assessments</h3>
-            </div>
-            <span className="text-xs text-slate-400 font-medium">
-              {filteredSubmissions.length} Submissions Logged
-            </span>
-          </div>
-
-          <div className="space-y-3">
-            {filteredSubmissions.length === 0 ? (
-              <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
-                No assessments match your search.
-              </div>
-            ) : (
-              filteredSubmissions.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => handleOpenReport(item.id)}
-                  className="group flex cursor-pointer flex-col items-start justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-indigo-300 hover:bg-slate-50/50 sm:flex-row sm:items-center sm:p-5"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0 rounded-lg bg-indigo-50 p-3 text-indigo-700">
-                      <MessageSquareText className="h-4 w-4" />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h3 className="text-sm font-semibold text-slate-900 group-hover:text-indigo-700 sm:text-base">
-                          {item.problemTitle}
-                        </h3>
-                        <span className="flex items-center gap-1 text-xs text-slate-500">
-                          <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                          {item.date}
-                        </span>
-                        <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                          {item.language}
-                        </span>
-                      </div>
-
-                      <p className="text-sm leading-relaxed text-slate-600">
-                        {item.feedbackSummary || (item.status === 'Passed'
-                          ? 'All test cases passed. Open the report for the full evaluation.'
-                          : 'Open the report to review the test results and evaluation feedback.')}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4 self-end sm:self-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <div className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-mono text-xs font-semibold ${
-                      item.score >= 85 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                      item.score >= 70 ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
-                      item.score >= 60 ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                      'bg-rose-50 text-rose-700 border border-rose-200'
-                    }`}>
-                      <span>{item.score} / 100</span>
-                    </div>
-
-                    <button
-                      onClick={() => handleOpenReport(item.id)}
-                      className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:border-indigo-300 hover:bg-white hover:text-indigo-700"
-                    >
-                      <BookOpen className="h-3.5 w-3.5" />
-                      <span>Full Report</span>
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: PRACTICE & TOPICS */}
-      {activeTab === 'recommendations' && (
-        <div className="space-y-6">
+      {roadmapTab ? <DsaRoadmapView embedded /> : <div className="space-y-6">
           {recommendationError && <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{recommendationError} Your saved assessment history is still available below.</p>}
           {/* Recommended Topic Clusters */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -455,14 +195,16 @@ export const FeedbackRecommendationsView: React.FC = () => {
                 >
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-slate-500">Problem {idx + 1}</span>
+                      <span className="text-xs font-medium text-slate-500">Problem #{prob.id.match(/(\d+)$/)?.[1] || prob.id}</span>
                       <DifficultyBadge difficulty={(['Easy', 'Medium', 'Hard'].includes(prob.difficulty) ? prob.difficulty : 'Medium') as Difficulty} />
                     </div>
                     <h4 className="text-sm font-semibold text-slate-900 group-hover:text-indigo-700">
                       {prob.title}
                     </h4>
                     <div className="flex flex-wrap gap-1 mt-2">
-                      <span className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">{prob.category}</span>
+                      <span className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">{prob.topic || prob.category}</span>
+                      <span className="rounded bg-indigo-50 px-2 py-1 text-xs text-indigo-700">Problem bank</span>
+                      <span className="font-mono text-[11px] text-slate-400">ID: {prob.id}</span>
                     </div>
                     {prob.reason && <p className="mt-2 text-[11px] text-slate-500">{prob.reason}</p>}
                   </div>
@@ -477,8 +219,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
                 </div>
               ))}</div>}
           </div>
-        </div>
-      )}
+      </div>}
     </div>
   );
 };
