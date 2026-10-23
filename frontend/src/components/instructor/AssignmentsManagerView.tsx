@@ -16,11 +16,10 @@ import {
 import { useApp } from '../../context/AppContext';
 import { Assignment } from '../../types';
 import { Modal } from '../common/Modal';
-import { MOCK_PROBLEMS } from '../../mock/data';
 
 export const AssignmentsManagerView: React.FC = () => {
   const navigate = useNavigate();
-  const { assignments, addAssignment, deleteAssignment, courses } = useApp();
+  const { assignments, addAssignment, deleteAssignment, courses, problems } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAsgForAnalytics, setSelectedAsgForAnalytics] = useState<Assignment | null>(null);
   const [title, setTitle] = useState('');
@@ -216,7 +215,7 @@ export const AssignmentsManagerView: React.FC = () => {
           <div>
             <label className="block font-bold text-slate-700 mb-2">Select Problems from Bank:</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200">
-              {MOCK_PROBLEMS.map((prob) => {
+              {problems.map((prob) => {
                 const selected = selectedProbIds.includes(prob.id);
                 return (
                   <div

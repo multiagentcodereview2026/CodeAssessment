@@ -14,11 +14,11 @@ import {
   BookOpen,
   FileText,
   BellRing,
-  X
+  X,
+  Code2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { StatusBadge } from '../common/Badge';
-import { MOCK_PROBLEMS } from '../../mock/data';
 
 export const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -34,33 +34,44 @@ export const StudentDashboard: React.FC = () => {
     openAssessmentResult
   } = useApp();
 
-  const activeProblem = problems[0] || MOCK_PROBLEMS[0];
-  const latestSubmission = submissions[0];
+  const activeProblem = problems[0] || null;
+  const latestSubmission = submissions[0] || null;
   const assignedProblems = problems.filter((problem) => problem.isInstructorAssigned);
-  const weakTopic = studentProgress.weakTopics[0] || activeProblem.tags[0] || 'Algorithms';
-  const solvedPercent = Math.round((studentProgress.problemsSolved / studentProgress.totalProblems) * 100);
-  const projection = activeAssessment.scoreProjection;
+  const weakTopic = studentProgress.weakTopics[0] || (activeProblem?.tags?.[0]) || 'Algorithms & Data Structures';
+  const solvedPercent = studentProgress.totalProblems > 0
+    ? Math.round((studentProgress.problemsSolved / studentProgress.totalProblems) * 100)
+    : 0;
   const latestAnnouncement = announcements.find((item) => !item.read);
+  const studentName = currentUser.name || currentUser.rollNumber || 'Student';
 
-  const handleResumeChallenge = (probId: string = activeProblem.id) => {
-    openProblemWorkspace(probId);
-    navigate(`/problems/${probId}`);
+  const handleResumeChallenge = (probId?: string) => {
+    const targetId = probId || activeProblem?.id;
+    if (targetId) {
+      openProblemWorkspace(targetId);
+      navigate(`/problems/${targetId}`);
+    } else {
+      navigate('/problems');
+    }
   };
 
   const handleInspectReport = (subId?: string) => {
     openAssessmentResult(subId);
-    navigate('/result');
+    if (subId) {
+      navigate(`/submissions/${subId}`);
+    } else {
+      navigate('/result');
+    }
   };
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
-      {/* Top Banner (Clean Greeting & Primary CTAs - Jakob's & Fitts's Law) */}
+      {/* Top Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-full bg-gradient-to-l from-indigo-500/10 to-transparent pointer-events-none" />
         
         <div className="relative z-10">
           <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
-            Hello, {currentUser.name}! 👋
+            Hello, {studentName}! 👋
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-indigo-100/90 leading-relaxed">
             Your next best move is selected from deadlines, weak-topic feedback, and the latest AI score projection.
@@ -68,16 +79,27 @@ export const StudentDashboard: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3 relative z-10">
-          <button
-            onClick={() => handleResumeChallenge(activeProblem.id)}
-            className="px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
-          >
-            <Zap className="w-4 h-4 text-amber-300" />
-            <span>Resume "{activeProblem.title}"</span>
-          </button>
+          {activeProblem ? (
+            <button
+              onClick={() => handleResumeChallenge(activeProblem.id)}
+              className="px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            >
+              <Zap className="w-4 h-4 text-amber-300" />
+              <span>Resume "{activeProblem.title}"</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate('/problems')}
+              className="px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            >
+              <Code2 className="w-4 h-4 text-indigo-200" />
+              <span>Explore Problem Bank</span>
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Announcements */}
       {latestAnnouncement && (
         <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-start gap-3">
@@ -99,7 +121,7 @@ export const StudentDashboard: React.FC = () => {
                 )}
               </div>
               <p className="mt-1 text-xs text-amber-800 leading-relaxed">
-                {latestAnnouncement.message} It is now available in your Instructor Assigned queue.
+                {latestAnnouncement.message}
               </p>
             </div>
           </div>
@@ -125,38 +147,49 @@ export const StudentDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Personalized Learning Path */}
+      {/* Personalized Learning Path (3 Cards) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* 1. Continue */}
         <button
-          onClick={() => handleResumeChallenge(activeProblem.id)}
+          onClick={() => handleResumeChallenge(activeProblem?.id)}
           className="text-left bg-white rounded-2xl border border-indigo-200/80 p-5 shadow-xs hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-extrabold text-indigo-700 uppercase">1. Continue</span>
             <Zap className="w-4 h-4 text-indigo-500" />
           </div>
-          <h3 className="mt-2 text-sm font-bold text-slate-900">{activeProblem.title}</h3>
+          <h3 className="mt-2 text-sm font-bold text-slate-900">
+            {activeProblem ? activeProblem.title : 'Problem Bank'}
+          </h3>
           <p className="mt-1 text-xs text-slate-500 leading-relaxed">
-            Target {activeProblem.optimalComplexity.time} time and {activeProblem.optimalComplexity.space} space before submitting.
+            {activeProblem
+              ? `Target ${activeProblem.optimalComplexity?.time || 'optimal'} time and ${activeProblem.optimalComplexity?.space || 'optimal'} space before submitting.`
+              : 'Explore the full problem bank and begin your next challenge.'}
           </p>
         </button>
 
+        {/* 2. Revise */}
         <button
-          onClick={() => handleInspectReport(latestSubmission?.id)}
+          onClick={() => latestSubmission ? handleInspectReport(latestSubmission.id) : navigate('/problems')}
           className="text-left bg-white rounded-2xl border border-emerald-200/80 p-5 shadow-xs hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-extrabold text-emerald-700 uppercase">2. Revise</span>
             <FileText className="w-4 h-4 text-emerald-500" />
           </div>
-          <h3 className="mt-2 text-sm font-bold text-slate-900">{latestSubmission?.problemTitle || activeAssessment.problemTitle}</h3>
+          <h3 className="mt-2 text-sm font-bold text-slate-900">
+            {latestSubmission ? latestSubmission.problemTitle : 'No Submissions Yet'}
+          </h3>
           <p className="mt-1 text-xs text-slate-500 leading-relaxed">
-            AI projects +{projection.improvementDelta} points if you address {projection.focusAreas[0]?.toLowerCase() || 'the top rubric gap'}.
+            {latestSubmission
+              ? (latestSubmission.feedbackSummary || `Score: ${latestSubmission.score}/100. Inspect AI report for complexity analysis and hints.`)
+              : 'Submit a solution to unlock AI rubric feedback and score projections.'}
           </p>
         </button>
 
+        {/* 3. Practice */}
         <button
-          onClick={() => navigate('/feedback')}
+          onClick={() => navigate('/problems')}
           className="text-left bg-white rounded-2xl border border-amber-200/80 p-5 shadow-xs hover:border-amber-400 hover:shadow-md transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between">
@@ -185,13 +218,13 @@ export const StudentDashboard: React.FC = () => {
           </div>
           <div className="flex items-baseline gap-1.5">
             <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-mono">
-              {studentProgress.overallScore}
+              {studentProgress.overallScore != null ? studentProgress.overallScore : 0}
             </span>
             <span className="text-xs text-slate-400 font-mono">/ 100</span>
           </div>
           <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600 font-semibold">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span>Excellent</span>
+            <span>{studentProgress.overallScore >= 80 ? 'Excellent' : studentProgress.overallScore >= 60 ? 'On Track' : 'In Progress'}</span>
           </div>
         </div>
 
@@ -210,13 +243,13 @@ export const StudentDashboard: React.FC = () => {
             <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-mono">
               {studentProgress.problemsSolved}
             </span>
-            <span className="text-xs text-slate-400 font-mono">/ {studentProgress.totalProblems}</span>
+            <span className="text-xs text-slate-400 font-mono">/ {studentProgress.totalProblems || problems.length}</span>
           </div>
           <div className="mt-2 text-xs text-slate-500 flex items-center justify-between">
             <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mr-2">
               <div
-                className="bg-emerald-500 h-full rounded-full"
-                style={{ width: `${(studentProgress.problemsSolved / studentProgress.totalProblems) * 100}%` }}
+                className="bg-emerald-500 h-full rounded-full transition-all"
+                style={{ width: `${solvedPercent}%` }}
               />
             </div>
             <span className="font-mono text-[11px] font-semibold text-slate-600">{solvedPercent}%</span>
@@ -242,11 +275,11 @@ export const StudentDashboard: React.FC = () => {
           </div>
           <div className="mt-2 text-xs text-amber-600 font-semibold flex items-center gap-1">
             <Flame className="w-3.5 h-3.5 fill-amber-500" />
-            <span>Active learning streak 🔥</span>
+            <span>{studentProgress.currentStreak > 0 ? 'Active learning streak 🔥' : 'Start your streak today'}</span>
           </div>
         </div>
 
-        {/* Rank */}
+        {/* Cohort Rank */}
         <div
           onClick={() => navigate('/analytics')}
           className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs hover:border-indigo-300 card-hover cursor-pointer transition-all"
@@ -259,44 +292,70 @@ export const StudentDashboard: React.FC = () => {
           </div>
           <div className="flex items-baseline gap-1.5">
             <span className="text-2xl sm:text-3xl font-extrabold text-purple-700 font-mono">
-              #6
+              {studentProgress.rankPercentile || '—'}
             </span>
           </div>
           <div className="mt-2 text-xs text-purple-600 font-medium truncate">
-            Rank #6 of 48 peers
+            {studentProgress.problemsSolved > 0 ? 'Live cohort standing' : 'Submit solutions to establish rank'}
           </div>
         </div>
       </div>
 
       {/* AI Projected Score Action Card */}
-      <div className="p-6 rounded-3xl bg-gradient-to-r from-purple-900/10 via-indigo-900/10 to-transparent border border-purple-200/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
-        <div className="flex items-start gap-3.5">
-          <div className="p-3 bg-purple-600 text-white rounded-2xl shadow-md shadow-purple-600/20">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-slate-900">
-                Projected Score After Revision Available
-              </h3>
-              <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase bg-purple-100 text-purple-800 rounded-full">
-                +7 pts Gain
-              </span>
+      {latestSubmission ? (
+        <div className="p-6 rounded-3xl bg-gradient-to-r from-purple-900/10 via-indigo-900/10 to-transparent border border-purple-200/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-start gap-3.5">
+            <div className="p-3 bg-purple-600 text-white rounded-2xl shadow-md shadow-purple-600/20">
+              <Sparkles className="w-5 h-5" />
             </div>
-            <p className="text-xs text-slate-600 mt-1">
-              Applying AI recommendations on <strong className="text-slate-800">{activeAssessment.problemTitle}</strong> can boost your score from <span className="font-mono font-bold text-slate-800">{projection.currentScore}</span> to <span className="font-mono font-bold text-emerald-600">{projection.projectedScore}/100</span>.
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900">
+                  Latest Assessed Solution
+                </h3>
+                <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase bg-purple-100 text-purple-800 rounded-full">
+                  Score: {latestSubmission.score}/100
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-1">
+                <strong className="text-slate-800">{latestSubmission.problemTitle}</strong> · Status: <span className="font-semibold text-emerald-700">{latestSubmission.status}</span>. {latestSubmission.feedbackSummary || 'Inspect the report to review full AST complexity analysis.'}
+              </p>
+            </div>
           </div>
-        </div>
 
-        <button
-          onClick={() => handleInspectReport()}
-          className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-2xl shadow-md shadow-purple-600/20 transition-all flex items-center gap-2 flex-shrink-0 cursor-pointer active:scale-95"
-        >
-          <span>View Detailed Feedback</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
+          <button
+            onClick={() => handleInspectReport(latestSubmission.id)}
+            className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-2xl shadow-md shadow-purple-600/20 transition-all flex items-center gap-2 flex-shrink-0 cursor-pointer active:scale-95"
+          >
+            <span>View Detailed Feedback</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ) : (
+        <div className="p-6 rounded-3xl bg-gradient-to-r from-indigo-900/10 via-slate-900/10 to-transparent border border-indigo-200/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-start gap-3.5">
+            <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-md shadow-indigo-600/20">
+              <Code2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">
+                Ready to begin your practice?
+              </h3>
+              <p className="text-xs text-slate-600 mt-1">
+                Choose a challenge from the Problem Bank and run your solution in the compiler sandbox for live AI evaluation.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => navigate('/problems')}
+            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-2xl shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2 flex-shrink-0 cursor-pointer active:scale-95"
+          >
+            <span>Browse Problems</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Middle Grid: Recent Submissions & Side Panels */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -328,39 +387,47 @@ export const StudentDashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {submissions.slice(0, 5).map((sub) => (
-                  <tr 
-                    key={sub.id} 
-                    onClick={() => handleInspectReport(sub.id)}
-                    className="hover:bg-slate-50/70 transition-colors group cursor-pointer"
-                  >
-                    <td className="py-4 font-bold text-slate-800">
-                      <div className="flex items-center gap-2">
-                        <span>{sub.problemTitle}</span>
-                        <span className="text-[10px] text-slate-400 font-mono">({sub.language})</span>
-                      </div>
-                    </td>
-                    <td className="py-4 font-mono font-bold">
-                      <span className={sub.score >= 80 ? 'text-emerald-600' : sub.score >= 60 ? 'text-indigo-600' : 'text-rose-600'}>
-                        {sub.score} / 100
-                      </span>
-                    </td>
-                    <td className="py-4">
-                      <StatusBadge status={sub.status} />
-                    </td>
-                    <td className="py-4 text-slate-500 font-mono text-[11px]">
-                      {sub.date}
-                    </td>
-                    <td className="py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => handleInspectReport(sub.id)}
-                        className="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer"
-                      >
-                        Inspect AI Report
-                      </button>
+                {submissions.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-slate-400">
+                      No submissions recorded yet. Start solving problems from the Problem Bank!
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  submissions.slice(0, 5).map((sub) => (
+                    <tr 
+                      key={sub.id} 
+                      onClick={() => handleInspectReport(sub.id)}
+                      className="hover:bg-slate-50/70 transition-colors group cursor-pointer"
+                    >
+                      <td className="py-4 font-bold text-slate-800">
+                        <div className="flex items-center gap-2">
+                          <span>{sub.problemTitle}</span>
+                          <span className="text-[10px] text-slate-400 font-mono font-normal">
+                            ({sub.language})
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-4 font-mono font-extrabold text-indigo-600 text-sm">
+                        {sub.score}/100
+                      </td>
+                      <td className="py-4">
+                        <StatusBadge status={sub.status} />
+                      </td>
+                      <td className="py-4 text-slate-400 font-mono text-[11px]">
+                        {sub.date}
+                      </td>
+                      <td className="py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => handleInspectReport(sub.id)}
+                          className="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer"
+                        >
+                          Inspect AI Report
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -378,15 +445,19 @@ export const StudentDashboard: React.FC = () => {
               AI identified lower test pass rates on these algorithmic patterns:
             </p>
             <div className="flex flex-wrap gap-2">
-              {studentProgress.weakTopics.map((topic, i) => (
-                <button
-                  key={i}
-                  onClick={() => navigate('/problems')}
-                  className="px-3 py-1 text-xs font-semibold rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200/80 transition-colors cursor-pointer"
-                >
-                  {topic}
-                </button>
-              ))}
+              {studentProgress.weakTopics.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">No weak topics flagged yet.</p>
+              ) : (
+                studentProgress.weakTopics.map((topic, i) => (
+                  <button
+                    key={i}
+                    onClick={() => navigate('/problems')}
+                    className="px-3 py-1 text-xs font-semibold rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200/80 transition-colors cursor-pointer"
+                  >
+                    {topic}
+                  </button>
+                ))
+              )}
             </div>
             <button
               onClick={() => navigate('/feedback?tab=practice')}
@@ -413,45 +484,51 @@ export const StudentDashboard: React.FC = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {assignedProblems.slice(0, 3).map((prob) => (
-            <div
-              key={prob.id}
-              onClick={() => handleResumeChallenge(prob.id)}
-              className="p-5 rounded-2xl border border-slate-200 hover:border-indigo-400 hover:shadow-md card-hover transition-all cursor-pointer bg-slate-50/50 hover:bg-white flex flex-col justify-between group"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
-                    {prob.courseCode || 'CS201'}
-                  </span>
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    Due: {prob.dueDate || '15 May, 2026'}
-                  </span>
-                </div>
-                <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                  {prob.title}
-                </h4>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {prob.tags.slice(0, 2).map((tag, tIdx) => (
-                    <span key={tIdx} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
-                      {tag}
+        {assignedProblems.length === 0 ? (
+          <div className="text-center py-8 text-sm text-slate-400">
+            No active course assignments posted yet.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {assignedProblems.slice(0, 3).map((prob) => (
+              <div
+                key={prob.id}
+                onClick={() => handleResumeChallenge(prob.id)}
+                className="p-5 rounded-2xl border border-slate-200 hover:border-indigo-400 hover:shadow-md card-hover transition-all cursor-pointer bg-slate-50/50 hover:bg-white flex flex-col justify-between group"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
+                      {prob.courseCode || 'Course'}
                     </span>
-                  ))}
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      Due: {prob.dueDate || 'No due date'}
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                    {prob.title}
+                  </h4>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {prob.tags.slice(0, 2).map((tag, tIdx) => (
+                      <span key={tIdx} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex items-center gap-2 text-[11px] font-mono text-slate-500">
+                    <Clock className="w-3 h-3" />
+                    <span>Opt: {prob.optimalComplexity.time} / {prob.optimalComplexity.space}</span>
+                  </div>
                 </div>
-                <div className="mt-3 flex items-center gap-2 text-[11px] font-mono text-slate-500">
-                  <Clock className="w-3 h-3" />
-                  <span>Opt: {prob.optimalComplexity.time} / {prob.optimalComplexity.space}</span>
-                </div>
-              </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-indigo-600">
-                <span>Code in Sandbox</span>
-                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-indigo-600">
+                  <span>Code in Sandbox</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
