@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Code2,
@@ -19,7 +19,10 @@ import {
   AlertTriangle,
   ShieldAlert,
   FileCheck2,
-  Check
+  Check,
+  ChevronDown,
+  RotateCcw,
+  Filter
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DifficultyBadge } from '../common/Badge';
@@ -62,6 +65,25 @@ export const ProblemsListView: React.FC = () => {
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [languageFilter, setLanguageFilter] = useState<string>('all');
   const [isSkillsOpen, setIsSkillsOpen] = useState(false);
+  const [isInstructorSkillsOpen, setIsInstructorSkillsOpen] = useState(false);
+  const [skillSearch, setSkillSearch] = useState('');
+  const skillsDropdownRef = useRef<HTMLDivElement>(null);
+  const instructorSkillsDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (skillsDropdownRef.current && !skillsDropdownRef.current.contains(e.target as Node)) {
+        setIsSkillsOpen(false);
+      }
+      if (instructorSkillsDropdownRef.current && !instructorSkillsDropdownRef.current.contains(e.target as Node)) {
+        setIsInstructorSkillsOpen(false);
+      }
+    };
+    if (isSkillsOpen || isInstructorSkillsOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isSkillsOpen, isInstructorSkillsOpen]);
   const [practiceProblems, setPracticeProblems] = useState<Problem[]>(readCachedPracticeCatalogue);
   const [isPracticeLoading, setIsPracticeLoading] = useState(() => readCachedPracticeCatalogue().length === 0);
   const [practiceLoadError, setPracticeLoadError] = useState('');
@@ -69,6 +91,12 @@ export const ProblemsListView: React.FC = () => {
   const [instructorProblems, setInstructorProblems] = useState<Problem[]>([]);
   const [isInstructorLoading, setIsInstructorLoading] = useState(true);
   const [instructorLoadError, setInstructorLoadError] = useState('');
+  const [practicePage, setPracticePage] = useState(1);
+  const practicePageSize = 50;
+
+  useEffect(() => {
+    setPracticePage(1);
+  }, [search, difficultyFilter, selectedTag, languageFilter]);
 
   useEffect(() => {
     if (!isInstructor) {
@@ -375,6 +403,8 @@ export const ProblemsListView: React.FC = () => {
     .sort((left, right) => questionOrder(left.id) - questionOrder(right.id) || left.title.localeCompare(right.title));
   const normalizedStudentSearch = search.trim().toLowerCase();
   const studentPracticeTopics = Array.from(new Set(orderedPracticeProblems.flatMap((problem) => problem.tags))).sort();
+  const studentInstructorTopics = Array.from(new Set(studentInstructorProblems.flatMap((problem) => problem.tags))).sort();
+  const currentTopics = activeTab === 'instructor' && studentInstructorTopics.length ? studentInstructorTopics : studentPracticeTopics;
   const studentPracticeLanguages = Array.from(new Set(orderedPracticeProblems.flatMap((problem) => Object.keys(problem.starterCode || {}).map((language) => language.toLowerCase())))).sort();
   const visibleStudentPractice = orderedPracticeProblems.filter((problem, index) => {
     const matchesNumber = /^\d+$/.test(normalizedStudentSearch) && questionOrder(problem.id) === Number(normalizedStudentSearch);
@@ -384,522 +414,993 @@ export const ProblemsListView: React.FC = () => {
       (selectedTag === 'all' || problem.tags.includes(selectedTag)) &&
       (languageFilter === 'all' || Object.keys(problem.starterCode || {}).some((language) => language.toLowerCase() === languageFilter));
   });
+
+  const totalPracticePages = Math.ceil(visibleStudentPractice.length / practicePageSize) || 1;
+  const paginatedStudentPractice = visibleStudentPractice.slice(
+    (practicePage - 1) * practicePageSize,
+    practicePage * practicePageSize
+  );
   const visibleStudentInstructor = studentInstructorProblems.filter((problem) => {
     const content = `${problem.title} ${problem.courseCode || ''} ${problem.tags.join(' ')}`.toLowerCase();
-    return !normalizedStudentSearch || content.includes(normalizedStudentSearch);
+    const matchSearch = !normalizedStudentSearch || content.includes(normalizedStudentSearch);
+    const matchDiff = difficultyFilter === 'all' || problem.difficulty.toLowerCase() === difficultyFilter.toLowerCase();
+    const matchTag = selectedTag === 'all' || problem.tags.includes(selectedTag);
+    return matchSearch && matchDiff && matchTag;
   });
 
   if (!isInstructor) {
     return (
-      <div className="space-y-5 pb-12 animate-fadeIn">
-        <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          <button
-            onClick={() => { setActiveTab('practice'); navigate('/problems'); }}
-            className={`rounded-lg px-4 py-2.5 text-sm font-bold transition-colors ${activeTab === 'practice' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-          >
-            DSA Practice
-          </button>
-          <button
-            onClick={() => { setActiveTab('instructor'); navigate('/problems?view=instructor'); }}
-            className={`rounded-lg px-4 py-2.5 text-sm font-bold transition-colors ${activeTab === 'instructor' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-          >
-            Instructor Problems
-            <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-700">{studentInstructorProblems.length}</span>
-          </button>
-        </div>
+      <div className="space-y-6 pb-12 animate-fadeIn">
+        {/* Unified Page Header Aligned with App Design System */}
+        <header className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-indigo-700">Independent practice</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+              Find a problem to solve
+            </h1>
+            <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-600">
+              Choose a topic and difficulty, then open a problem to write code, run examples, and submit for assessment.
+            </p>
+          </div>
 
-        {activeTab === 'instructor' ? (
-          <section className="space-y-5">
-            <header>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-600">Course work</p>
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Instructor Problems</h1>
-              <p className="mt-1 text-sm text-slate-500">Problems assigned by your instructor, kept separate from DSA practice.</p>
-            </header>
+          {/* Compact Tab Switcher Aligned to Header */}
+          <div className="flex shrink-0 items-center">
+            <div className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200/90 bg-slate-100 p-0.5 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => { setActiveTab('practice'); navigate('/problems'); }}
+                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-all cursor-pointer ${
+                  activeTab === 'practice'
+                    ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-white/50'
+                }`}
+              >
+                <Code2 className={`h-3.5 w-3.5 ${activeTab === 'practice' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                <span>DSA Practice</span>
+                <span className={`ml-0.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[10px] font-mono leading-none transition-colors ${
+                  activeTab === 'practice'
+                    ? 'bg-indigo-50 text-indigo-700 font-medium border border-indigo-100'
+                    : 'bg-slate-200/70 text-slate-500'
+                }`}>
+                  {orderedPracticeProblems.length || practiceProblems.length}
+                </span>
+              </button>
 
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              {isInstructorLoading ? (
-                <div className="p-10 text-center text-sm font-semibold text-slate-500">Loading instructor problems…</div>
-              ) : visibleStudentInstructor.length === 0 ? (
-                <div className="p-10 text-center text-sm text-slate-500">No instructor problems match this search.</div>
-              ) : visibleStudentInstructor.map((problem) => {
-                const attempted = solvedSlugs.has(problem.slug) || solvedSlugs.has(problem.id);
-                return (
-                  <button
-                    key={problem.id}
-                    onClick={() => handleSolve(problem.id)}
-                    className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 border-b border-slate-100 px-6 py-5 text-left transition-colors last:border-b-0 hover:bg-emerald-50/60"
-                  >
-                    <span className={`text-base font-bold ${attempted ? 'text-emerald-600' : 'text-slate-300'}`}>{attempted ? '✓' : '○'}</span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-base font-bold text-slate-900">{problem.title}</span>
-                      <span className="mt-1 block text-sm text-slate-500">{problem.courseCode || 'Course assignment'}{problem.dueDate ? ` · Due ${problem.dueDate}` : ''}</span>
-                    </span>
-                    <DifficultyBadge difficulty={problem.difficulty} />
-                  </button>
-                );
-              })}
+              <button
+                type="button"
+                onClick={() => { setActiveTab('instructor'); navigate('/problems?view=instructor'); }}
+                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-all cursor-pointer ${
+                  activeTab === 'instructor'
+                    ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-white/50'
+                }`}
+              >
+                <GraduationCap className={`h-3.5 w-3.5 ${activeTab === 'instructor' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                <span>Instructor Problems</span>
+                <span className={`ml-0.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[10px] font-mono leading-none transition-colors ${
+                  activeTab === 'instructor'
+                    ? 'bg-indigo-50 text-indigo-700 font-medium border border-indigo-100'
+                    : 'bg-slate-200/70 text-slate-500'
+                }`}>
+                  {studentInstructorProblems.length}
+                </span>
+              </button>
             </div>
-          </section>
-        ) : (
-          <section className="space-y-5">
-            <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-              <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-indigo-700">Independent practice</p><h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Find a problem to solve</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Choose a topic and difficulty, then open a problem to write code, run examples, and submit for assessment.</p></div>
-              <span className="text-sm text-slate-500">{orderedPracticeProblems.length} {orderedPracticeProblems.length === 1 ? 'problem' : 'problems'} available</span>
-            </header>
-            <div className="relative">
-              <main className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by number, question name, or DSA topic" className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-indigo-500" />
-                  </div>
-                  <div className="relative">
+          </div>
+        </header>
+
+        <section className="space-y-4">
+          <div className="relative">
+            <main className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              {/* Filter and Search Bar */}
+              <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder={activeTab === 'practice' ? "Search by number, question name, or DSA topic..." : "Search by question name, topic, or course..."}
+                    className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50/70 py-1.5 pl-9 pr-3 text-xs text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:ring-1 focus:ring-indigo-100"
+                  />
+                  {search && (
                     <button
                       type="button"
-                      onClick={() => setIsSkillsOpen((open) => !open)}
-                      aria-expanded={isSkillsOpen}
-                      className={`inline-flex h-full w-full items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-colors sm:w-auto ${
-                        isSkillsOpen || selectedTag !== 'all'
-                          ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
-                          : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-200 hover:bg-indigo-50'
-                      }`}
+                      onClick={() => setSearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                     >
-                      <Layers className="h-4 w-4" />
-                      <span>Skills</span>
-                      {selectedTag !== 'all' && <span className="max-w-20 truncate text-xs">{selectedTag}</span>}
+                      <X className="w-3.5 h-3.5" />
                     </button>
+                  )}
+                </div>
 
-                    {isSkillsOpen && (
-                      <aside className="absolute right-0 top-full z-30 mt-2 max-h-[520px] w-[min(320px,calc(100vw-3rem))] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-5 text-slate-100 shadow-xl shadow-slate-950/20">
-                        <div className="flex items-center justify-between gap-3">
-                          <h2 className="text-sm font-extrabold">Skills</h2>
+                {/* Skills Popover Filter */}
+                <div className="relative" ref={skillsDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsSkillsOpen((open) => !open)}
+                    aria-expanded={isSkillsOpen}
+                    className={`inline-flex h-9 w-full items-center justify-between gap-2 rounded-xl border px-3 text-xs font-medium transition-all cursor-pointer sm:w-auto ${
+                      selectedTag !== 'all'
+                        ? 'border-indigo-300 bg-indigo-50 text-indigo-700 shadow-2xs font-semibold'
+                        : isSkillsOpen
+                        ? 'border-indigo-300 bg-indigo-50/50 text-indigo-700 shadow-xs'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Layers className={`h-3.5 w-3.5 ${selectedTag !== 'all' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                      <span>{selectedTag === 'all' ? 'Skills' : selectedTag}</span>
+                    </div>
+                    {selectedTag !== 'all' ? (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTag('all');
+                        }}
+                        className="rounded-full p-0.5 text-indigo-500 hover:bg-indigo-200/70 hover:text-indigo-800 transition-colors"
+                        title="Clear skill filter"
+                      >
+                        <X className="h-3 w-3" />
+                      </span>
+                    ) : (
+                      <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform duration-150 ${isSkillsOpen ? 'rotate-180 text-indigo-600' : ''}`} />
+                    )}
+                  </button>
+
+                  {isSkillsOpen && (
+                    <div className="absolute right-0 top-full z-40 mt-1.5 w-[min(340px,calc(100vw-2rem))] rounded-2xl border border-slate-200/90 bg-white p-3 text-slate-800 shadow-xl shadow-indigo-950/10 animate-fadeIn">
+                      {/* Popover Header */}
+                      <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                        <div className="flex items-center gap-1.5">
+                          <Layers className="h-3.5 w-3.5 text-indigo-600" />
+                          <h3 className="text-xs font-bold text-slate-900">Filter by Topic</h3>
+                          <span className="rounded-full bg-slate-100 px-1.5 py-0.2 text-[10px] font-semibold text-slate-600">
+                            {currentTopics.length}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {selectedTag !== 'all' && (
+                            <button
+                              type="button"
+                              onClick={() => { setSelectedTag('all'); setIsSkillsOpen(false); }}
+                              className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                            >
+                              <RotateCcw className="h-2.5 w-2.5" />
+                              Reset
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => setIsSkillsOpen(false)}
                             aria-label="Close skills"
-                            className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+                            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
                           >
-                            <X className="h-4 w-4" />
+                            <X className="h-3.5 w-3.5" />
                           </button>
                         </div>
+                      </div>
+
+                      {/* Search Input for Topics */}
+                      <div className="relative mt-2.5">
+                        <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          value={skillSearch}
+                          onChange={(e) => setSkillSearch(e.target.value)}
+                          placeholder="Search topics (e.g., Array, Graph, DP)..."
+                          className="w-full rounded-lg border border-slate-200 bg-slate-50/80 py-1.5 pl-8 pr-7 text-xs text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-200"
+                        />
+                        {skillSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setSkillSearch('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* All Topics option */}
+                      <div className="mt-2.5">
                         <button
                           type="button"
                           onClick={() => { setSelectedTag('all'); setIsSkillsOpen(false); }}
-                          className={`mt-4 text-left text-xs font-bold ${selectedTag === 'all' ? 'text-white' : 'text-slate-400 hover:text-white'}`}
+                          className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                            selectedTag === 'all'
+                              ? 'bg-indigo-600 text-white shadow-xs font-semibold'
+                              : 'bg-slate-50 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700'
+                          }`}
                         >
-                          • All DSA topics <span className="ml-1 text-slate-400">×{orderedPracticeProblems.length}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`w-1.5 h-1.5 rounded-full ${selectedTag === 'all' ? 'bg-white' : 'bg-slate-400'}`} />
+                            <span>All Topics</span>
+                          </div>
+                          <span className={`rounded px-1.5 py-0.2 text-[10px] font-mono ${selectedTag === 'all' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-200/80 text-slate-600'}`}>
+                            {activeTab === 'instructor' ? studentInstructorProblems.length : orderedPracticeProblems.length}
+                          </span>
                         </button>
-                        <div className="mt-4 flex flex-wrap gap-1.5">
-                          {studentPracticeTopics.map((topic) => (
-                            <button
-                              type="button"
-                              key={topic}
-                              onClick={() => { setSelectedTag(topic); setIsSkillsOpen(false); }}
-                              className={`rounded-lg px-2 py-1 text-[11px] transition-colors ${selectedTag === topic ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'}`}
-                            >
-                              {topic} <span className="text-slate-400">×{orderedPracticeProblems.filter((problem) => problem.tags.includes(topic)).length}</span>
-                            </button>
-                          ))}
+                      </div>
+
+                      {/* Topics Pill Cloud */}
+                      <div className="mt-2 max-h-52 overflow-y-auto pr-1">
+                        <div className="flex flex-wrap gap-1">
+                          {currentTopics
+                            .filter((topic) => !skillSearch || topic.toLowerCase().includes(skillSearch.toLowerCase()))
+                            .map((topic) => {
+                              const count = (activeTab === 'instructor' ? studentInstructorProblems : orderedPracticeProblems).filter((p) => p.tags.includes(topic)).length;
+                              const isSelected = selectedTag === topic;
+                              return (
+                                <button
+                                  type="button"
+                                  key={topic}
+                                  onClick={() => { setSelectedTag(topic); setIsSkillsOpen(false); }}
+                                  className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-indigo-600 text-white font-semibold shadow-xs'
+                                      : 'border border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/60 hover:text-indigo-700'
+                                  }`}
+                                >
+                                  <span>{topic}</span>
+                                  <span className={`rounded px-1 py-0.2 text-[9px] font-mono ${
+                                    isSelected ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-500'
+                                  }`}>
+                                    {count}
+                                  </span>
+                                </button>
+                              );
+                            })}
                         </div>
-                      </aside>
-                    )}
-                  </div>
-                  <select aria-label="Filter by difficulty" value={difficultyFilter} onChange={(event) => setDifficultyFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-indigo-500">
-                    <option value="all">All difficulties</option>
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
-                  </select>
-                  {studentPracticeLanguages.length > 0 && <select aria-label="Filter by supported language" value={languageFilter} onChange={(event) => setLanguageFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-indigo-500"><option value="all">All languages</option>{studentPracticeLanguages.map((language) => <option key={language} value={language}>{({ cpp: 'C++', c: 'C', java: 'Java', python: 'Python', javascript: 'JavaScript' } as Record<string, string>)[language] || language.toUpperCase()}</option>)}</select>}
+                        {currentTopics.filter((topic) => !skillSearch || topic.toLowerCase().includes(skillSearch.toLowerCase())).length === 0 && (
+                          <p className="py-5 text-center text-xs text-slate-400">No topics match &quot;{skillSearch}&quot;</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {isPracticeLoading && orderedPracticeProblems.length === 0 ? (
+                <select
+                  aria-label="Filter by difficulty"
+                  value={difficultyFilter}
+                  onChange={(event) => setDifficultyFilter(event.target.value)}
+                  className="h-9 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none transition-all hover:border-slate-300 focus:border-indigo-500 cursor-pointer"
+                >
+                  <option value="all">All difficulties</option>
+                  <option value="easy">Easy</option>
+                  <option value="medium">Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+
+                {activeTab === 'practice' && studentPracticeLanguages.length > 0 && (
+                  <select
+                    aria-label="Filter by supported language"
+                    value={languageFilter}
+                    onChange={(event) => setLanguageFilter(event.target.value)}
+                    className="h-9 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none transition-all hover:border-slate-300 focus:border-indigo-500 cursor-pointer"
+                  >
+                    <option value="all">All languages</option>
+                    {studentPracticeLanguages.map((language) => (
+                      <option key={language} value={language}>
+                        {({ cpp: 'C++', c: 'C', java: 'Java', python: 'Python', javascript: 'JavaScript' } as Record<string, string>)[language] || language.toUpperCase()}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={handleClearFilters}
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:underline px-2 py-1 cursor-pointer"
+                  >
+                    Reset Filters
+                  </button>
+                )}
+              </div>
+
+              {/* Active Tab: Instructor Problems */}
+              {activeTab === 'instructor' ? (
+                isInstructorLoading ? (
+                  <div className="flex min-h-56 items-center justify-center text-sm font-semibold text-slate-500">
+                    Loading instructor assignments…
+                  </div>
+                ) : studentInstructorProblems.length === 0 ? (
+                  <div className="space-y-3 p-12 text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+                      <GraduationCap className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-base font-bold text-slate-800">No instructor assignments yet</h3>
+                    <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                      Your instructor has not published any coursework assignments yet. Explore DSA Practice to sharpen your coding skills.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => { setActiveTab('practice'); navigate('/problems'); }}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 transition-colors cursor-pointer"
+                    >
+                      <Code2 className="w-3.5 h-3.5" />
+                      <span>Switch to DSA Practice</span>
+                    </button>
+                  </div>
+                ) : visibleStudentInstructor.length === 0 ? (
+                  <div className="space-y-3 p-12 text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+                      <Search className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-base font-bold text-slate-800">No matching instructor problems</h3>
+                    <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                      Try adjusting your search keyword or clearing the filters.
+                    </p>
+                    {hasActiveFilters && (
+                      <button
+                        type="button"
+                        onClick={handleClearFilters}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 transition-colors cursor-pointer"
+                      >
+                        Clear Filters
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200/80 bg-slate-50/75 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                          <th className="py-3 px-4 w-16 text-center">#</th>
+                          <th className="py-3 px-4">Title</th>
+                          <th className="py-3 px-4 hidden md:table-cell">Course &amp; Due Date</th>
+                          <th className="py-3 px-4 w-32">Difficulty</th>
+                          <th className="py-3 px-4 w-32 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {visibleStudentInstructor.map((problem, idx) => {
+                          const solved = solvedSlugs.has(problem.slug) || solvedSlugs.has(problem.id);
+                          return (
+                            <tr
+                              key={problem.id}
+                              onClick={() => handleSolve(problem.id)}
+                              className="group hover:bg-indigo-50/40 transition-colors cursor-pointer"
+                            >
+                              <td className="py-3.5 px-4 text-center">
+                                {solved ? (
+                                  <span className="inline-flex items-center justify-center text-emerald-600" title="Solved">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                  </span>
+                                ) : (
+                                  <span className="font-mono text-xs font-semibold text-slate-400 group-hover:text-indigo-600 transition-colors">
+                                    {idx + 1}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                                    {problem.title}
+                                  </span>
+                                  <div className="flex flex-wrap items-center gap-1 mt-1">
+                                    {problem.tags.slice(0, 3).map((tag, tIdx) => (
+                                      <span key={tIdx} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                                        {tag}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4 hidden md:table-cell text-xs text-slate-500">
+                                <div className="flex flex-col gap-0.5">
+                                  {problem.courseCode && (
+                                    <span className="inline-flex items-center gap-1 font-bold text-slate-700">
+                                      <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
+                                      {problem.courseCode}
+                                    </span>
+                                  )}
+                                  {problem.dueDate ? (
+                                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-700">
+                                      <Calendar className="w-3 h-3 text-amber-600" />
+                                      {new Date(problem.dueDate).toLocaleDateString()}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] text-slate-400">No due date</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <DifficultyBadge difficulty={problem.difficulty} />
+                              </td>
+                              <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSolve(problem.id)}
+                                  className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all shadow-2xs ${
+                                    solved
+                                      ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white'
+                                      : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white'
+                                  }`}
+                                >
+                                  <span>{solved ? 'Review' : 'Solve'}</span>
+                                  <ArrowRight className="h-3 w-3" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              ) : (
+                /* Active Tab: DSA Practice */
+                isPracticeLoading && orderedPracticeProblems.length === 0 ? (
                   <div className="flex min-h-56 items-center justify-center text-sm font-semibold text-slate-500">Loading DSA problems…</div>
                 ) : practiceLoadError && orderedPracticeProblems.length === 0 ? (
                   <div className="flex min-h-56 flex-col items-center justify-center gap-2 p-6 text-center" role="alert"><p className="text-sm font-semibold text-slate-800">Problem bank unavailable</p><p className="max-w-md text-sm text-slate-500">{practiceLoadError}</p><button type="button" onClick={() => { setIsPracticeLoading(true); setPracticeReloadKey((key) => key + 1); }} className="mt-2 rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800">Try again</button></div>
                 ) : (
                   <div>
                     {practiceLoadError && orderedPracticeProblems.length > 0 && <div role="status" className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900">Showing the last saved problem list. The latest refresh failed. <button type="button" onClick={() => { setIsPracticeLoading(true); setPracticeReloadKey((key) => key + 1); }} className="ml-1 font-semibold underline">Retry</button></div>}
-                    <div className="grid gap-3 p-3 sm:grid-cols-2 sm:p-4">
-                    {visibleStudentPractice.map((problem) => {
-                      const number = orderedPracticeProblems.findIndex((item) => item.id === problem.id) + 1;
-                      const solved = solvedSlugs.has(problem.slug) || solvedSlugs.has(problem.id);
-                      return (
-                        <article key={problem.id} className="flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-indigo-200 hover:bg-indigo-50/20">
-                          <div className="flex items-start justify-between gap-3"><span className="min-w-0"><span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">Problem {number}</span><span className="mt-1 block truncate text-sm font-bold text-slate-900">{problem.title}</span></span><DifficultyBadge difficulty={problem.difficulty} /></div>
-                          <p className="mt-2 line-clamp-2 min-h-10 text-xs leading-5 text-slate-600">{problem.description.trim() || 'Open this problem to read the full statement and examples.'}</p>
-                          <div className="mt-3 flex flex-wrap items-center gap-2"><span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600">{problem.tags[0] || 'Algorithms'}</span>{solved && <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" />Solved</span>}</div>
-                          <button type="button" onClick={() => handleSolve(problem.id)} className="mt-4 inline-flex min-h-10 items-center justify-center gap-2 self-start rounded-lg bg-indigo-700 px-3.5 text-sm font-semibold text-white transition hover:bg-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">{solved ? 'Review solution' : 'Solve problem'}<ArrowRight className="h-4 w-4" /></button>
-                        </article>
-                      );
-                    })}
+                    {/* Row-wise Problems Table */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-200/80 bg-slate-50/75 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            <th className="py-3 px-4 w-16 text-center">#</th>
+                            <th className="py-3 px-4">Title</th>
+                            <th className="py-3 px-4 hidden md:table-cell">Tags</th>
+                            <th className="py-3 px-4 w-32">Difficulty</th>
+                            <th className="py-3 px-4 w-32 text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {paginatedStudentPractice.map((problem) => {
+                            const number = orderedPracticeProblems.findIndex((item) => item.id === problem.id) + 1;
+                            const solved = solvedSlugs.has(problem.slug) || solvedSlugs.has(problem.id);
+
+                            return (
+                              <tr
+                                key={problem.id}
+                                onClick={() => handleSolve(problem.id)}
+                                className="group hover:bg-indigo-50/40 transition-colors cursor-pointer"
+                              >
+                                {/* Problem Number / Status */}
+                                <td className="py-3.5 px-4 text-center">
+                                  {solved ? (
+                                    <span className="inline-flex items-center justify-center text-emerald-600" title="Solved">
+                                      <CheckCircle2 className="w-4 h-4" />
+                                    </span>
+                                  ) : (
+                                    <span className="font-mono text-xs font-semibold text-slate-400 group-hover:text-indigo-600 transition-colors">
+                                      {number}
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Problem Title & Mobile Tags */}
+                                <td className="py-3.5 px-4">
+                                  <div className="flex flex-col">
+                                    <span className="text-sm font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                                      {problem.title}
+                                    </span>
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1 md:hidden">
+                                      {problem.tags.slice(0, 2).map((tag, tIdx) => (
+                                        <span
+                                          key={tIdx}
+                                          className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
+                                        >
+                                          {tag}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* Desktop Tags */}
+                                <td className="py-3.5 px-4 hidden md:table-cell">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {problem.tags.slice(0, 3).map((tag, tIdx) => (
+                                      <span
+                                        key={tIdx}
+                                        className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 border border-slate-200/50"
+                                      >
+                                        {tag}
+                                      </span>
+                                    ))}
+                                    {problem.optimalComplexity?.time && problem.optimalComplexity.time !== '—' && (
+                                      <span className="inline-flex items-center gap-1 text-[11px] font-mono text-slate-400 ml-1">
+                                        <Clock className="w-3 h-3" />
+                                        {problem.optimalComplexity.time}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* Difficulty */}
+                                <td className="py-3.5 px-4">
+                                  <DifficultyBadge difficulty={problem.difficulty} />
+                                </td>
+
+                                {/* Action */}
+                                <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSolve(problem.id)}
+                                    className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all shadow-2xs ${
+                                      solved
+                                        ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white'
+                                        : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white'
+                                    }`}
+                                  >
+                                    <span>{solved ? 'Review' : 'Solve'}</span>
+                                    <ArrowRight className="h-3 w-3" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
+
+                    {/* Pagination Controls */}
+                    {visibleStudentPractice.length > practicePageSize && (
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200/80 px-6 py-3.5 bg-slate-50/60">
+                        <span className="text-xs text-slate-500 font-medium">
+                          Showing <strong className="text-slate-800 font-mono">{(practicePage - 1) * practicePageSize + 1}</strong>–<strong className="text-slate-800 font-mono">{Math.min(practicePage * practicePageSize, visibleStudentPractice.length)}</strong> of <strong className="text-slate-800 font-mono">{visibleStudentPractice.length.toLocaleString()}</strong> problems
+                        </span>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={practicePage === 1}
+                            onClick={() => setPracticePage((p) => Math.max(1, p - 1))}
+                            className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                          >
+                            Previous
+                          </button>
+
+                          <span className="px-3 py-1 text-xs font-mono font-bold text-slate-700 bg-white rounded-xl border border-slate-200">
+                            Page {practicePage} of {totalPracticePages}
+                          </span>
+
+                          <button
+                            type="button"
+                            disabled={practicePage === totalPracticePages}
+                            onClick={() => setPracticePage((p) => Math.min(totalPracticePages, p + 1))}
+                            className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {!visibleStudentPractice.length && <div className="p-10 text-center"><p className="text-sm font-semibold text-slate-800">{orderedPracticeProblems.length === 0 ? 'No practice problems are available yet' : 'No matching problems'}</p><p className="mt-1 text-sm text-slate-500">{orderedPracticeProblems.length === 0 ? 'The practice catalogue is empty. Try again later or open an instructor assignment.' : 'Try a different search or clear the selected filters.'}</p>{hasActiveFilters && <button type="button" onClick={handleClearFilters} className="mt-3 text-sm font-semibold text-indigo-700 hover:text-indigo-900">Clear filters</button>}</div>}
                   </div>
-                )}
-              </main>
-            </div>
-          </section>
-        )}
+                )
+              )}
+            </main>
+          </div>
+        </section>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 pb-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 pb-12 animate-fadeIn">
+      {/* Header Aligned to Design System */}
+      <header className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            {isInstructor ? 'Problem Bank & Assessments' : 'Coding Problem Bank'}
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-600">Course Administration</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            Problem Bank &amp; Assessments
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            {isInstructor
-              ? 'Create, customize test cases, configure due dates, and inspect multi-agent question diagnostics.'
-              : 'Solve algorithmic problems with real-time sandbox execution and multi-agent AI assessment.'}
+          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-600">
+            Create, customize test cases, configure due dates, and inspect multi-agent question diagnostics.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           {isInstructor && (
             <button
+              type="button"
               onClick={handleOpenCreateModal}
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-indigo-700 px-4 text-sm font-semibold text-white transition hover:bg-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 text-xs font-semibold text-white shadow-2xs transition hover:bg-emerald-700 cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               <span>+ Add Question</span>
             </button>
           )}
 
-            <span className="rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-600">
-            {isInstructor ? 'Course Questions' : 'Total Problems'}: <strong className="text-indigo-600 font-mono text-sm ml-1">{isInstructor ? instructorProblems.length : problems.length}</strong>
+          <span className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 shadow-2xs">
+            {isInstructor ? 'Course Questions' : 'Total Problems'}: <strong className="text-emerald-600 font-mono text-xs ml-0.5">{isInstructor ? instructorProblems.length : problems.length}</strong>
           </span>
         </div>
-      </div>
-
-      {/* Binary Tabs (Strictly Instructor Assigned or Standard Practice) */}
-      {!isInstructor && <div className="flex bg-slate-200/60 p-1.5 rounded-2xl border border-slate-200/80 max-w-md w-full sm:w-auto">
-        <button
-          onClick={() => setActiveTab('instructor')}
-          className={`flex-1 sm:flex-initial py-2.5 px-5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
-            activeTab === 'instructor'
-              ? 'bg-white text-emerald-600 shadow-sm shadow-emerald-100'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <GraduationCap className="w-4 h-4" />
-          <span>Instructor Assigned</span>
-          <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${activeTab === 'instructor' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
-            {instructorCount}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('practice')}
-          className={`flex-1 sm:flex-initial py-2.5 px-5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
-            activeTab === 'practice'
-              ? 'bg-white text-indigo-600 shadow-sm shadow-indigo-100'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Code2 className="w-3.5 h-3.5" />
-          <span>Standard Practice</span>
-          <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${activeTab === 'practice' ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
-            {practiceCount}
-          </span>
-        </button>
-      </div>}
+      </header>
 
       {/* Queue Intelligence */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">Current Queue</span>
-            <Layers className="w-4 h-4 text-indigo-500" />
+            <span className="text-xs font-bold text-slate-500">Course Questions</span>
+            <Layers className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-extrabold text-slate-900 font-mono">{selectedTabCount}</span>
-            <span className="text-xs text-slate-500">{activeTab === 'instructor' ? 'assigned questions' : 'practice drills'}</span>
+            <span className="text-2xl font-extrabold text-slate-900 font-mono">{instructorProblems.length}</span>
+            <span className="text-xs text-slate-500">questions published</span>
           </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-slate-500">{focusLabel}</p>
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+            Assigned across your active courses with customized tests and due dates.
+          </p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">{isInstructor ? 'Your Courses' : 'Visible Progress'}</span>
-            <Check className="w-4 h-4 text-emerald-500" />
+            <span className="text-xs font-bold text-slate-500">Active Courses</span>
+            <GraduationCap className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-extrabold text-slate-900 font-mono">{isInstructor ? courses.length : completionCount}</span>
-            <span className="text-xs text-slate-500">{isInstructor ? 'saved courses' : 'matched as solved'}</span>
+            <span className="text-2xl font-extrabold text-slate-900 font-mono">{courses.length}</span>
+            <span className="text-xs text-slate-500">linked courses</span>
           </div>
-          <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-emerald-500"
-              style={{ width: `${isInstructor ? 0 : filtered.length ? Math.round((completionCount / filtered.length) * 100) : 0}%` }}
-            />
-          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+            Students enrolled in these courses can view and submit these questions.
+          </p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">Assessment workflow</span>
-            <ShieldAlert className="w-4 h-4 text-indigo-600" />
+            <span className="text-xs font-bold text-slate-500">Assessment Workflow</span>
+            <ShieldAlert className="w-4 h-4 text-emerald-600" />
           </div>
-          <p className="mt-3 text-sm font-semibold text-slate-800">Run first, then submit</p>
+          <p className="mt-2 text-sm font-semibold text-slate-800">Automated Evaluation</p>
           <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-            Run checks the sample cases. Submit requests the complete assessment.
+            Inspect execution accuracy, analyze failures, and monitor student submissions.
           </p>
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 lg:flex-row">
-        <div className="relative w-full lg:w-96">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            aria-label="Search problems by title or topic"
-            placeholder="Search problems, topics, algorithms..."
-            className="w-full pl-10 pr-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-          {activeTab !== 'instructor' && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-500">Difficulty:</span>
-              <select
-                value={difficultyFilter}
-                onChange={(e) => setDifficultyFilter(e.target.value)}
-                className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 font-medium text-slate-700 focus:outline-none focus:border-indigo-500 cursor-pointer"
+      <main className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {/* Filter and Search Bar */}
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search questions, topics, course..."
+              className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50/70 py-1.5 pl-9 pr-3 text-xs text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:ring-1 focus:ring-emerald-100"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
-                <option value="all">All Difficulties</option>
-                <option value="easy">Easy</option>
-                <option value="medium">Medium</option>
-                <option value="hard">Hard</option>
-              </select>
-            </div>
-          )}
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500">Topic:</span>
-            <select
-              value={selectedTag}
-              onChange={(e) => setSelectedTag(e.target.value)}
-              className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 font-medium text-slate-700 focus:outline-none focus:border-indigo-500 cursor-pointer"
-            >
-              <option value="all">All Topics</option>
-              {allTags.map((tag) => (
-                <option key={tag} value={tag}>
-                  {tag}
-                </option>
-              ))}
-            </select>
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
+
+          {/* Topics Popover Filter */}
+          <div className="relative" ref={instructorSkillsDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setIsInstructorSkillsOpen((open) => !open)}
+              aria-expanded={isInstructorSkillsOpen}
+              className={`inline-flex h-9 w-full items-center justify-between gap-2 rounded-xl border px-3 text-xs font-medium transition-all cursor-pointer sm:w-auto ${
+                selectedTag !== 'all'
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-700 shadow-2xs font-semibold'
+                  : isInstructorSkillsOpen
+                  ? 'border-emerald-300 bg-emerald-50/50 text-emerald-700 shadow-xs'
+                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <Layers className={`h-3.5 w-3.5 ${selectedTag !== 'all' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                <span>{selectedTag === 'all' ? 'Skills' : selectedTag}</span>
+              </div>
+              {selectedTag !== 'all' ? (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedTag('all');
+                  }}
+                  className="rounded-full p-0.5 text-emerald-500 hover:bg-emerald-200/70 hover:text-emerald-800 transition-colors"
+                  title="Clear skill filter"
+                >
+                  <X className="h-3 w-3" />
+                </span>
+              ) : (
+                <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform duration-150 ${isInstructorSkillsOpen ? 'rotate-180 text-emerald-600' : ''}`} />
+              )}
+            </button>
+
+            {isInstructorSkillsOpen && (
+              <div className="absolute right-0 top-full z-40 mt-1.5 w-[min(340px,calc(100vw-2rem))] rounded-2xl border border-slate-200/90 bg-white p-3 text-slate-800 shadow-xl shadow-emerald-950/10 animate-fadeIn">
+                {/* Popover Header */}
+                <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                  <div className="flex items-center gap-1.5">
+                    <Layers className="h-3.5 w-3.5 text-emerald-600" />
+                    <h3 className="text-xs font-bold text-slate-900">Filter by Topic</h3>
+                    <span className="rounded-full bg-slate-100 px-1.5 py-0.2 text-[10px] font-semibold text-slate-600">
+                      {allTags.length}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedTag !== 'all' && (
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedTag('all'); setIsInstructorSkillsOpen(false); }}
+                        className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-800 cursor-pointer"
+                      >
+                        <RotateCcw className="h-2.5 w-2.5" />
+                        Reset
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIsInstructorSkillsOpen(false)}
+                      aria-label="Close skills"
+                      className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search Input for Topics */}
+                <div className="relative mt-2.5">
+                  <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={skillSearch}
+                    onChange={(e) => setSkillSearch(e.target.value)}
+                    placeholder="Search topics..."
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50/80 py-1.5 pl-8 pr-7 text-xs text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-200"
+                  />
+                  {skillSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setSkillSearch('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* All Topics option */}
+                <div className="mt-2.5">
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedTag('all'); setIsInstructorSkillsOpen(false); }}
+                    className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                      selectedTag === 'all'
+                        ? 'bg-emerald-600 text-white shadow-xs font-semibold'
+                        : 'bg-slate-50 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`w-1.5 h-1.5 rounded-full ${selectedTag === 'all' ? 'bg-white' : 'bg-slate-400'}`} />
+                      <span>All Topics</span>
+                    </div>
+                    <span className={`rounded px-1.5 py-0.2 text-[10px] font-mono ${selectedTag === 'all' ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-200/80 text-slate-600'}`}>
+                      {instructorProblems.length}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Topics Pill Cloud */}
+                <div className="mt-2 max-h-52 overflow-y-auto pr-1">
+                  <div className="flex flex-wrap gap-1">
+                    {allTags
+                      .filter((topic) => !skillSearch || topic.toLowerCase().includes(skillSearch.toLowerCase()))
+                      .map((topic) => {
+                        const count = instructorProblems.filter((p) => p.tags.includes(topic)).length;
+                        const isSelected = selectedTag === topic;
+                        return (
+                          <button
+                            type="button"
+                            key={topic}
+                            onClick={() => { setSelectedTag(topic); setIsInstructorSkillsOpen(false); }}
+                            className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-emerald-600 text-white font-semibold shadow-xs'
+                                : 'border border-slate-200 bg-white text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/60 hover:text-emerald-700'
+                            }`}
+                          >
+                            <span>{topic}</span>
+                            <span className={`rounded px-1 py-0.2 text-[9px] font-mono ${
+                              isSelected ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              {count}
+                            </span>
+                          </button>
+                        );
+                      })}
+                  </div>
+                  {allTags.filter((topic) => !skillSearch || topic.toLowerCase().includes(skillSearch.toLowerCase())).length === 0 && (
+                    <p className="py-5 text-center text-xs text-slate-400">No topics match &quot;{skillSearch}&quot;</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <select
+            aria-label="Filter by difficulty"
+            value={difficultyFilter}
+            onChange={(event) => setDifficultyFilter(event.target.value)}
+            className="h-9 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none transition-all hover:border-slate-300 focus:border-emerald-500 cursor-pointer"
+          >
+            <option value="all">All difficulties</option>
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+          </select>
 
           {hasActiveFilters && (
             <button
+              type="button"
               onClick={handleClearFilters}
-              className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:underline px-2 py-1 cursor-pointer"
+              className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline px-2 py-1 cursor-pointer"
             >
               Reset Filters
             </button>
           )}
         </div>
-      </div>
 
-      {/* Problems Grid */}
-      {filtered.length === 0 ? (
-        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-12 text-center">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
-            <Search className="w-6 h-6" />
-          </div>
-          <h3 className="text-base font-bold text-slate-800">
-            {isInstructor && isInstructorLoading ? 'Loading course questions' : isInstructor && instructorProblems.length === 0 ? 'No course questions yet' : 'No matching problems found'}
-          </h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            {isInstructor && isInstructorLoading
-              ? 'Loading saved course questions…'
-              : isInstructor && instructorLoadError
-                ? instructorLoadError
-                : isInstructor && courses.length === 0
-                  ? 'Create a course in Courses before publishing questions.'
-                  : isInstructor && instructorProblems.length === 0
-                    ? 'No questions have been published to your courses yet. Use Add Question to create one.'
-                    : 'Try adjusting your search keyword or topic filter.'}
-          </p>
-          <button
-            onClick={handleClearFilters}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 transition-colors cursor-pointer"
-          >
-            Clear All Filters
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.map((prob) => {
-            const isSolved = solvedSlugs.has(prob.slug) || solvedSlugs.has(prob.id);
-
-            return (
-              <div
-                key={prob.id}
-                className={`flex flex-col justify-between overflow-hidden rounded-xl border bg-white p-5 transition-colors group ${
-                  prob.isInstructorAssigned
-                    ? 'border-indigo-200/90 shadow-xs ring-1 ring-indigo-500/10'
-                    : 'border-slate-200/80 shadow-xs'
-                }`}
+        {/* Row-wise Problems Table or Empty State */}
+        {filtered.length === 0 ? (
+          <div className="space-y-3 p-12 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+              <Search className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-slate-800">
+              {isInstructorLoading ? 'Loading course questions…' : instructorProblems.length === 0 ? 'No course questions yet' : 'No matching questions found'}
+            </h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              {isInstructorLoading
+                ? 'Loading saved course questions…'
+                : instructorLoadError
+                  ? instructorLoadError
+                  : courses.length === 0
+                    ? 'Create a course in Courses before publishing questions.'
+                    : instructorProblems.length === 0
+                      ? 'No questions have been published to your courses yet. Use + Add Question to create one.'
+                      : 'Try adjusting your search keyword or topic filter.'}
+            </p>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleClearFilters}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-semibold hover:bg-emerald-700 transition-colors cursor-pointer"
               >
-                <div>
-                  {/* Top Badge Row */}
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    {prob.isInstructorAssigned ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-amber-900 bg-amber-50 border border-amber-300 px-3 py-1 rounded-xl shadow-xs">
-                        <Calendar className="w-3.5 h-3.5 text-amber-600" />
-                        <span>{prob.dueDate ? `Due: ${new Date(prob.dueDate).toLocaleString()}` : 'No due date'}</span>
+                Clear All Filters
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200/80 bg-slate-50/75 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  <th className="py-3 px-4 w-12 text-center">#</th>
+                  <th className="py-3 px-4">Title &amp; Course</th>
+                  <th className="py-3 px-4 hidden md:table-cell">Due Date</th>
+                  <th className="py-3 px-4 hidden lg:table-cell">Test Cases</th>
+                  <th className="py-3 px-4 w-28">Difficulty</th>
+                  <th className="py-3 px-4 w-44 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map((prob, idx) => (
+                  <tr
+                    key={prob.id}
+                    className="group hover:bg-emerald-50/40 transition-colors cursor-pointer"
+                    onClick={() => setSelectedProblemForAnalytics(prob)}
+                  >
+                    {/* Index */}
+                    <td className="py-3.5 px-4 text-center">
+                      <span className="font-mono text-xs font-semibold text-slate-400 group-hover:text-emerald-600 transition-colors">
+                        {idx + 1}
                       </span>
-                    ) : (
-                      <DifficultyBadge difficulty={prob.difficulty} />
-                    )}
+                    </td>
 
-                    {prob.isInstructorAssigned && (
-                      <span className="inline-flex items-center gap-1 bg-emerald-600 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-xl shadow-xs tracking-wider uppercase">
-                        <GraduationCap className="w-3 h-3" />
-                        {prob.courseCode || 'Course'}
-                      </span>
-                    )}
-                  </div>
+                    {/* Title & Course */}
+                    <td className="py-3.5 px-4">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-slate-900 group-hover:text-emerald-700 transition-colors">
+                            {prob.title}
+                          </span>
+                          {prob.courseCode && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200 uppercase tracking-wide">
+                              <GraduationCap className="w-3 h-3 text-emerald-600" />
+                              {prob.courseCode}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          {prob.tags.map((tag, tIdx) => (
+                            <span
+                              key={tIdx}
+                              className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md font-medium border border-slate-200/60"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </td>
 
-                  {/* Status & Accuracy Sub-row */}
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <div>
-                      {isInstructor ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200/80">
-                          <FileCheck2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>{prob.testCases.length} test cases configured</span>
-                        </span>
-                      ) : isSolved ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2.5 py-1 rounded-xl shadow-xs">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Solved</span>
+                    {/* Due Date */}
+                    <td className="py-3.5 px-4 hidden md:table-cell text-xs text-slate-500">
+                      {prob.dueDate ? (
+                        <span className="inline-flex items-center gap-1.5 text-slate-700 font-medium">
+                          <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                          {new Date(prob.dueDate).toLocaleString()}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200">
-                          Unsolved
-                        </span>
+                        <span className="text-slate-400">No due date</span>
                       )}
-                    </div>
+                    </td>
 
-                    <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200/80 shadow-xs">
-                      {isInstructor ? 'Course question' : <>Acc: <strong className="text-indigo-600">{prob.acceptanceRate}</strong></>}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 mb-3">
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                      <span className="block text-[10px] font-bold uppercase text-slate-500">Test cases</span>
-                      <span className="text-[11px] font-medium text-slate-600">Run sample cases in workspace</span>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-2">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Target</span>
-                      <span className="text-[11px] font-mono font-bold text-slate-700">
-                        {prob.optimalComplexity.time}, {prob.optimalComplexity.space}
+                    {/* Test Cases */}
+                    <td className="py-3.5 px-4 hidden lg:table-cell text-xs">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 bg-slate-100/80 px-2.5 py-1 rounded-lg border border-slate-200/60">
+                        <FileCheck2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>{prob.testCases.length} test cases</span>
                       </span>
-                    </div>
-                  </div>
+                    </td>
 
-                  {/* Title */}
-                  <h3
-                    onClick={() => {
-                      if (isInstructor) {
-                        setSelectedProblemForAnalytics(prob);
-                      } else {
-                        handleSolve(prob.id);
-                      }
-                    }}
-                    className="text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors cursor-pointer"
-                  >
-                    {prob.title}
-                  </h3>
+                    {/* Difficulty */}
+                    <td className="py-3.5 px-4">
+                      <DifficultyBadge difficulty={prob.difficulty} />
+                    </td>
 
-                  {/* Description snippet */}
-                  <p className="text-xs text-slate-500 line-clamp-2 mt-2 leading-relaxed">
-                    {prob.description.replace(/[`*]/g, '')}
-                  </p>
+                    {/* Actions */}
+                    <td className="py-3.5 px-4 text-right">
+                      <div className="inline-flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProblemForAnalytics(prob)}
+                          title="View Diagnostics & Analytics"
+                          className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors cursor-pointer"
+                        >
+                          <BarChart3 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="hidden sm:inline">Analytics</span>
+                        </button>
 
-                  {/* Tags */}
-                  <div className="flex flex-wrap gap-1.5 mt-3.5">
-                    {prob.tags.map((tag, idx) => (
-                      <span
-                        key={idx}
-                        className="text-[10px] bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg font-medium border border-slate-200/50"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditModal(prob)}
+                          title="Edit question & test cases"
+                          className="rounded-lg p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors cursor-pointer"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
 
-                {/* Footer Controls */}
-                <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
-                    <Clock className="w-3 h-3 text-slate-400" />
-                    <span>{prob.isInstructorAssigned ? (prob.dueDate ? `Due ${new Date(prob.dueDate).toLocaleString()}` : 'No due date') : `Opt: ${prob.optimalComplexity.time}`}</span>
-                  </div>
-
-                  {isInstructor ? (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleOpenEditModal(prob)}
-                        title="Customize specifics of this question"
-                        className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors cursor-pointer"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteProblem(prob)}
-                        title="Delete Question"
-                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setSelectedProblemForAnalytics(prob)}
-                        className="px-4 py-2 bg-slate-900 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md hover:scale-105 active:scale-95 cursor-pointer"
-                      >
-                        <BarChart3 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Analytics</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => handleSolve(prob.id)}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
-                        prob.isInstructorAssigned
-                          ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20'
-                          : 'bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white'
-                      }`}
-                    >
-                      <span>{isSolved ? 'Review / Solve' : 'Code Challenge'}</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteProblem(prob)}
+                          title="Delete question"
+                          className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </main>
 
       {/* QUESTION CREATOR & CUSTOMIZER MODAL */}
       <Modal
