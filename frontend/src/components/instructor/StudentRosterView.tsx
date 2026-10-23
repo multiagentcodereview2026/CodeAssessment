@@ -185,7 +185,7 @@ export const StudentRosterView: React.FC = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-slate-200/80 bg-slate-50/75 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              <tr className="border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 <th className="py-3 px-4">Student</th>
                 <th className="py-3 px-4">Submissions</th>
                 <th className="py-3 px-4">Avg Score</th>
@@ -194,7 +194,7 @@ export const StudentRosterView: React.FC = () => {
                 <th className="py-3 px-4 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
               {loading && <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-500">Loading the live roster…</td></tr>}
               {!loading && loadError && <tr><td colSpan={6} className="px-6 py-12 text-center text-rose-600">{loadError}<button onClick={() => void loadRoster()} className="ml-3 font-bold underline cursor-pointer">Retry</button></td></tr>}
               {!loading && !loadError && filtered.length === 0 && (

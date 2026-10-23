@@ -12,9 +12,12 @@ import {
   Bell,
   LogOut,
   ChevronDown,
-  BellRing
+  BellRing,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
+import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../hooks/useNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -22,6 +25,7 @@ const StudentLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { resolvedTheme, toggleTheme } = useTheme();
   const { notifications, unreadCount, notificationError, markRead, markAllRead } = useNotifications();
   
   const [profileOpen, setProfileOpen] = useState(false);
@@ -129,7 +133,22 @@ const StudentLayout = () => {
             {navItems.find(item => item.path === location.pathname || (item.path !== '/dashboard' && location.pathname.startsWith(item.path)))?.name || 'Overview'}
           </motion.div>
           
-          <div className="flex items-center space-x-5">
+          <div className="flex items-center space-x-3 sm:space-x-4">
+            {/* Quick Theme Toggle */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+              aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+              className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all cursor-pointer"
+            >
+              {resolvedTheme === 'dark' ? (
+                <Sun className="w-5 h-5 text-amber-400" />
+              ) : (
+                <Moon className="w-5 h-5 text-slate-600" />
+              )}
+            </button>
+
             {/* Notifications Dropdown */}
             <div className="relative" ref={notifRef}>
               <button 
@@ -189,16 +208,18 @@ const StudentLayout = () => {
                 aria-label="Open account menu"
                 aria-expanded={profileOpen}
                 aria-haspopup="true"
-                className="flex items-center cursor-pointer group p-1.5 rounded-2xl hover:bg-slate-100/80 transition-colors text-left"
+                className={`flex items-center cursor-pointer group p-1.5 rounded-2xl transition-colors text-left ${
+                  profileOpen ? 'bg-slate-100 dark:bg-slate-800/80' : 'hover:bg-slate-100/80 dark:hover:bg-slate-800/60'
+                }`}
               >
-                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm shadow-inner mr-2.5 group-hover:bg-indigo-200 transition-colors">
+                <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-950/80 border border-indigo-200/60 dark:border-indigo-800/60 flex items-center justify-center text-indigo-700 dark:text-indigo-300 font-bold text-sm shadow-inner mr-2.5 group-hover:bg-indigo-200 dark:group-hover:bg-indigo-900/80 transition-colors">
                   {displayName.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex flex-col text-left">
-                  <span className="text-xs font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">{displayName}</span>
-                  <span className="text-[10px] font-medium text-slate-400 font-mono">{displayId}</span>
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{displayName}</span>
+                  <span className="text-[10px] font-medium text-slate-400 dark:text-slate-400 font-mono">{displayId}</span>
                 </div>
-                <ChevronDown className={`w-4 h-4 ml-2 text-slate-400 group-hover:text-indigo-600 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-4 h-4 ml-2 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
               </button>
 
               <AnimatePresence>
@@ -208,13 +229,13 @@ const StudentLayout = () => {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute right-0 mt-2 w-64 bg-white rounded-3xl shadow-2xl border border-slate-200/90 p-3 z-50 space-y-2 text-xs"
+                    className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200/90 dark:border-slate-800 p-3 z-50 space-y-2 text-xs"
                   >
                     {/* User header */}
-                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-0.5">
-                      <span className="font-bold text-slate-900 block">{displayName}</span>
-                      <span className="text-[11px] text-slate-400 font-mono block truncate">{displayEmail}</span>
-                      <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 font-mono">
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700/60 space-y-0.5">
+                      <span className="font-bold text-slate-900 dark:text-white block">{displayName}</span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono block truncate">{displayEmail}</span>
+                      <span className="inline-block mt-1 px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200/60 dark:border-indigo-500/30 text-indigo-700 dark:text-indigo-300 font-mono">
                         Student ID: {displayId}
                       </span>
                     </div>
@@ -225,9 +246,9 @@ const StudentLayout = () => {
                           setProfileOpen(false);
                           navigate('/profile');
                         }}
-                        className="w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-100 hover:text-indigo-600 rounded-xl font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
+                        className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-xl font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
                       >
-                        <User className="w-4 h-4 text-slate-400" />
+                        <User className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                         <span>View Profile</span>
                       </button>
 
@@ -236,9 +257,9 @@ const StudentLayout = () => {
                           setProfileOpen(false);
                           navigate('/submissions');
                         }}
-                        className="w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-100 hover:text-indigo-600 rounded-xl font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
+                        className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-xl font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
                       >
-                        <ListOrdered className="w-4 h-4 text-slate-400" />
+                        <ListOrdered className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                         <span>My Submissions</span>
                       </button>
 
@@ -247,17 +268,17 @@ const StudentLayout = () => {
                           setProfileOpen(false);
                           navigate('/settings');
                         }}
-                        className="w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-100 hover:text-indigo-600 rounded-xl font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
+                        className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-xl font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
                       >
-                        <Settings className="w-4 h-4 text-slate-400" />
+                        <Settings className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                         <span>Settings</span>
                       </button>
                     </div>
 
-                    <div className="pt-1 border-t border-slate-100">
+                    <div className="pt-1 border-t border-slate-100 dark:border-slate-800">
                       <button
                         onClick={handleLogout}
-                        className="w-full px-3 py-2 text-left text-rose-600 hover:bg-rose-50 rounded-xl font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
+                        className="w-full px-3 py-2 text-left text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
                       >
                         <LogOut className="w-4 h-4 text-rose-500" />
                         <span>Sign Out</span>

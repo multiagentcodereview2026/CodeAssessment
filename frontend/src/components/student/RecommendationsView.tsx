@@ -12,7 +12,8 @@ import { DifficultyBadge } from '../common/Badge';
 export const RecommendationsView: React.FC = () => {
   const navigate = useNavigate();
   const { activeAssessment, openProblemWorkspace } = useApp();
-  const { recommendedTopics, practiceProblems } = activeAssessment;
+  const recommendedTopics = activeAssessment?.recommendedTopics || [];
+  const practiceProblems = activeAssessment?.practiceProblems || [];
 
   const handleStartPractice = (probId: string) => {
     openProblemWorkspace(probId);

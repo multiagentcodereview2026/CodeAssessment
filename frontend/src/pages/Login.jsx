@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
+import { useTheme } from '../context/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GraduationCap, Code2, Users, ArrowRight, ShieldCheck, Mail, Lock, User, Sparkles, Eye, EyeOff } from 'lucide-react';
+import { GraduationCap, Code2, Users, ArrowRight, ShieldCheck, Mail, Lock, User, Sparkles, Eye, EyeOff, Sun, Moon } from 'lucide-react';
 
 const Login = () => {
   const [mode, setMode] = useState('login'); // 'login' or 'register'
@@ -15,6 +16,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const { login, register } = useAuth();
+  const { resolvedTheme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -77,6 +79,22 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Theme Toggle Button */}
+      <div className="absolute top-4 right-4 z-20">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+          aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+          className="p-2.5 rounded-xl border border-slate-200/80 bg-white/80 backdrop-blur-md text-slate-600 hover:text-slate-900 hover:bg-white shadow-xs transition-all cursor-pointer"
+        >
+          {resolvedTheme === 'dark' ? (
+            <Sun className="w-4 h-4 text-amber-400" />
+          ) : (
+            <Moon className="w-4 h-4 text-slate-600" />
+          )}
+        </button>
+      </div>
       {/* Animated background blobs */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
         <motion.div

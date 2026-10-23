@@ -16,7 +16,6 @@ import {
 import {
   MOCK_STUDENT_USER,
   MOCK_PROBLEMS,
-  MOCK_DEFAULT_ASSESSMENT,
 } from '../mock/data';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 import { useAuth } from './useAuth';
@@ -72,8 +71,8 @@ interface AppContextType {
   selectedProblemId: string;
   setSelectedProblemId: (id: string) => void;
   selectedProblem: Problem;
-  activeAssessment: AssessmentResult;
-  setActiveAssessment: (result: AssessmentResult) => void;
+  activeAssessment: AssessmentResult | null;
+  setActiveAssessment: (result: AssessmentResult | null) => void;
   submissions: SubmissionItem[];
   submissionsLoadState: 'loading' | 'ready' | 'error';
   submissionsOwnerId: string | null;
@@ -125,7 +124,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
 
   const [selectedProblemId, setSelectedProblemId] = useState<string>('prob-1');
-  const [activeAssessment, setActiveAssessment] = useState<AssessmentResult>(MOCK_DEFAULT_ASSESSMENT);
+  const [activeAssessment, setActiveAssessment] = useState<AssessmentResult | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
   const [submissionsLoadState, setSubmissionsLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [submissionsOwnerId, setSubmissionsOwnerId] = useState<string | null>(null);

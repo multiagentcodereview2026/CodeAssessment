@@ -12,9 +12,12 @@ import {
   Bell,
   LogOut,
   ChevronDown,
-  GraduationCap
+  GraduationCap,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
+import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../hooks/useNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -22,6 +25,7 @@ const InstructorLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { resolvedTheme, toggleTheme } = useTheme();
   const { notifications, unreadCount, notificationError, markRead, markAllRead } = useNotifications();
   const notificationCount = unreadCount;
   
@@ -127,7 +131,22 @@ const InstructorLayout = () => {
             {navItems.find(item => item.path === location.pathname || (item.path !== '/instructor/dashboard' && location.pathname.startsWith(item.path)))?.name || 'Overview'}
           </motion.div>
           
-          <div className="flex items-center space-x-5">
+          <div className="flex items-center space-x-3 sm:space-x-4">
+            {/* Quick Theme Toggle */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+              aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+              className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all cursor-pointer"
+            >
+              {resolvedTheme === 'dark' ? (
+                <Sun className="w-5 h-5 text-amber-400" />
+              ) : (
+                <Moon className="w-5 h-5 text-slate-600" />
+              )}
+            </button>
+
             {/* Notifications Dropdown */}
             <div className="relative" ref={notifRef}>
               <button 
@@ -185,16 +204,18 @@ const InstructorLayout = () => {
                 aria-label="Open account menu"
                 aria-expanded={profileOpen}
                 aria-haspopup="true"
-                className="flex items-center cursor-pointer group p-1.5 rounded-2xl hover:bg-slate-100/80 transition-colors text-left"
+                className={`flex items-center cursor-pointer group p-1.5 rounded-2xl transition-colors text-left ${
+                  profileOpen ? 'bg-slate-100 dark:bg-slate-800/80' : 'hover:bg-slate-100/80 dark:hover:bg-slate-800/60'
+                }`}
               >
-                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-sm shadow-inner mr-2.5 group-hover:bg-emerald-200 transition-colors">
+                <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-200/60 dark:border-emerald-800/60 flex items-center justify-center text-emerald-700 dark:text-emerald-300 font-bold text-sm shadow-inner mr-2.5 group-hover:bg-emerald-200 dark:group-hover:bg-emerald-900/80 transition-colors">
                   {displayName.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex flex-col text-left">
-                  <span className="text-xs font-bold text-slate-700 group-hover:text-emerald-600 transition-colors">{displayName}</span>
-                  <span className="text-[10px] font-medium text-slate-400">Faculty Portal</span>
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{displayName}</span>
+                  <span className="text-[10px] font-medium text-slate-400 dark:text-slate-400">Faculty Portal</span>
                 </div>
-                <ChevronDown className={`w-4 h-4 ml-2 text-slate-400 group-hover:text-emerald-600 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-4 h-4 ml-2 text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
               </button>
 
               <AnimatePresence>
@@ -204,13 +225,13 @@ const InstructorLayout = () => {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute right-0 z-50 mt-2 w-64 space-y-2 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-lg"
+                    className="absolute right-0 z-50 mt-2 w-64 space-y-2 rounded-3xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 text-xs shadow-2xl"
                   >
-                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-0.5">
-                      <span className="font-bold text-slate-900 block">{displayName}</span>
-                      <span className="text-[11px] text-slate-400 font-mono block truncate">{displayEmail}</span>
-                      <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 font-mono">
-                        Associate Professor
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700/60 space-y-0.5">
+                      <span className="font-bold text-slate-900 dark:text-white block">{displayName}</span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono block truncate">{displayEmail}</span>
+                      <span className="inline-block mt-1 px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-200/60 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-mono">
+                        Instructor ID: {displayId}
                       </span>
                     </div>
 
@@ -220,9 +241,9 @@ const InstructorLayout = () => {
                           setProfileOpen(false);
                           navigate('/instructor/courses');
                         }}
-                        className="w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-100 hover:text-emerald-600 rounded-xl font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
+                        className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-xl font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
                       >
-                        <BookOpen className="w-4 h-4 text-slate-400" />
+                        <BookOpen className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                         <span>My Courses</span>
                       </button>
 
@@ -231,9 +252,9 @@ const InstructorLayout = () => {
                           setProfileOpen(false);
                           navigate('/instructor/students');
                         }}
-                        className="w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-100 hover:text-emerald-600 rounded-xl font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
+                        className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-xl font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
                       >
-                        <Users className="w-4 h-4 text-slate-400" />
+                        <Users className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                         <span>Student Roster</span>
                       </button>
 
@@ -242,17 +263,17 @@ const InstructorLayout = () => {
                           setProfileOpen(false);
                           navigate('/instructor/settings');
                         }}
-                        className="w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-100 hover:text-emerald-600 rounded-xl font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
+                        className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-xl font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
                       >
-                        <Settings className="w-4 h-4 text-slate-400" />
+                        <Settings className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                         <span>Faculty Settings</span>
                       </button>
                     </div>
 
-                    <div className="pt-1 border-t border-slate-100">
+                    <div className="pt-1 border-t border-slate-100 dark:border-slate-800">
                       <button
                         onClick={handleLogout}
-                        className="w-full px-3 py-2 text-left text-rose-600 hover:bg-rose-50 rounded-xl font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
+                        className="w-full px-3 py-2 text-left text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
                       >
                         <LogOut className="w-4 h-4 text-rose-500" />
                         <span>Sign Out</span>

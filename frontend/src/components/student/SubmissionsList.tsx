@@ -101,7 +101,7 @@ export const SubmissionsList: React.FC = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="bg-slate-50/70 border-b border-slate-200/80 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+              <tr className="bg-slate-50/70 dark:bg-slate-800/60 border-b border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                 <th className="py-4 px-6">Problem</th>
                 <th className="py-4 px-6">Score</th>
                 <th className="py-4 px-6">Status</th>
@@ -112,10 +112,10 @@ export const SubmissionsList: React.FC = () => {
                 <th className="py-4 px-6 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 font-sans">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
               {filtered.length > 0 ? (
                 filtered.map((sub) => (
-                  <tr key={sub.id} className="transition-colors hover:bg-slate-50 group">
+                  <tr key={sub.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40 group">
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-2.5">
                         <FileCode className="w-4 h-4 text-indigo-500 flex-shrink-0" />

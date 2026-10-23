@@ -747,7 +747,7 @@ export const ProblemsListView: React.FC = () => {
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="border-b border-slate-200/80 bg-slate-50/75 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                        <tr className="border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                           <th className="py-3 px-4 w-16 text-center">#</th>
                           <th className="py-3 px-4">Title</th>
                           <th className="py-3 px-4 hidden md:table-cell">Course &amp; Due Date</th>
@@ -755,14 +755,14 @@ export const ProblemsListView: React.FC = () => {
                           <th className="py-3 px-4 w-32 text-right">Action</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                         {visibleStudentInstructor.map((problem, idx) => {
                           const solved = solvedSlugs.has(problem.slug) || solvedSlugs.has(problem.id);
                           return (
                             <tr
                               key={problem.id}
                               onClick={() => handleSolve(problem.id)}
-                              className="group hover:bg-indigo-50/40 transition-colors cursor-pointer"
+                              className="group hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
                             >
                               <td className="py-3.5 px-4 text-center">
                                 {solved ? (
@@ -844,7 +844,7 @@ export const ProblemsListView: React.FC = () => {
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
                         <thead>
-                          <tr className="border-b border-slate-200/80 bg-slate-50/75 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                          <tr className="border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                             <th className="py-3 px-4 w-16 text-center">#</th>
                             <th className="py-3 px-4">Title</th>
                             <th className="py-3 px-4 hidden md:table-cell">Tags</th>
@@ -852,7 +852,7 @@ export const ProblemsListView: React.FC = () => {
                             <th className="py-3 px-4 w-32 text-right">Action</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                           {paginatedStudentPractice.map((problem) => {
                             const number = orderedPracticeProblems.findIndex((item) => item.id === problem.id) + 1;
                             const solved = solvedSlugs.has(problem.slug) || solvedSlugs.has(problem.id);
@@ -861,7 +861,7 @@ export const ProblemsListView: React.FC = () => {
                               <tr
                                 key={problem.id}
                                 onClick={() => handleSolve(problem.id)}
-                                className="group hover:bg-indigo-50/40 transition-colors cursor-pointer"
+                                className="group hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
                               >
                                 {/* Problem Number / Status */}
                                 <td className="py-3.5 px-4 text-center">
@@ -1287,7 +1287,7 @@ export const ProblemsListView: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200/80 bg-slate-50/75 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                <tr className="border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   <th className="py-3 px-4 w-12 text-center">#</th>
                   <th className="py-3 px-4">Title &amp; Course</th>
                   <th className="py-3 px-4 hidden md:table-cell">Due Date</th>
@@ -1296,11 +1296,11 @@ export const ProblemsListView: React.FC = () => {
                   <th className="py-3 px-4 w-44 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                 {filtered.map((prob, idx) => (
                   <tr
                     key={prob.id}
-                    className="group hover:bg-emerald-50/40 transition-colors cursor-pointer"
+                    className="group hover:bg-emerald-50/40 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer"
                     onClick={() => setSelectedProblemForAnalytics(prob)}
                   >
                     {/* Index */}
@@ -1351,8 +1351,8 @@ export const ProblemsListView: React.FC = () => {
 
                     {/* Test Cases */}
                     <td className="py-3.5 px-4 hidden lg:table-cell text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 bg-slate-100/80 px-2.5 py-1 rounded-lg border border-slate-200/60">
-                        <FileCheck2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100/80 dark:bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-slate-700/60">
+                        <FileCheck2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                         <span>{prob.testCases.length} test cases</span>
                       </span>
                     </td>

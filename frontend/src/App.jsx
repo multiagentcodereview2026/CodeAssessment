@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation, 
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/useAuth';
 import { AppProvider } from './context/AppContext';
+import { ThemeProvider } from './context/ThemeContext';
 import Login from './pages/Login';
 import StudentLayout from './layouts/StudentLayout';
 import SolverLayout from './layouts/SolverLayout';
@@ -145,13 +146,15 @@ function AppRoutes() {
 
 function App() {
   return (
-    <AuthProvider>
-      <AppProvider>
-        <Router>
-          <AppRoutes />
-        </Router>
-      </AppProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppProvider>
+          <Router>
+            <AppRoutes />
+          </Router>
+        </AppProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

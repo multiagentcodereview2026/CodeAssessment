@@ -17,11 +17,14 @@ import {
   ShieldCheck,
   Check,
   MoreHorizontal,
-  LoaderCircle
+  LoaderCircle,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/useAuth';
+import { useTheme } from '../../context/ThemeContext';
 import { CompilerFeedback } from './CompilerFeedback';
 import { DifficultyBadge } from '../common/Badge';
 import { DoubleConfirmDialog } from '../common/DoubleConfirmDialog';
@@ -67,6 +70,7 @@ export const ProblemWorkspace: React.FC = () => {
   const isInstructorProblem = new URLSearchParams(location.search).get('view') === 'instructor';
   const assignmentId = new URLSearchParams(location.search).get('assignmentId');
   const { authFetch } = useAuth();
+  const { resolvedTheme, toggleTheme } = useTheme();
   const {
     currentUser,
     selectedProblem: fallbackProblem,
@@ -813,7 +817,7 @@ export const ProblemWorkspace: React.FC = () => {
         {!assignmentAccess ? 'Checking assignment availability…' : assignmentAccess.unavailable ? 'Assignment availability could not be verified. Editing and submission are paused until access is restored.' : assignmentLocked ? 'This assignment is closed. You can review the instructions and your draft, but cannot run or submit code.' : assignmentAccess.due_date ? `Due ${new Date(assignmentAccess.due_date).toLocaleString()}` : 'Assignment open · No deadline'}
       </div>}
       {/* Keep the workspace entry point quiet so the problem and editor lead. */}
-      <div className="flex items-center">
+      <div className="flex items-center justify-between">
         <button
           onClick={() => {
             navigate(isInstructorProblem ? '/problems?view=instructor' : '/problems');
@@ -824,6 +828,25 @@ export const ProblemWorkspace: React.FC = () => {
           <span>{isInstructorProblem ? 'Back to Instructor Problems' : 'Back to Problem Bank'}</span>
         </button>
 
+        <button
+          type="button"
+          onClick={toggleTheme}
+          title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+          aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
+        >
+          {resolvedTheme === 'dark' ? (
+            <>
+              <Sun className="w-3.5 h-3.5 text-amber-400" />
+              <span>Light Mode</span>
+            </>
+          ) : (
+            <>
+              <Moon className="w-3.5 h-3.5 text-slate-600" />
+              <span>Dark Mode</span>
+            </>
+          )}
+        </button>
       </div>
 
       {/* Main Split Grid */}
