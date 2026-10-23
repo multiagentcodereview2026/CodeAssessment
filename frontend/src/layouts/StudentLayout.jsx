@@ -14,7 +14,8 @@ import {
   Sparkles,
   Clock,
   ShieldCheck,
-  BellRing
+  BellRing,
+  BookOpen
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
@@ -49,6 +50,7 @@ const StudentLayout = () => {
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { name: 'My Courses', path: '/courses', icon: BookOpen },
     { name: 'Problems', path: '/problems', icon: Code2 },
     { name: 'Submissions', path: '/submissions', icon: ListOrdered },
     { name: 'Analytics & Progress', path: '/analytics', icon: LineChart },

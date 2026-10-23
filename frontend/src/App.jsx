@@ -14,6 +14,7 @@ import { SubmissionsList } from './components/student/SubmissionsList';
 import { AnalyticsProgressView } from './components/student/AnalyticsProgressView';
 import { FeedbackRecommendationsView } from './components/student/FeedbackRecommendationsView';
 import { StudentProfileView } from './components/student/StudentProfileView';
+import { MyCoursesView } from './components/student/MyCoursesView';
 
 // Instructor Feature Components from git
 import { InstructorDashboard } from './components/instructor/InstructorDashboard';
@@ -55,6 +56,7 @@ function AppRoutes() {
         <Route path="/" element={<ProtectedStudentRoute />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<StudentDashboard />} />
+          <Route path="courses" element={<MyCoursesView />} />
           <Route path="problems" element={<ProblemsListView />} />
           <Route path="problems/:id" element={<ProblemWorkspace />} />
           <Route path="workspace" element={<ProblemWorkspace />} />
