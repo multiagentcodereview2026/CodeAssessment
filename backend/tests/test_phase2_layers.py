@@ -116,7 +116,7 @@ def test_python_cyclic_index_placement_is_amortized_linear():
     assert result.time_complexity == "O(n)"
 
 
-def test_cpp_stdin_input_storage_is_not_auxiliary_space():
+def test_cpp_stdin_input_storage_counts_as_student_space():
     result = analyze_source(
         "#include <vector>\n#include <iostream>\nusing namespace std;\n"
         "int main(){ int n; cin >> n; vector<int> arr(n); "
@@ -124,4 +124,7 @@ def test_cpp_stdin_input_storage_is_not_auxiliary_space():
         "cout << arr[n-1]; }",
         "cpp",
     )
-    assert result.space_complexity == "O(1)"
+    # Platform policy counts an input-sized collection allocated by the
+    # student's stdin/main program. stdin itself is infrastructure, but the
+    # student's vector remains O(n) memory.
+    assert result.space_complexity == "O(n)"
