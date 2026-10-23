@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Play,
   Send,
@@ -16,23 +16,55 @@ import {
   ShieldCheck,
   Check
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { DifficultyBadge } from '../common/Badge';
 import { AssessmentResult, SubmissionItem } from '../../types';
 
 export const ProblemWorkspace: React.FC = () => {
   const navigate = useNavigate();
+  const { id: urlProblemId } = useParams<{ id?: string }>();
+  const [searchParams] = useSearchParams();
+  const assignmentId = searchParams.get('assignmentId');
+
   const {
+    problems,
     selectedProblem,
+    openProblemWorkspace,
     setCurrentView,
     addSubmission
   } = useApp();
 
+  const activeProblem = (urlProblemId ? (problems || []).find(p => p.id === urlProblemId || String(p.id) === String(urlProblemId)) : null) || selectedProblem;
+
+  // Auto-select problem in context if navigated directly via URL
+  useEffect(() => {
+    if (urlProblemId && selectedProblem?.id !== urlProblemId) {
+      openProblemWorkspace(urlProblemId);
+    }
+  }, [urlProblemId]);
+
   const [language, setLanguage] = useState<string>('cpp');
+  const starterCode = activeProblem?.starterCode || {};
   const [code, setCode] = useState<string>(
-    selectedProblem.starterCode[language] || selectedProblem.starterCode['cpp'] || ''
+    starterCode[language] || starterCode['cpp'] || '// Write your solution here\n'
   );
+
+  // When problem or language changes, sync starter code
+  useEffect(() => {
+    if (activeProblem) {
+      const pStarter = activeProblem.starterCode || {};
+      setCode(pStarter[language] || pStarter['cpp'] || '// Write your solution here\n');
+      setRunOutput(null);
+    }
+  }, [activeProblem?.id, language]);
+
+  const testCases = Array.isArray(activeProblem?.testCases) ? activeProblem.testCases : [];
+  const examples = Array.isArray(activeProblem?.examples) ? activeProblem.examples : [];
+  const constraints = Array.isArray(activeProblem?.constraints) ? activeProblem.constraints : [];
+  const tags = Array.isArray(activeProblem?.tags) ? activeProblem.tags : [];
+  const optimalComplexity = activeProblem?.optimalComplexity || { time: 'O(N)', space: 'O(1)' };
+
   const [activeLeftTab, setActiveLeftTab] = useState<'statement' | 'testcases'>('statement');
   const [activeTestTab, setActiveTestTab] = useState<number>(0);
   const [isRunning, setIsRunning] = useState<boolean>(false);
@@ -48,14 +80,16 @@ export const ProblemWorkspace: React.FC = () => {
   // When language changes, update starter code
   const handleLanguageChange = (newLang: string) => {
     setLanguage(newLang);
-    if (selectedProblem.starterCode[newLang]) {
-      setCode(selectedProblem.starterCode[newLang]);
+    const pStarter = activeProblem?.starterCode || {};
+    if (pStarter[newLang]) {
+      setCode(pStarter[newLang]);
     }
   };
 
   const handleResetCode = () => {
     if (window.confirm('Reset code to initial template?')) {
-      setCode(selectedProblem.starterCode[language] || '');
+      const pStarter = activeProblem?.starterCode || {};
+      setCode(pStarter[language] || pStarter['cpp'] || '// Write your solution here\n');
       setRunOutput(null);
     }
   };
@@ -71,13 +105,18 @@ export const ProblemWorkspace: React.FC = () => {
         status: 'success',
         time: '32 ms',
         memory: '3.8 MB',
-        results: selectedProblem.testCases.map((tc, idx) => ({
-          caseNum: idx + 1,
-          passed: true,
-          input: tc.input,
-          expected: tc.expectedOutput,
-          output: tc.expectedOutput
-        }))
+        results: testCases.length > 0
+          ? testCases.map((tc, idx) => ({
+              caseNum: idx + 1,
+              passed: true,
+              input: tc.input,
+              expected: tc.expectedOutput,
+              output: tc.expectedOutput
+            }))
+          : [
+              { caseNum: 1, passed: true, input: 'Sample Input 1', expected: 'Sample Output 1', output: 'Sample Output 1' },
+              { caseNum: 2, passed: true, input: 'Sample Input 2', expected: 'Sample Output 2', output: 'Sample Output 2' }
+            ]
       });
     }, 1200);
   };
@@ -100,8 +139,8 @@ export const ProblemWorkspace: React.FC = () => {
 
       const newAssessment: AssessmentResult = {
         submissionId: newSubmissionId,
-        problemId: selectedProblem.id,
-        problemTitle: selectedProblem.title,
+        problemId: activeProblem.id,
+        problemTitle: activeProblem.title,
         timestamp: 'Just now',
         language: language === 'cpp' ? 'C++' : language === 'python' ? 'Python 3' : language === 'java' ? 'Java' : 'TypeScript',
         code: code,
@@ -117,16 +156,16 @@ export const ProblemWorkspace: React.FC = () => {
           timeComplexity: {
             score: 18,
             max: 25,
-            detected: 'O(N)',
-            optimal: 'O(N)',
+            detected: optimalComplexity.time || 'O(N)',
+            optimal: optimalComplexity.time || 'O(N)',
             notes: 'Single-pass linear hash lookup achieved optimal Big-O bounds.'
           },
           spaceComplexity: {
             score: 12,
             max: 15,
-            detected: 'O(N)',
-            optimal: 'O(N)',
-            notes: 'Auxiliary hash map allocates up to N elements.'
+            detected: optimalComplexity.space || 'O(N)',
+            optimal: optimalComplexity.space || 'O(N)',
+            notes: 'Auxiliary memory allocations stay within expected bounds.'
           },
           codeQuality: {
             score: 18,
@@ -145,13 +184,13 @@ export const ProblemWorkspace: React.FC = () => {
           overallScore: 85
         },
         explainableFeedback:
-          'Good use of HashMap to achieve optimal time complexity O(n). All test cases passed with zero boundary violations. Consider pre-allocating hash bucket capacity to avoid dynamic rehashing overhead on large datasets.',
+          'Good use of optimal data structures to achieve targeted bounds. All test cases passed with zero boundary violations. Pre-allocate buffer capacity to avoid dynamic resizing overhead on large datasets.',
         suggestedImprovements: [
-          'Use descriptive variable names (replace `mp` with `numToIndexMap`, `rem` with `complement`)',
-          'Add structured comments to document hash map lookup edge cases',
-          'Pre-allocate bucket capacity with reserve() for memory locality'
+          'Use descriptive variable names throughout critical inner loops',
+          'Add structured comments documenting boundary conditions and edge cases',
+          'Pre-allocate capacity with reserve() for improved cache locality'
         ],
-        recommendedTopics: ['Hash Map', 'Arrays', 'Two Pointers'],
+        recommendedTopics: tags.length > 0 ? tags : ['Hash Map', 'Arrays', 'Two Pointers'],
         practiceProblems: [
           { id: 'p1', title: '4Sum', difficulty: 'Medium', tags: ['Array', 'Two Pointers'] },
           { id: 'p2', title: 'Subarray Sum Equals K', difficulty: 'Medium', tags: ['Hash Table', 'Prefix Sum'] },
@@ -195,51 +234,42 @@ public:
         return {}; // No solution found
     }
 };`,
-        testResults: [
-          {
-            id: 'tr-1',
-            testCaseNumber: 1,
-            input: 'nums = [2,7,11,15], target = 9',
-            expectedOutput: '[0,1]',
-            actualOutput: '[0,1]',
-            passed: true,
-            executionTimeMs: 4,
-            memoryMb: 1.8
-          },
-          {
-            id: 'tr-2',
-            testCaseNumber: 2,
-            input: 'nums = [3,2,4], target = 6',
-            expectedOutput: '[1,2]',
-            actualOutput: '[1,2]',
-            passed: true,
-            executionTimeMs: 3,
-            memoryMb: 1.7
-          },
-          {
-            id: 'tr-3',
-            testCaseNumber: 3,
-            input: 'nums = [3,3], target = 6',
-            expectedOutput: '[0,1]',
-            actualOutput: '[0,1]',
-            passed: true,
-            executionTimeMs: 2,
-            memoryMb: 1.7
-          }
-        ]
+        testResults: testCases.length > 0
+          ? testCases.map((tc, idx) => ({
+              id: `tr-${idx + 1}`,
+              testCaseNumber: idx + 1,
+              input: tc.input,
+              expectedOutput: tc.expectedOutput,
+              actualOutput: tc.expectedOutput,
+              passed: true,
+              executionTimeMs: 3,
+              memoryMb: 1.8
+            }))
+          : [
+              {
+                id: 'tr-1',
+                testCaseNumber: 1,
+                input: 'nums = [2,7,11,15], target = 9',
+                expectedOutput: '[0,1]',
+                actualOutput: '[0,1]',
+                passed: true,
+                executionTimeMs: 4,
+                memoryMb: 1.8
+              }
+            ]
       };
 
       const newSubItem: SubmissionItem = {
         id: newSubmissionId,
-        problemId: selectedProblem.id,
-        problemTitle: selectedProblem.title,
+        problemId: activeProblem.id,
+        problemTitle: activeProblem.title,
         score: 85,
         status: 'Passed',
         language: language === 'cpp' ? 'C++' : language === 'python' ? 'Python' : 'Java',
-        date: '01 May, 10:30 AM',
-        passedTestCases: 3,
-        totalTestCases: 3,
-        feedbackSummary: 'Good use of HashMap. Consider better variable names.'
+        date: 'Just now',
+        passedTestCases: testCases.length || 3,
+        totalTestCases: testCases.length || 3,
+        feedbackSummary: 'Good algorithmic approach. All test cases passed with optimal asymptotic time.'
       };
 
       addSubmission(newSubItem, newAssessment);
@@ -285,13 +315,13 @@ public:
           <div className="p-5 border-b border-slate-100">
             <div className="flex items-center gap-2.5 mb-2">
               <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
-                {selectedProblem.title}
+                {activeProblem.title}
               </h1>
-              <DifficultyBadge difficulty={selectedProblem.difficulty} />
+              <DifficultyBadge difficulty={activeProblem.difficulty} />
             </div>
             <div className="flex items-center gap-4 text-xs text-slate-500">
-              <span>Acceptance: <strong className="text-slate-700">{selectedProblem.acceptanceRate}</strong></span>
-              <span>Optimal Time: <strong className="text-slate-700 font-mono">{selectedProblem.optimalComplexity.time}</strong></span>
+              <span>Acceptance: <strong className="text-slate-700">{activeProblem.acceptanceRate || '—'}</strong></span>
+              <span>Optimal Time: <strong className="text-slate-700 font-mono">{optimalComplexity.time}</strong></span>
             </div>
           </div>
 
@@ -315,7 +345,7 @@ public:
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
-              Test Cases ({selectedProblem.testCases.length})
+              Test Cases ({testCases.length})
             </button>
           </div>
 
@@ -326,13 +356,13 @@ public:
                 {/* Description */}
                 <div className="prose prose-slate prose-sm max-w-none">
                   <div className="whitespace-pre-line leading-relaxed text-slate-600">
-                    {selectedProblem.description}
+                    {activeProblem.description}
                   </div>
                 </div>
 
                 {/* Examples */}
                 <div className="space-y-4">
-                  {selectedProblem.examples.map((ex, idx) => (
+                  {examples.map((ex, idx) => (
                     <div key={idx} className="bg-slate-50 rounded-xl p-4 border border-slate-200/80">
                       <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
                         Example {idx + 1}:
@@ -362,7 +392,7 @@ public:
                     Constraints:
                   </h4>
                   <ul className="list-disc list-inside space-y-1 text-xs text-amber-900 font-mono">
-                    {selectedProblem.constraints.map((c, i) => (
+                    {constraints.map((c, i) => (
                       <li key={i}>{c}</li>
                     ))}
                   </ul>
@@ -374,7 +404,7 @@ public:
                     Algorithmic Tags
                   </h4>
                   <div className="flex flex-wrap gap-1.5">
-                    {selectedProblem.tags.map((t, idx) => (
+                    {tags.map((t, idx) => (
                       <span
                         key={idx}
                         className="px-2.5 py-1 text-xs font-medium bg-slate-100 text-slate-700 rounded-lg border border-slate-200"
@@ -391,8 +421,8 @@ public:
                 <p className="text-xs text-slate-500">
                   Sandbox test suite verified against solution constraints:
                 </p>
-                {selectedProblem.testCases.map((tc, idx) => (
-                  <div key={tc.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+                {testCases.map((tc, idx) => (
+                  <div key={tc.id || idx} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-slate-800">
                         Case {idx + 1} {tc.isHidden && <span className="text-purple-600">(Hidden Test)</span>}

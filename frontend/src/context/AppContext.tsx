@@ -46,32 +46,36 @@ const EMPTY_INSTRUCTOR_STATS = {
 };
 
 const EMPTY_ASSESSMENT: AssessmentResult = {
-  id: '',
+  submissionId: '',
   problemId: '',
-  problemTitle: '',
-  language: '',
+  problemTitle: 'No assessment yet',
+  timestamp: new Date().toISOString(),
+  language: 'C++',
   code: '',
-  overallScore: 0,
-  correctness: 0,
-  performance: 0,
-  codeQuality: 0,
-  security: 0,
-  complexity: { time: '—', space: '—' },
-  feedback: {
-    summary: 'No assessment generated yet.',
-    strengths: [],
-    improvements: [],
-    suggestions: []
+  status: 'Accepted',
+  executionTime: '—',
+  memory: '—',
+  multiScores: {
+    correctness: { score: 0, max: 20, notes: 'Awaiting submission evaluation.' },
+    timeComplexity: { score: 0, max: 20, detected: '—', optimal: '—', notes: 'Complexity analysis pending.' },
+    spaceComplexity: { score: 0, max: 20, detected: '—', optimal: '—', notes: 'Memory profiling pending.' },
+    codeQuality: { score: 0, max: 20, styleScore: 0, structureScore: 0, notes: 'Code quality review pending.' },
+    similarity: { score: 0, max: 20, originalityPercent: 100, plagiarismRisk: 'Low', notes: 'Originality verified.' },
+    overallScore: 0
   },
-  testCaseResults: [],
-  executionTime: 0,
-  memoryUsage: 0,
+  explainableFeedback: 'Submit code in the compiler workspace to receive real-time multi-agent AI assessment.',
+  suggestedImprovements: [],
+  recommendedTopics: [],
+  practiceProblems: [],
   scoreProjection: {
     currentScore: 0,
     projectedScore: 0,
     improvementDelta: 0,
-    focusAreas: []
-  }
+    focusAreas: [],
+    iterationTimeline: []
+  },
+  aiRevisedCode: '',
+  testResults: []
 };
 
 const mapApiProblem = (p: any): Problem => ({
@@ -502,7 +506,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setCurrentView('workspace');
   };
 
-  const openAssessmentResult = (_submissionId?: string) => {
+  const openAssessmentResult = (submissionId?: string) => {
+    if (submissionId) {
+      const sub = submissions.find(s => s.id === submissionId);
+      if (sub) {
+        setActiveAssessment(prev => ({
+          ...prev,
+          submissionId: sub.id,
+          problemId: sub.problemId,
+          problemTitle: sub.problemTitle,
+          language: sub.language,
+          timestamp: sub.date,
+          status: sub.status === 'Passed' ? 'Accepted' : sub.status === 'Partial' ? 'Partial' : 'Wrong Answer',
+          multiScores: {
+            ...prev.multiScores,
+            overallScore: sub.score,
+            correctness: { score: Math.round(sub.score * 0.2), max: 20, notes: `${sub.passedTestCases}/${sub.totalTestCases} test cases passed.` }
+          },
+          explainableFeedback: sub.feedbackSummary || prev.explainableFeedback
+        }));
+      }
+    }
     setCurrentView('result');
   };
 

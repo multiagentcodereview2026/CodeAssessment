@@ -18,25 +18,43 @@ import { TOPIC_MASTERY } from '../../data/learningInsights';
 export const FeedbackRecommendationsView: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { submissions, openAssessmentResult, openProblemWorkspace, activeAssessment } = useApp();
+  const { submissions, openAssessmentResult, openProblemWorkspace, activeAssessment, studentProgress, problems } = useApp();
 
-  // Tab State: 'feedback' | 'recommendations' (Strict binary toggle)
+  // Tab State: 'feedback' | 'recommendations'
   const initialTab = searchParams.get('tab') === 'practice' ? 'recommendations' : 'feedback';
   const [activeTab, setActiveTab] = useState<'feedback' | 'recommendations'>(initialTab);
   const [search, setSearch] = useState('');
 
-  const { recommendedTopics, practiceProblems } = activeAssessment;
-  const revisionPlan = activeAssessment.scoreProjection.focusAreas.map((area, index) => ({
+  const recommendedTopics = Array.isArray(activeAssessment?.recommendedTopics) && activeAssessment.recommendedTopics.length > 0
+    ? activeAssessment.recommendedTopics
+    : (studentProgress?.weakTopics?.length > 0
+      ? studentProgress.weakTopics
+      : ['Arrays & Hashing', 'Two Pointers', 'Binary Search']);
+
+  const practiceProblems = Array.isArray(activeAssessment?.practiceProblems) && activeAssessment.practiceProblems.length > 0
+    ? activeAssessment.practiceProblems
+    : (problems || []).slice(0, 3);
+
+  const focusAreas = Array.isArray(activeAssessment?.scoreProjection?.focusAreas)
+    ? activeAssessment.scoreProjection.focusAreas
+    : [];
+
+  const suggestedImprovements = Array.isArray(activeAssessment?.suggestedImprovements)
+    ? activeAssessment.suggestedImprovements
+    : [];
+
+  const revisionPlan = focusAreas.map((area, index) => ({
     title: area,
-    detail: activeAssessment.suggestedImprovements[index] || 'Apply the AI recommendation and resubmit to update the projected score.',
+    detail: suggestedImprovements[index] || 'Apply the AI recommendation and resubmit to update the projected score.',
     status: index === 0 ? 'Priority' : index === 1 ? 'Next' : 'Refinement'
   }));
-  const weakestTopics = [...TOPIC_MASTERY].sort((a, b) => a.mastery - b.mastery).slice(0, 3);
 
-  const filteredSubmissions = submissions.filter((s) =>
-    s.problemTitle.toLowerCase().includes(search.toLowerCase()) ||
-    (s.feedbackSummary && s.feedbackSummary.toLowerCase().includes(search.toLowerCase())) ||
-    s.language.toLowerCase().includes(search.toLowerCase())
+  const weakestTopics = (TOPIC_MASTERY || []).slice().sort((a, b) => a.mastery - b.mastery).slice(0, 3);
+
+  const filteredSubmissions = (submissions || []).filter((s) =>
+    (s.problemTitle || '').toLowerCase().includes(search.toLowerCase()) ||
+    ((s.feedbackSummary || '').toLowerCase().includes(search.toLowerCase())) ||
+    ((s.language || '').toLowerCase().includes(search.toLowerCase()))
   );
 
   const handleOpenReport = (subId: string) => {
@@ -64,12 +82,12 @@ export const FeedbackRecommendationsView: React.FC = () => {
 
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-slate-600 bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200 shadow-xs">
-            Evaluated Submissions: <strong className="text-indigo-600 font-mono text-sm ml-1">{submissions.length}</strong>
+            Evaluated Submissions: <strong className="text-indigo-600 font-mono text-sm ml-1">{(submissions || []).length}</strong>
           </span>
         </div>
       </div>
 
-      {/* Segmented View Controls (Either 'AI Feedback' or 'Practice & Topics') */}
+      {/* Segmented View Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         {/* Binary 2-Tab Switcher */}
         <div className="flex bg-slate-200/60 p-1.5 rounded-2xl border border-slate-200/80 max-w-md w-full md:w-auto">
@@ -84,7 +102,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
             <MessageSquareText className="w-3.5 h-3.5" />
             <span>AI Feedback</span>
             <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${activeTab === 'feedback' ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
-              {submissions.length}
+              {(submissions || []).length}
             </span>
           </button>
 
@@ -104,21 +122,21 @@ export const FeedbackRecommendationsView: React.FC = () => {
           </button>
         </div>
 
-        {/* Search Bar (Only shown on Feedback tab) */}
+        {/* Live Search Input (for Feedback tab) */}
         {activeTab === 'feedback' && (
-          <div className="relative w-full md:w-80">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <div className="relative max-w-xs w-full">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search feedback notes or code..."
-              className="w-full pl-10 pr-4 py-2.5 text-xs bg-white border border-slate-200 rounded-2xl focus:outline-none focus:border-indigo-500 shadow-xs"
+              placeholder="Search problem, language, feedback..."
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs focus:outline-none focus:border-indigo-500 shadow-xs"
             />
             {search && (
               <button
                 onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -130,36 +148,40 @@ export const FeedbackRecommendationsView: React.FC = () => {
       {/* TAB 1: AI FEEDBACK */}
       {activeTab === 'feedback' && (
         <div className="space-y-4">
-          <div className="bg-white rounded-3xl border border-indigo-200/80 p-5 sm:p-6 shadow-xs">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div>
-                <span className="text-xs font-extrabold uppercase text-indigo-700">Revision Checklist</span>
-                <h3 className="mt-1 text-base font-bold text-slate-900">
-                  Raise {activeAssessment.problemTitle} from {activeAssessment.scoreProjection.currentScore} to {activeAssessment.scoreProjection.projectedScore}
-                </h3>
-                <p className="mt-1 text-xs text-slate-500 leading-relaxed">
-                  Focus areas are derived from the current assessment, so the checklist maps directly to backend assessment fields.
-                </p>
-              </div>
-              <button
-                onClick={() => handleStartPractice(activeAssessment.problemId)}
-                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Code2 className="w-3.5 h-3.5" />
-                <span>Revise in Sandbox</span>
-              </button>
-            </div>
-
-            <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
-              {revisionPlan.map((item) => (
-                <div key={item.title} className="rounded-2xl bg-slate-50 border border-slate-200/80 p-4">
-                  <span className="text-[10px] font-bold uppercase text-indigo-600">{item.status}</span>
-                  <h4 className="mt-1 text-xs font-extrabold text-slate-900">{item.title}</h4>
-                  <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">{item.detail}</p>
+          {activeAssessment?.problemTitle && revisionPlan.length > 0 && (
+            <div className="bg-white rounded-3xl border border-indigo-200/80 p-5 sm:p-6 shadow-xs">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <span className="text-xs font-extrabold uppercase text-indigo-700">Revision Checklist</span>
+                  <h3 className="mt-1 text-base font-bold text-slate-900">
+                    Raise {activeAssessment.problemTitle} from {activeAssessment.scoreProjection?.currentScore ?? 0} to {activeAssessment.scoreProjection?.projectedScore ?? 100}
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+                    Focus areas are derived from your latest evaluation, mapping directly to AST complexity and style suggestions.
+                  </p>
                 </div>
-              ))}
+                {activeAssessment.problemId && (
+                  <button
+                    onClick={() => handleStartPractice(activeAssessment.problemId)}
+                    className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Code2 className="w-3.5 h-3.5" />
+                    <span>Revise in Sandbox</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+                {revisionPlan.map((item) => (
+                  <div key={item.title} className="rounded-2xl bg-slate-50 border border-slate-200/80 p-4">
+                    <span className="text-[10px] font-bold uppercase text-indigo-600">{item.status}</span>
+                    <h4 className="mt-1 text-xs font-extrabold text-slate-900">{item.title}</h4>
+                    <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">{item.detail}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -174,7 +196,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
           <div className="space-y-3">
             {filteredSubmissions.length === 0 ? (
               <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-400 text-xs">
-                No feedback notes found matching your search.
+                No evaluated submissions recorded yet. Pick a problem from the Problem Bank to start coding and receive live AI coaching!
               </div>
             ) : (
               filteredSubmissions.map((item) => (
@@ -236,21 +258,23 @@ export const FeedbackRecommendationsView: React.FC = () => {
       {/* TAB 2: PRACTICE & TOPICS */}
       {activeTab === 'recommendations' && (
         <div className="space-y-6">
-          {/* Recommended Topic Clusters */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {weakestTopics.map((topic) => (
-              <div key={topic.name} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-slate-700">{topic.name}</span>
-                  <span className="text-xs font-mono font-bold text-amber-700">{topic.mastery}%</span>
+          {/* Weakest Topics Diagnostic */}
+          {weakestTopics.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {weakestTopics.map((topic) => (
+                <div key={topic.name} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-slate-700">{topic.name}</span>
+                    <span className="text-xs font-mono font-bold text-amber-700">{topic.mastery}%</span>
+                  </div>
+                  <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${topic.mastery}%`, backgroundColor: topic.color }} />
+                  </div>
+                  <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">{topic.nextAction}</p>
                 </div>
-                <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${topic.mastery}%`, backgroundColor: topic.color }} />
-                </div>
-                <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">{topic.nextAction}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           {/* Recommended Topic Clusters */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 sm:p-8 space-y-4">
@@ -259,7 +283,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
                 <BookOpen className="w-5 h-5 text-indigo-600" />
                 <h3 className="text-base font-bold text-slate-900">Recommended Topic Clusters</h3>
               </div>
-              <span className="text-xs text-slate-400 font-medium">High syllabus weight</span>
+              <span className="text-xs text-slate-400 font-medium">Adaptive Practice Guidance</span>
             </div>
 
             <div className="flex flex-wrap gap-3">
@@ -273,7 +297,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
                     <span className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
                       {topic}
                     </span>
-                    <p className="text-[11px] text-slate-400 mt-0.5">3 Practice problems</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Targeted algorithm questions</p>
                   </div>
                   <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
                 </div>
@@ -296,39 +320,45 @@ export const FeedbackRecommendationsView: React.FC = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {practiceProblems.map((prob, idx) => (
-                <div
-                  key={prob.id}
-                  className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between space-y-4 hover:border-indigo-400 hover:bg-white transition-all group"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold font-mono text-slate-400">#{idx + 1}</span>
-                      <DifficultyBadge difficulty={prob.difficulty} />
-                    </div>
-                    <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                      {prob.title}
-                    </h4>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {prob.tags.map((t, tIdx) => (
-                        <span key={tIdx} className="text-[10px] bg-slate-200/60 text-slate-700 px-1.5 py-0.5 rounded">
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => handleStartPractice(prob.id)}
-                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            {practiceProblems.length === 0 ? (
+              <p className="text-xs text-slate-400 py-6 text-center">
+                Explore the Problem Bank to select your next challenge.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {practiceProblems.map((prob, idx) => (
+                  <div
+                    key={prob.id}
+                    className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between space-y-4 hover:border-indigo-400 hover:bg-white transition-all group"
                   >
-                    <Code2 className="w-3.5 h-3.5" />
-                    <span>Start Practice</span>
-                  </button>
-                </div>
-              ))}
-            </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold font-mono text-slate-400">#{idx + 1}</span>
+                        <DifficultyBadge difficulty={prob.difficulty} />
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                        {prob.title}
+                      </h4>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {(prob.tags || []).map((t, tIdx) => (
+                          <span key={tIdx} className="text-[10px] bg-slate-200/60 text-slate-700 px-1.5 py-0.5 rounded">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleStartPractice(prob.id)}
+                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                    >
+                      <Code2 className="w-3.5 h-3.5" />
+                      <span>Start Practice</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

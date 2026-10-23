@@ -18,9 +18,14 @@ export const SubmissionsList: React.FC = () => {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
-  const filtered = submissions.filter((sub) => {
-    const matchesSearch = sub.problemTitle.toLowerCase().includes(search.toLowerCase()) || sub.language.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || sub.status.toLowerCase() === filterStatus.toLowerCase();
+  const filtered = (submissions || []).filter((sub) => {
+    const pTitle = (sub.problemTitle || '').toLowerCase();
+    const sLang = (sub.language || '').toLowerCase();
+    const sStatus = (sub.status || '').toLowerCase();
+    const q = search.toLowerCase();
+
+    const matchesSearch = pTitle.includes(q) || sLang.includes(q);
+    const matchesStatus = filterStatus === 'all' || sStatus === filterStatus.toLowerCase();
     return matchesSearch && matchesStatus;
   });
 

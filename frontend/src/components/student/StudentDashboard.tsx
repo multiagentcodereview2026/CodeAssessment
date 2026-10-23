@@ -34,15 +34,16 @@ export const StudentDashboard: React.FC = () => {
     openAssessmentResult
   } = useApp();
 
-  const activeProblem = problems[0] || null;
-  const latestSubmission = submissions[0] || null;
-  const assignedProblems = problems.filter((problem) => problem.isInstructorAssigned);
-  const weakTopic = studentProgress.weakTopics[0] || (activeProblem?.tags?.[0]) || 'Algorithms & Data Structures';
-  const solvedPercent = studentProgress.totalProblems > 0
-    ? Math.round((studentProgress.problemsSolved / studentProgress.totalProblems) * 100)
+  const activeProblem = (problems || [])[0] || null;
+  const latestSubmission = (submissions || [])[0] || null;
+  const assignedProblems = (problems || []).filter((problem) => problem.isInstructorAssigned);
+  const weakTopics = Array.isArray(studentProgress?.weakTopics) ? studentProgress.weakTopics : [];
+  const weakTopic = weakTopics[0] || (activeProblem?.tags?.[0]) || 'Algorithms & Data Structures';
+  const solvedPercent = (studentProgress?.totalProblems || 0) > 0
+    ? Math.round(((studentProgress?.problemsSolved || 0) / studentProgress.totalProblems) * 100)
     : 0;
-  const latestAnnouncement = announcements.find((item) => !item.read);
-  const studentName = currentUser.name || currentUser.rollNumber || 'Student';
+  const latestAnnouncement = (announcements || []).find((item) => !item.read);
+  const studentName = currentUser?.name || currentUser?.rollNumber || 'Student';
 
   const handleResumeChallenge = (probId?: string) => {
     const targetId = probId || activeProblem?.id;
@@ -445,10 +446,10 @@ export const StudentDashboard: React.FC = () => {
               AI identified lower test pass rates on these algorithmic patterns:
             </p>
             <div className="flex flex-wrap gap-2">
-              {studentProgress.weakTopics.length === 0 ? (
+              {weakTopics.length === 0 ? (
                 <p className="text-xs text-slate-400 italic">No weak topics flagged yet.</p>
               ) : (
-                studentProgress.weakTopics.map((topic, i) => (
+                weakTopics.map((topic, i) => (
                   <button
                     key={i}
                     onClick={() => navigate('/problems')}
