@@ -44,7 +44,7 @@ export const InstructorDashboard: React.FC = () => {
       {/* Top Banner (Clean Greeting & Primary CTAs - Jakob's & Fitts's Law) */}
       <div className="flex flex-col justify-between gap-5 border-b border-slate-200 pb-6 sm:flex-row sm:items-end">
         <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-[0.14em] text-indigo-700">Faculty workspace</p>
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">Faculty workspace</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-[2rem]">
             Welcome back, {currentUser.name.split(' ')[0]}
           </h1>
@@ -56,14 +56,14 @@ export const InstructorDashboard: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             onClick={() => navigate('/instructor/problems')}
-            className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-indigo-700 px-4 text-sm font-semibold text-white transition hover:bg-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
           >
             <Plus className="w-4 h-4" />
             <span>Create Question</span>
           </button>
           <button
             onClick={() => navigate('/instructor/reports')}
-            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
           >
             <Download className="w-4 h-4" />
             <span>Export Reports</span>
@@ -76,11 +76,11 @@ export const InstructorDashboard: React.FC = () => {
         {/* Total Students */}
         <button type="button"
           onClick={() => navigate('/instructor/students')}
-          className="w-full rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="w-full rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
         >
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-semibold text-slate-500">Total Students</span>
-            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
               <Users className="w-4 h-4" />
             </div>
           </div>
@@ -89,7 +89,7 @@ export const InstructorDashboard: React.FC = () => {
           </div>
           <div className="mt-2 text-xs text-slate-500 flex items-center justify-between">
             <span>Across your courses</span>
-            <span className="text-indigo-600 font-semibold flex items-center gap-0.5">
+            <span className="text-emerald-600 font-semibold flex items-center gap-0.5">
               Roster <ChevronRight className="w-3 h-3" />
             </span>
           </div>
@@ -98,7 +98,7 @@ export const InstructorDashboard: React.FC = () => {
         {/* Active Questions */}
         <button type="button"
           onClick={() => navigate('/instructor/problems')}
-          className="w-full rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="w-full rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
         >
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-semibold text-slate-500">Active assignments</span>
@@ -111,7 +111,7 @@ export const InstructorDashboard: React.FC = () => {
           </div>
           <div className="mt-2 flex items-center justify-between text-xs font-semibold text-slate-500">
             <span>Currently in your courses</span>
-            <span className="flex items-center gap-0.5 font-semibold text-indigo-700">
+            <span className="flex items-center gap-0.5 font-semibold text-emerald-700">
               Problem Bank <ChevronRight className="w-3 h-3" />
             </span>
           </div>
@@ -120,11 +120,11 @@ export const InstructorDashboard: React.FC = () => {
         {/* Submissions */}
         <button type="button"
           onClick={() => navigate('/instructor/reports')}
-          className="w-full rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="w-full rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
         >
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-semibold text-slate-500">Submissions Evaluated</span>
-            <div className="rounded-lg bg-indigo-50 p-2 text-indigo-700">
+            <div className="rounded-lg bg-emerald-50 p-2 text-emerald-700">
               <FileCheck2 className="w-4 h-4" />
             </div>
           </div>
@@ -139,7 +139,7 @@ export const InstructorDashboard: React.FC = () => {
         {/* Avg Score */}
         <button type="button"
           onClick={() => navigate('/instructor/analytics')}
-          className="w-full rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="w-full rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
         >
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-semibold text-slate-500">Avg. Class Score</span>
@@ -184,7 +184,7 @@ export const InstructorDashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <button
           onClick={() => navigate('/instructor/problems')}
-          className="rounded-xl border border-slate-200 bg-white p-5 text-left transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="rounded-xl border border-slate-200 bg-white p-5 text-left transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-extrabold text-amber-700 uppercase">Turnout Watch</span>
@@ -200,11 +200,11 @@ export const InstructorDashboard: React.FC = () => {
 
         <button
           onClick={() => navigate('/instructor/analytics')}
-          className="rounded-xl border border-slate-200 bg-white p-5 text-left transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="rounded-xl border border-slate-200 bg-white p-5 text-left transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase text-slate-500">Class overview</span>
-            <Target className="h-4 w-4 text-indigo-700" />
+            <Target className="h-4 w-4 text-emerald-700" />
           </div>
           <h3 className="mt-2 text-sm font-bold text-slate-900">Complexity Reasoning</h3>
           <p className="mt-1 text-xs text-slate-500 leading-relaxed">
@@ -214,7 +214,7 @@ export const InstructorDashboard: React.FC = () => {
 
         <button
           onClick={() => navigate('/instructor/similarity')}
-          className="rounded-xl border border-slate-200 bg-white p-5 text-left transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="rounded-xl border border-slate-200 bg-white p-5 text-left transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase text-slate-500">Similarity review</span>

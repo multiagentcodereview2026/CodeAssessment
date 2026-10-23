@@ -4,6 +4,8 @@ __pycache__/
 backend/codeassessment.db
 backend/codeassessment_v2.db
 backend/codeassessment_v2_backup.db
+*.db
+.build_conference_paper.py
 README.md
 frontend/README.md
 .env
