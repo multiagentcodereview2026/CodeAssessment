@@ -27,18 +27,6 @@ export interface TestCase {
   isHidden?: boolean;
 }
 
-export type InputValueKind = 'int' | 'float' | 'str' | 'bool' | 'list' | 'optional';
-
-export interface InputValueSchema {
-  kind: InputValueKind;
-  item?: InputValueSchema;
-}
-
-export interface ProblemInputField {
-  name: string;
-  schema: InputValueSchema;
-}
-
 export interface Problem {
   id: string;
   title: string;
@@ -56,8 +44,6 @@ export interface Problem {
     time: string;
     space: string;
   };
-  /** Display metadata only. TestCase.input remains the untouched judge stdin. */
-  inputSchema?: ProblemInputField[];
   isInstructorAssigned?: boolean;
   courseCode?: string;
   dueDate?: string;
@@ -72,23 +58,8 @@ export interface TestCaseResult {
   passed: boolean;
   executionTimeMs: number;
   memoryMb: number;
-  /** Never render input/output for a hidden test, even if an API regresses. */
-  isHidden?: boolean;
-  /** Raw sandbox verdict, used for a student-friendly failed-case summary. */
-  verdict?: string;
-  /** Public-case diagnostic only. */
-  reason?: string;
   stdout?: string;
   stderr?: string;
-}
-
-export interface FailedTestCaseSummary {
-  /** One-based position in the full public + hidden judge suite. */
-  ordinal: number;
-  isHidden: boolean;
-  status?: string;
-  /** The backend must keep this generic for a hidden test. */
-  reason?: string;
 }
 
 export interface MultiDimensionalScore {
@@ -166,14 +137,11 @@ export interface AssessmentResult {
   scoreProjection: ScoreProjection;
   aiRevisedCode: string;
   testResults: TestCaseResult[];
-  totalTestCases?: number;
-  lastFailedCase?: FailedTestCaseSummary;
 }
 
 export interface SubmissionItem {
   id: string;
   problemId: string;
-  problemSlug?: string;
   problemTitle: string;
   score: number;
   status: 'Passed' | 'Partial' | 'Failed';

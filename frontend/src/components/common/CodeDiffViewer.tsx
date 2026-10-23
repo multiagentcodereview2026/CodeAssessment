@@ -18,15 +18,11 @@ export const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({
   projectedScore = 92,
   improvementDelta = 7
 }) => {
-  // API integrations may provide a non-string value at runtime. Never let a
-  // malformed optional AI suggestion crash the submission result page.
-  const safeOriginalCode = typeof originalCode === 'string' ? originalCode : '';
-  const safeRevisedCode = typeof revisedCode === 'string' ? revisedCode : safeOriginalCode;
   const [viewMode, setViewMode] = useState<'split' | 'revised'>('split');
   const [copied, setCopied] = useState(false);
 
   const handleCopyRevised = () => {
-    navigator.clipboard.writeText(safeRevisedCode);
+    navigator.clipboard.writeText(revisedCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -113,7 +109,7 @@ export const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({
               </span>
             </div>
             <pre className="max-h-[430px] text-slate-300 overflow-auto leading-relaxed whitespace-pre font-mono selection:bg-rose-500/30 custom-scrollbar pr-4">
-              {safeOriginalCode.trim()}
+              {originalCode.trim()}
             </pre>
           </div>
 
@@ -128,7 +124,7 @@ export const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({
               </span>
             </div>
             <pre className="max-h-[430px] text-emerald-100/90 overflow-auto leading-relaxed whitespace-pre font-mono selection:bg-emerald-500/30 custom-scrollbar pr-4">
-              {safeRevisedCode.trim()}
+              {revisedCode.trim()}
             </pre>
           </div>
         </div>
@@ -140,7 +136,7 @@ export const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({
             </span>
           </div>
           <pre className="max-h-[520px] text-slate-200 overflow-auto leading-relaxed whitespace-pre font-mono custom-scrollbar pr-4">
-            {safeRevisedCode.trim()}
+            {revisedCode.trim()}
           </pre>
         </div>
       )}
