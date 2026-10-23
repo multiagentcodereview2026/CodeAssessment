@@ -25,6 +25,10 @@ class _FakeProvider:
         return _Response(self.content)
 
 
+class _BadRequest(Exception):
+    status_code = 400
+
+
 def _invoke(fallback):
     return asyncio.run(base.invoke_agent("prompt", {"input": "test"}, ExampleOutput, fallback))
 
@@ -69,3 +73,13 @@ def test_invalid_provider_schema_is_labeled_as_fallback(monkeypatch):
     result = _invoke({"summary": "Validated fallback"})
 
     assert result == {"summary": "Validated fallback", "analysis_source": "fallback"}
+
+
+def test_bad_request_retries_without_response_format_before_fallback(monkeypatch):
+    monkeypatch.setattr(base, "llm", _FakeProvider(error=_BadRequest()))
+    monkeypatch.setattr(base, "plain_llm", _FakeProvider('{"summary":"Plain retry result"}'))
+    monkeypatch.setattr(base.settings, "GROQ_API_KEY", "configured-for-test")
+
+    result = _invoke({"summary": "Fallback"})
+
+    assert result == {"summary": "Plain retry result", "analysis_source": "groq"}

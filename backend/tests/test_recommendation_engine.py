@@ -36,9 +36,10 @@ def test_best_score_is_used_once_for_every_problem_tag():
 
 def test_difficulty_policy_matches_published_ranges():
     assert set(difficulty_plan(59)) == {"Easy"}
-    assert difficulty_plan(60) == ["Easy", "Easy", "Easy", "Easy", "Medium", "Medium"]
-    assert difficulty_plan(75) == ["Medium", "Medium", "Medium", "Medium", "Hard", "Hard"]
-    assert set(difficulty_plan(96)) == {"Hard"}
+    assert difficulty_plan(99, completed_problems=2) == ["Easy"] * 6
+    assert difficulty_plan(65, completed_problems=3) == ["Easy", "Easy", "Easy", "Easy", "Easy", "Medium"]
+    assert difficulty_plan(75, completed_problems=6) == ["Easy", "Medium", "Medium", "Medium", "Hard", "Hard"]
+    assert difficulty_plan(96, completed_problems=10) == ["Easy", "Medium", "Medium", "Hard", "Hard", "Hard"]
 
 
 def test_recommendations_are_same_topic_and_prefer_unattempted_ids():
@@ -55,7 +56,27 @@ def test_recommendations_are_same_topic_and_prefer_unattempted_ids():
     assert all(item["topic"] == "Array" for item in result["problems"])
 
 
-def test_one_perfect_easy_problem_does_not_trigger_hard_recommendations():
+def test_selected_topic_remains_available_after_core_or_high_score_progress():
+    problems = [
+        problem("array-done", "Easy", "Array", ["Array"]),
+        problem("array-next-easy", "Easy", "Array", ["Array"]),
+        problem("array-next-medium", "Medium", "Array", ["Array"]),
+        problem("array-next-hard", "Hard", "Array", ["Array"]),
+        problem("greedy-done", "Easy", "Greedy", ["Greedy"]),
+        problem("greedy-next", "Easy", "Greedy", ["Greedy"]),
+    ]
+    result = build_recommendations(
+        problems,
+        [submission("array-done", 100), submission("greedy-done", 50)],
+        selected_topic="Array",
+    )
+
+    assert result["priority_topics"] == ["Array"]
+    assert result["problems"]
+    assert all(item["topic"] == "Array" for item in result["problems"])
+
+
+def test_small_sample_does_not_fill_easy_queue_with_harder_problems():
     problems = [
         problem("array-easy-done", "Easy", "Array", ["Array"]),
         problem("array-easy-next", "Easy", "Array", ["Array"]),
@@ -64,7 +85,7 @@ def test_one_perfect_easy_problem_does_not_trigger_hard_recommendations():
     result = build_recommendations(problems, [submission("array-easy-done", 100)], topic_limit=1)
 
     assert result["problems"]
-    assert {item["difficulty"] for item in result["problems"]} == {"Easy"}
+    assert [item["difficulty"] for item in result["problems"]] == ["Easy"]
 
 
 def test_roadmap_requires_twenty_high_scoring_mixed_difficulty_problems():

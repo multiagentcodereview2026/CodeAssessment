@@ -23,6 +23,27 @@ Updated: 2026-10-19. Backend/frontend checks, an isolated Docker Compose startup
 | Automated checks / CI | Local checks pass; hosted execution pending | GitHub Actions runs frontend lint/build, backend pytest, engine unit tests, and Docker-backed tests for each language. Local equivalent checks passed; a successful hosted run is still needed. |
 | Production operations | Pending external environment and hardening | No production target was provided. Compose is a development setup, the engine uses the Docker socket, and deployment, production secret rotation, backups/restore drills, structured monitoring, rate limiting, and a hardened execution boundary remain before public use. |
 
+## Agreed future plan: evidence-first explainability
+
+The current explainability agent is sufficient for guided practice, but it must
+not depend on a provider's wording to establish the diagnosis. Future work is
+intentionally ordered as follows:
+
+1. Build deterministic evidence from the saved submission: first failing public
+   case or compiler diagnostic, structural loop/recursion facts, measured time
+   and space analysis, and recorded style findings.
+2. Select one priority in a fixed learning order: correctness, then time, then
+   space, then style.
+3. Generate a complete useful fallback directly from those facts whenever the
+   optional provider is unavailable, rate-limited, or slow.
+4. Use Groq only to improve clarity and tone. Its response must not introduce
+   an unsupported diagnosis, hidden-test claim, or a replacement solution.
+5. Keep feedback linked to the exact saved evidence so students can verify why
+   a recommendation was made.
+
+This keeps explainability reliable without requiring GPT-quality prose from
+the optional provider.
+
 ## Required local startup check
 
 1. Install and start Docker Desktop with the Linux engine available.

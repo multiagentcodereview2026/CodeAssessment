@@ -66,16 +66,35 @@ def normalize_topics(topic_tags: Any, category: str | None) -> list[str]:
     return topics
 
 
-def difficulty_plan(average_score: float | None, limit: int = 6) -> list[str]:
-    """Create the published, deterministic difficulty mix for a topic."""
+def difficulty_plan(
+    average_score: float | None,
+    limit: int = 6,
+    *,
+    completed_problems: int = 0,
+) -> list[str]:
+    """Create the visible Easy -> Medium -> Hard queue for a topic.
+
+    ``limit`` only controls the number of cards shown.  It does not change
+    the roadmap's longer-term core quotas.  Keeping at least one Easy item in
+    every mixed band gives learners an accessible warm-up while their topic
+    average determines how much Medium/Hard practice they receive.
+    """
     score = 0.0 if average_score is None else average_score
-    if score < 60:
+    completed = max(0, int(completed_problems))
+    if limit <= 0:
+        return []
+    # A small sample is not enough evidence to escalate difficulty. This is
+    # why two 99% submissions still receive Easy practice rather than a sudden
+    # jump to Hard problems.
+    if score < 60 or completed < 3:
         return ["Easy"] * limit
-    if score < 75:
-        return ["Easy"] * ((limit * 2 + 2) // 3) + ["Medium"] * (limit // 3)
-    if score <= 95:
-        return ["Medium"] * ((limit * 2 + 2) // 3) + ["Hard"] * (limit // 3)
-    return ["Hard"] * limit
+    if score < 65:
+        return ["Easy"] * limit
+    if completed < 6 or score < 70:
+        return ["Easy"] * max(1, limit - 1) + ["Medium"]
+    if completed < 10 or score <= 95:
+        return ["Easy"] + ["Medium"] * max(1, limit - 3) + ["Hard"] * min(2, limit - 1)
+    return ["Easy"] + ["Medium"] * max(1, limit - 4) + ["Hard"] * min(3, limit - 1)
 
 
 def _roadmap_step_for_topic(topic: str) -> tuple[str, str] | None:
@@ -88,31 +107,18 @@ def _roadmap_step_for_topic(topic: str) -> tuple[str, str] | None:
 
 
 def _practice_difficulty_plan(topic_data: dict[str, Any], limit: int) -> list[str]:
-    """Choose a topic's next level from evidence, never average alone.
+    """Choose six practice cards from the topic's current score band.
 
-    A perfect score on a single Easy problem therefore remains an Easy
-    recommendation until the student demonstrates the curriculum's required
-    Easy coverage. This applies even when the learner has not opted into the
-    visible roadmap page.
+    The DSA Roadmap separately enforces its exact Easy/Medium/Hard completion
+    quotas. Practice recommendations are deliberately lighter-weight: each
+    successful submission naturally removes its card because completed IDs are
+    deprioritized, then this deterministic mix supplies the replacement.
     """
-    roadmap_step = _roadmap_step_for_topic(topic_data["topic"])
-    completed_by_difficulty = topic_data["completed_by_difficulty"]
-    average = topic_data["average_score"]
-    if roadmap_step:
-        _step_id, level = roadmap_step
-        requirements = CORE_DIFFICULTY_MIX[level]
-        if completed_by_difficulty["Easy"] < requirements["Easy"]:
-            return ["Easy"] * limit
-        if average is None or average < ROADMAP_CORE_AVERAGE:
-            return ["Easy"] * limit
-        if completed_by_difficulty["Medium"] < requirements["Medium"]:
-            return ["Medium"] * limit
-        if completed_by_difficulty["Hard"] < requirements["Hard"]:
-            return ["Hard"] * limit
-    # Tags outside the roadmap still require enough evidence before Hard work.
-    if topic_data["assessed_problems"] < 3:
-        return ["Easy"] * limit
-    return difficulty_plan(average, limit)
+    return difficulty_plan(
+        topic_data["average_score"],
+        limit,
+        completed_problems=topic_data["assessed_problems"],
+    )
 
 
 def build_recommendations(
@@ -121,6 +127,7 @@ def build_recommendations(
     *,
     per_topic_limit: int = 6,
     topic_limit: int = 3,
+    selected_topic: str | None = None,
 ) -> dict[str, Any]:
     """Build topic averages and same-topic recommendations from assessed attempts.
 
@@ -173,15 +180,25 @@ def build_recommendations(
 
     # Practised lower averages need attention first. Untried topics follow in
     # stable alphabetical order so this never becomes a random list.
-    priority_topics = sorted(
-        topic_rows,
-        key=lambda item: (
-            item["average_score"] is None,
-            item["average_score"] if item["average_score"] is not None else 0.0,
-            item["assessed_problems"],
-            item["topic"],
-        ),
-    )[:topic_limit]
+    requested_topic = str(selected_topic or "").strip().casefold()
+    if requested_topic:
+        # The Practice & topics selector is intentional focused practice.
+        # It must keep serving this topic after roadmap completion instead of
+        # restricting the learner to whichever three topics are auto-priority.
+        priority_topics = [
+            item for item in topic_rows
+            if item["topic"].casefold() == requested_topic
+        ]
+    else:
+        priority_topics = sorted(
+            topic_rows,
+            key=lambda item: (
+                item["average_score"] is None,
+                item["average_score"] if item["average_score"] is not None else 0.0,
+                item["assessed_problems"],
+                item["topic"],
+            ),
+        )[:topic_limit]
 
     recommendations: list[dict[str, Any]] = []
     for topic_data in priority_topics:
@@ -198,7 +215,12 @@ def build_recommendations(
         is_roadmap_topic = _roadmap_step_for_topic(topic) is not None
         planned_difficulties = _practice_difficulty_plan(topic_data, per_topic_limit)
         for difficulty in planned_difficulties:
-            match = next((problem for problem in candidates if problem.id not in used and problem.difficulty == difficulty), None)
+            match = next((
+                problem for problem in candidates
+                if problem.id not in used
+                and problem.id not in best_scores
+                and problem.difficulty == difficulty
+            ), None)
             if match is None:
                 continue
             used.add(match.id)
@@ -210,11 +232,14 @@ def build_recommendations(
                 "topic_tags": normalize_topics(getattr(match, "topic_tags", None), getattr(match, "category", None)),
                 "topic": topic,
                 "reason": (
-                    f"Build {difficulty} coverage for {topic} before advancing difficulty."
+                    f"{difficulty} practice for {topic}, ordered from your {topic_data['average_score'] if topic_data['average_score'] is not None else 'new'}% topic average."
                     if is_roadmap_topic
                     else f"{difficulty} practice for {topic}, selected from your {topic_data['average_score'] if topic_data['average_score'] is not None else 'new'}% topic evidence."
                 ),
             })
+        # Never replace a requested Easy/Medium/Hard slot with a harder
+        # difficulty. A missing matching item is a catalogue gap, not a reason
+        # to push a new learner to Medium or Hard practice.
 
     return {
         "topics": topic_rows,

@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # a safe fallback, so retries are opt-in rather than the default.
     GROQ_TIMEOUT_SECONDS: int = 90
     GROQ_MAX_RETRIES: int = 0
+    # A guided learning step must feel interactive. If the optional provider
+    # takes longer than this, deterministic evidence-based guidance is used.
+    GUIDED_REVISION_TIMEOUT_SECONDS: int = 12
 
     # Hybrid complexity review: AST may answer directly only when its
     # structural evidence is strong. Lower-confidence AST output is checked

@@ -43,7 +43,8 @@ export const FeedbackRecommendationsView: React.FC = () => {
     const loadRecommendations = async () => {
       setRecommendationError('');
       try {
-        const response = await authFetch('/api/student/recommendations', { cache: 'no-store' });
+        const query = selectedTopic ? `?topic=${encodeURIComponent(selectedTopic)}` : '';
+        const response = await authFetch(`/api/student/recommendations${query}`, { cache: 'no-store' });
         if (!response.ok) throw new Error('Personalized recommendations are temporarily unavailable.');
         const data = await response.json();
         if (cancelled) return;
@@ -58,7 +59,7 @@ export const FeedbackRecommendationsView: React.FC = () => {
     };
     void loadRecommendations();
     return () => { cancelled = true; };
-  }, [authFetch, evaluatedSubmissions.length]);
+  }, [authFetch, evaluatedSubmissions.length, selectedTopic]);
 
   useEffect(() => {
     let cancelled = false;

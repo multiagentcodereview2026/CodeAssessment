@@ -32,9 +32,12 @@ COMPLEXITY_LEVELS = list(TIME_COMPLEXITY_LEVELS)
 def normalize_complexity(complexity: Optional[str]) -> Optional[str]:
     """Normalize common single-variable Big-O spellings.
 
-    Multi-variable expressions such as ``O(V + E)`` and ``O(mn)`` are
-    deliberately returned as unsupported values. They need a
-    problem-family-specific comparator, not a global rank ladder.
+    Any *one* symbolic input-size variable is canonicalized to ``n``. For
+    example, ``O(L)``, ``O(m^2)``, and ``O(log P)`` use the same single-input
+    growth buckets as ``O(n)``, ``O(n^2)``, and ``O(log n)``. Expressions
+    containing two independent dimensions, such as ``O(V + E)`` and
+    ``O(m*n)``, deliberately remain unsupported because they need a
+    problem-family-specific comparator.
     """
     if not complexity or not isinstance(complexity, str):
         return None
@@ -66,10 +69,9 @@ def normalize_complexity(complexity: Optional[str]) -> Optional[str]:
         "o(n2)": "O(n^2)",
         "o(n^3)": "O(n^3)",
         "o(n3)": "O(n^3)",
-        # Keep bounded-parameter expressions exact in the report.  They are
-        # projected to the score ladder separately, using only the private
-        # constraints of the current problem.
-        "o(k)": "O(k)",
+        # Keep multi-factor bounded-parameter expressions exact in the report.
+        # They are projected to the score ladder separately, using only the
+        # private constraints of the current problem.
         "o(n*k)": "O(n*k)",
         "o(k*n)": "O(n*k)",
         "o(n^2*k)": "O(n^2*k)",
@@ -181,6 +183,25 @@ def _score_projection(
     published constraints.  General multi-variable expressions remain review
     only rather than being guessed.
     """
+    # Preserve a bounded scalar's constant-size behaviour before generic
+    # display normalization maps a single symbol (for example ``k``) to n.
+    # ``O(k)`` with ``k <= 100`` scores as O(1), whereas unbounded ``O(k)``
+    # scores as the ordinary single-input O(n) bucket.
+    raw_compact = str(complexity or "").strip().lower()
+    raw_compact = raw_compact.replace("²", "^2").replace("³", "^3")
+    raw_compact = re.sub(r"\s+", "", raw_compact)
+    bounded_monomial = re.fullmatch(
+        r"o\(([a-z][a-z0-9_]*)(?:\^\d+)?\)", raw_compact
+    )
+    if bounded_monomial and bounded_monomial.group(1) in {
+        str(name).lower() for name in bounded_parameters
+    }:
+        return "O(1)"
+
+    symbolic_rank = _symbolic_single_input_rank(raw_compact)
+    if symbolic_rank:
+        return symbolic_rank
+
     normalized = normalize_complexity(complexity)
     if normalized in TIME_COMPLEXITY_LEVELS:
         return normalized
@@ -214,6 +235,169 @@ def _score_projection(
         return None
 
     degree = powers["n"]
+    if degree == 1:
+        return "O(n)"
+    if degree == 2:
+        return "O(n^2)"
+    if degree == 3:
+        return "O(n^3)"
+    if degree >= 4:
+        return "O(n^4+)"
+    return None
+
+
+def _benchmark_rank_projection(
+    complexity: Optional[str],
+    bounded_parameters: Iterable[str] = (),
+) -> Optional[str]:
+    """Project a curated benchmark formula onto the fixed score ladder.
+
+    Problem-bank targets may legitimately describe several dimensions, for
+    example ``O(V + E)``, ``O(m*n)``, or ``O(n*k)``.  The public assessment
+    ladder nevertheless has one input-scale axis.  This function gives the
+    *private benchmark* a conservative structural bucket without changing the
+    formula shown anywhere in the student experience.
+
+    This is intentionally not used for student estimates.  A student result
+    with genuinely independent dimensions still requires review rather than
+    being guessed.  Here the formula was already curated as the benchmark, so
+    its highest polynomial growth order is a safe comparison ceiling.
+    """
+    strict = _score_projection(complexity, bounded_parameters)
+    if strict:
+        return strict
+
+    raw = str(complexity or "").strip()
+    compact = raw.lower()
+    compact = compact.replace("²", "^2").replace("³", "^3")
+    compact = compact.replace("·", "*").replace("×", "*").replace("**", "^")
+    compact = re.sub(r"\s+", "", compact)
+    match = re.fullmatch(r"o\((.*)\)", compact)
+    if not match:
+        return None
+    expression = match.group(1)
+
+    # Exponential and factorial growth remain above every polynomial bucket.
+    if "!" in expression:
+        return "O(n!)"
+    if re.search(r"(?:^|\*)[2-9]\^[a-z][a-z0-9_]*(?:$|\*)", expression):
+        return "O(2^n)"
+
+    # A logarithm of any aggregate input quantity remains logarithmic in the
+    # total input scale: log(m*n), log(V+E), and log(sum) all share this rank.
+    if expression.startswith("log(") and expression.endswith(")"):
+        return "O(log n)"
+
+    # Split a top-level sum.  Addition is dominated by its highest-order term.
+    terms = re.split(r"(?<!\^)\+", expression)
+    if len(terms) > 1:
+        buckets = [
+            _benchmark_rank_projection(f"O({term})", bounded_parameters)
+            for term in terms
+        ]
+        buckets = [bucket for bucket in buckets if bucket]
+        if len(buckets) == len(terms):
+            return max(buckets, key=complexity_rank)
+        return None
+
+    # Parentheses only group a term; min/max of input dimensions have linear
+    # magnitude in the total input scale.
+    expression = expression.strip("()")
+    if re.fullmatch(r"(?:min|max)\([a-z][a-z0-9_]*,[a-z][a-z0-9_]*\)", expression):
+        return "O(n)"
+
+    # Standard catalogue notation often writes a product as ``mn`` rather
+    # than ``m*n``.  Restrict this interpretation to two one-letter symbols so
+    # ordinary names such as ``amount`` are never split heuristically.
+    if re.fullmatch(r"[a-z]{2}", expression) and expression not in {"nn", "ll"}:
+        return "O(n^2)"
+
+    factors = expression.split("*")
+    degree = 0
+    logarithmic_factor = False
+    bounded = {str(name).lower() for name in bounded_parameters}
+    for factor in factors:
+        factor = factor.strip("()")
+        if not factor or factor.isdigit():
+            continue
+        if factor.startswith("log"):
+            logarithmic_factor = True
+            continue
+        named = re.fullmatch(r"([a-z][a-z0-9_]*)(?:\^(\d+))?", factor)
+        if named:
+            name, exponent = named.groups()
+            if name not in bounded:
+                degree += int(exponent or 1)
+            continue
+        # A grouped logarithmic term, e.g. ``(logn)^2``, does not change the
+        # polynomial degree of the fixed ladder.
+        if re.fullmatch(r"log[a-z][a-z0-9_]*(?:\^\d+)?", factor):
+            logarithmic_factor = True
+            continue
+        return None
+
+    if degree == 0:
+        return "O(1)"
+    if degree == 1:
+        return "O(n log n)" if logarithmic_factor else "O(n)"
+    if degree == 2:
+        return "O(n^3)" if logarithmic_factor else "O(n^2)"
+    if degree == 3:
+        return "O(n^4+)" if logarithmic_factor else "O(n^3)"
+    return "O(n^4+)"
+
+
+def _symbolic_single_input_rank(compact: str) -> Optional[str]:
+    """Map an exact one-input display expression onto the private rank ladder.
+
+    The report deliberately keeps names such as ``L`` and aggregate input
+    notation such as ``N + Σ|word|``. This helper is used only for score
+    comparison, where they are equivalent to the platform's canonical n when
+    they describe one input scale. Independent dimensions remain unresolved.
+    """
+    compact = str(compact or "")
+    compact = compact.replace("∑", "sum").replace("Σ", "sum").replace("σ", "sum")
+    compact = compact.replace("·", "*").replace("×", "*").replace("**", "^")
+
+    # Count plus a sum of the same collection's element sizes is one total
+    # input scale for the fixed rank ladder: O(N + Σ|word|) -> O(n).
+    aggregate = r"[a-z][a-z0-9_]*"
+    if re.fullmatch(
+        rf"o\((?:{aggregate}\+sum\|{aggregate}\||sum\|{aggregate}\|\+{aggregate})\)",
+        compact,
+    ):
+        return "O(n)"
+
+    if re.fullmatch(r"o\(log\(?[a-z][a-z0-9_]*\)?\)", compact):
+        return "O(log n)"
+    if re.fullmatch(r"o\(sqrt\(?[a-z][a-z0-9_]*\)?\)", compact):
+        return "O(sqrt n)"
+    if re.fullmatch(r"o\(([a-z][a-z0-9_]*)log\1\)", compact):
+        return "O(n log n)"
+    if re.fullmatch(r"o\([a-z][a-z0-9_]*!\)", compact):
+        return "O(n!)"
+    if re.fullmatch(r"o\([2-9]\^[a-z][a-z0-9_]*\)", compact):
+        return "O(2^n)"
+
+    # Constant multiples of one symbolic variable are still linear. The
+    # lower-cased representation makes N and n one display dimension here.
+    additive_terms = compact.removeprefix("o(").removesuffix(")").split("+")
+    if len(additive_terms) > 1:
+        dimensions = []
+        for term in additive_terms:
+            match = re.fullmatch(r"(?:\d+\*?)?([a-z][a-z0-9_]*)", term)
+            if not match:
+                dimensions = []
+                break
+            dimensions.append(match.group(1))
+        if dimensions and len(set(dimensions)) == 1:
+            return "O(n)"
+
+    monomial = re.fullmatch(r"o\(([a-z][a-z0-9_]*)(?:\^(\d+))?\)", compact)
+    if not monomial:
+        return None
+    _name, exponent = monomial.groups()
+    degree = int(exponent or 1)
     if degree == 1:
         return "O(n)"
     if degree == 2:
@@ -269,8 +453,14 @@ def private_time_complexity_breakdown(
             "reason": "The submitted algorithm could not be classified automatically.",
         }
 
-    projected_target = _score_projection(normalized_target, bounded_parameters)
-    projected_student = _score_projection(normalized_student, bounded_parameters)
+    # Project the original expressions so a bounded scalar (for example
+    # ``k <= 100``) is still recognised before display normalization maps a
+    # single variable to the generic n bucket.
+    projected_target = (
+        _score_projection(optimal_time, bounded_parameters)
+        or _benchmark_rank_projection(optimal_time, bounded_parameters)
+    )
+    projected_student = _score_projection(student_time, bounded_parameters)
     if not projected_target or not projected_student:
         return {
             "status": "REVIEW_REQUIRED",
@@ -284,8 +474,18 @@ def private_time_complexity_breakdown(
     optimal_rank = complexity_rank(projected_target)
     student_rank = complexity_rank(projected_student)
     difference = student_rank - optimal_rank
-    # Ten levels create nine intervals between the best and worst ranks.
-    penalty = 0.0 if difference <= 0 else min(25.0, difference * (25.0 / 9.0))
+    # Score the student relative to the benchmark's remaining worse ranks,
+    # rather than against the whole ten-level ladder.  A one-rank regression
+    # from an O(n) target should therefore matter more than a one-rank
+    # regression from an O(1) target: the former has fewer acceptable slower
+    # buckets before reaching the worst category.  This is deterministic and
+    # applies equally to time and auxiliary-space assessments.
+    worse_ranks_available = len(TIME_COMPLEXITY_LEVELS) - optimal_rank
+    penalty = (
+        0.0
+        if difference <= 0
+        else min(25.0, difference * (25.0 / max(1, worse_ranks_available)))
+    )
     marks = round(max(0.0, min(25.0, 25.0 - penalty)), 3)
 
     if difference <= 0:

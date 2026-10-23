@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Dict, Any
+import re
 from agents.base import load_prompt, invoke_agent, sanitize_code_comments
 from workflow.state import EvaluationState
 
@@ -21,6 +22,52 @@ def _is_style_only_advice(text: str) -> bool:
     return any(word in text.lower() for word in (
         "comment", "naming", "readability", "maintainability", "rename",
     ))
+
+
+def _style_finding_text(value: Any) -> str:
+    """Extract the readable message from an analyzer style finding."""
+    if isinstance(value, dict):
+        return str(value.get("message") or value.get("reason") or value.get("detail") or "").strip()
+    return str(value or "").strip()
+
+
+def _source_complexity_feedback(source_code: str, complexity: Dict[str, Any]) -> tuple[List[str], List[str]]:
+    """Describe a measured complexity gap using observable source structure.
+
+    This is intentionally structural rather than problem-name based.  It
+    prevents a correct-but-slow program from receiving empty advice such as
+    "review the analysis" when the source itself exposes repeated loops.
+    """
+    source = str(source_code or "")
+    time = str(complexity.get("time_complexity") or "").strip()
+    classification = str(complexity.get("time_classification") or "").upper()
+    time_score = complexity.get("time_score")
+    try:
+        has_time_gap = classification not in {"", "OPTIMAL"} or float(time_score) < 25
+    except (TypeError, ValueError):
+        has_time_gap = classification not in {"", "OPTIMAL"}
+    if not time or not has_time_gap:
+        return [], []
+
+    loop_headers = re.findall(r"\b(for|while)\s*\(", source)
+    if len(loop_headers) >= 2:
+        sequence = " → ".join(loop_headers[:3])
+        evidence = (
+            f"The submitted source contains {len(loop_headers)} loop headers ({sequence}); "
+            f"the saved analysis reports {time} time."
+        )
+        step = (
+            "Remove the repeated full pass inside the outer iteration; keep the needed "
+            "state in a structure that can provide the next required value without reprocessing the collection."
+        )
+        return [evidence], [step]
+    if loop_headers:
+        return [f"The submitted source has a loop-driven {time} path in the saved analysis."], [
+            "Inspect the loop body for repeated collection work and replace only that bottleneck."
+        ]
+    return [f"The saved source analysis reports {time} time and a non-optimal time result."], [
+        "Apply the recorded complexity suggestion to the operation identified by the analysis."
+    ]
 
 
 def build_evidence_feedback(state: EvaluationState) -> Dict[str, Any]:
@@ -47,6 +94,7 @@ def build_evidence_feedback(state: EvaluationState) -> Dict[str, Any]:
     revealed_case = execution.get("revealed_feedback_case") or {}
     complexity = state.get("complexity_details") or {}
     style = state.get("style_details") or {}
+    source_code = str(submission.get("source_code") or "")
 
     strengths: List[str] = []
     weaknesses: List[str] = []
@@ -90,6 +138,9 @@ def build_evidence_feedback(state: EvaluationState) -> Dict[str, Any]:
             estimates.append(f"extra space {space_complexity}")
         strengths.append("The analysis estimates " + " and ".join(estimates) + ".")
     complexity_issue = str(complexity.get("optimization_suggestion") or "").strip()
+    structural_weaknesses, structural_steps = _source_complexity_feedback(source_code, complexity)
+    weaknesses.extend(structural_weaknesses)
+    steps.extend(structural_steps)
     if complexity_issue and complexity_issue.lower() not in {"none", "n/a", "no optimization suggestion was available."}:
         weaknesses.append(complexity_issue)
         steps.append(complexity_issue)
@@ -103,7 +154,7 @@ def build_evidence_feedback(state: EvaluationState) -> Dict[str, Any]:
     for key in ("naming_issues", "readability_issues", "modularity_issues", "maintainability_issues"):
         values = style.get(key) or []
         if isinstance(values, list):
-            style_findings.extend(str(value) for value in values if value)
+            style_findings.extend(_style_finding_text(value) for value in values if value)
     # Comments are optional documentation, not a grading priority. Keep the
     # feedback focused on concrete structure/readability evidence instead.
     style_findings = [finding for finding in style_findings if "comment" not in finding.lower()]
@@ -199,7 +250,10 @@ async def explainability_node(state: EvaluationState) -> Dict[str, Any]:
         or any(str(case.get("status") or "").lower() != "accepted" for case in public_results)
         or revealed_case
     )
-    if has_correctness_issue:
+    # Deterministic source/test/style evidence is always retained.  The AI can
+    # add educational wording, but it may not replace a concrete observation
+    # with generic praise or an ungrounded recommendation.
+    if has_correctness_issue or fallback["weaknesses"]:
         ai_steps = [step for step in result.get("improvement_steps", []) if not _is_style_only_advice(str(step))]
         result["mentor_feedback"] = fallback["mentor_feedback"]
         result["key_insight"] = fallback["key_insight"]

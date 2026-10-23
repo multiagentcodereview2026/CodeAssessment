@@ -2217,7 +2217,12 @@ def _semantic_fast_path(source: str, language: str) -> ComplexityAnalysis | None
                 signals=["structural:deduplicated-two-input-result"],
             )
 
-    # Stdin/stdout programs with main() function
+    # Stdin/stdout programs with main() function.
+    #
+    # Platform policy: time includes parsing an input collection and emitting
+    # an output collection. Space includes student-owned, input-sized
+    # allocations made inside main(). The stdin/stdout streams themselves
+    # remain runtime infrastructure and are not charged.
     # Only apply this rule if there's NO separate solve/solution function
     # (which would contain the actual algorithm logic)
     has_solve_function = bool(re.search(r"\b(?:solve|solution|process|compute)\s*\(", src))
@@ -2226,27 +2231,42 @@ def _semantic_fast_path(source: str, language: str) -> ComplexityAnalysis | None
         has_input_reading = bool(re.search(r"(?:cin\s*>>|scanf|input\s*\(|sys\.stdin|raw_input)", src))
         has_loops = len(re.findall(r"\b(?:for|while)\b", src)) >= 1
         has_nested_loops = len(re.findall(r"\b(?:for|while)\b", src)) >= 2
-        has_dynamic_storage = bool(re.search(r"(?:vector|array|list|malloc|new\s+)", src))
-        # Under this project's convention, storage used to receive the input
-        # is not auxiliary space.  Recognize the common stdin fill pattern
-        # (``cin >> arr[i]`` / ``scanf(..., &arr[i])``) before charging for a
-        # vector/array declaration.
-        input_backed_storage = bool(re.search(
-            r"(?:cin\s*>>|scanf\s*\([^)]*&|input\s*\()\s*"
-            r"[^;\n]{0,80}\[[^\]]+\]",
+        input_sized_allocation = bool(re.search(
+            r"\b(?:vector|array|list|deque|queue|stack|priority_queue)\s*<[^;{}()]+>\s+\w+\s*"
+            r"\(\s*(?:[a-z_]\w*|\w+\.size\s*\(\))",
             src,
+        )) or bool(re.search(
+            r"\b(?:new\s+\w+\s*\[\s*[a-z_]\w*|\w+\s+\w+\s*\[\s*[a-z_]\w*)",
+            src,
+        ))
+        growing_local_container = bool(re.search(
+            r"\b(?:vector|list|deque|queue|stack|priority_queue|map|set|unordered_map|unordered_set)\b",
+            src,
+        ) and re.search(r"\.\s*(?:push_back|emplace_back|insert|emplace|push)\s*\(", src))
+        string_stream_value = bool(re.search(
+            r"\bstring\s+([a-z_]\w*)\s*;[^{}]{0,400}\bcin\s*>>\s*\1\b",
+            src,
+            re.DOTALL,
+        ))
+        input_owned_storage = input_sized_allocation or growing_local_container or string_stream_value
+        # Reading or printing a value with input-dependent length is linear
+        # work even when there is no explicit source-level loop.
+        streamed_linear_value = input_owned_storage or bool(re.search(
+            r"\bstring\s+([a-z_]\w*)\b[^{}]{0,400}\bcout\s*<<\s*\1\b",
+            src,
+            re.DOTALL,
         ))
 
         if has_input_reading:
             if has_nested_loops:
                 time_complexity = "O(n^2)" if not re.search(r"sort|binary_search", src) else "O(n^2 log n)"
-                space_complexity = "O(n)" if has_dynamic_storage and not input_backed_storage else "O(1)"
+                space_complexity = "O(n)" if input_owned_storage else "O(1)"
             elif has_loops:
                 time_complexity = "O(n log n)" if re.search(r"sort|binary_search", src) else "O(n)"
-                space_complexity = "O(n)" if has_dynamic_storage and not input_backed_storage else "O(1)"
+                space_complexity = "O(n)" if input_owned_storage else "O(1)"
             else:
-                time_complexity = "O(1)"
-                space_complexity = "O(1)"
+                time_complexity = "O(n)" if streamed_linear_value else "O(1)"
+                space_complexity = "O(n)" if input_owned_storage else "O(1)"
 
             return ComplexityAnalysis(
                 time_complexity, space_complexity,
@@ -2254,8 +2274,8 @@ def _semantic_fast_path(source: str, language: str) -> ComplexityAnalysis | None
                 signals=[
                     "semantic:stdin-main-program",
                     *(
-                        ["structural:stdin-input-buffer-excluded-from-auxiliary-space"]
-                        if input_backed_storage
+                        ["structural:stdin-input-sized-allocation"]
+                        if input_owned_storage
                         else []
                     ),
                 ],

@@ -85,7 +85,7 @@ def test_higher_confidence_ai_disagreement_becomes_analyzed_fallback(monkeypatch
     assert scored["complexity_details"]["analysis_status"] != "REVIEW_REQUIRED"
 
 
-def test_ai_fallback_cannot_replace_authoritative_stdin_input_space(monkeypatch):
+def test_ai_fallback_cannot_replace_authoritative_stdin_allocation_space(monkeypatch):
     async def provider(_payload):
         return {
             "time_complexity": "O(n^3)",
@@ -100,11 +100,11 @@ def test_ai_fallback_cannot_replace_authoritative_stdin_input_space(monkeypatch)
     monkeypatch.setattr(analyzer_service, "_review_limiter", analyzer_service.AIReviewRateLimiter(20, 1))
     static = ComplexityAnalysis(
         time_complexity="O(n^2)",
-        space_complexity="O(1)",
+        space_complexity="O(n)",
         confidence=0.85,
         method="ast",
         status="ANALYZED",
-        signals=["structural:stdin-input-buffer-excluded-from-auxiliary-space"],
+        signals=["structural:stdin-input-sized-allocation"],
     )
 
     evidence = asyncio.run(
@@ -115,7 +115,7 @@ def test_ai_fallback_cannot_replace_authoritative_stdin_input_space(monkeypatch)
 
     assert evidence.final is not None
     assert evidence.final.time_complexity == "O(n^3)"
-    assert evidence.final.space_complexity == "O(1)"
+    assert evidence.final.space_complexity == "O(n)"
     assert evidence.final.method == "ai-fallback+ast-space"
 
 

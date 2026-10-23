@@ -81,6 +81,28 @@ def test_offline_feedback_for_a_good_submission_does_not_invent_changes():
     assert "keep this version" in feedback["improvement_steps"][0]
 
 
+def test_offline_feedback_names_observed_loop_structure_for_a_time_gap():
+    feedback = build_evidence_feedback({
+        "problem": {"title": "Repeated work"},
+        "submission": {
+            "language": "cpp",
+            "source_code": "while (n--) { for (int i=0;i<n;++i) {} }",
+        },
+        "execution_result": {
+            "compile_status": "success",
+            "results": [{"status": "accepted", "is_hidden": False}],
+        },
+        "complexity_details": {
+            "time_complexity": "O(n^2)",
+            "time_classification": "MODERATE",
+            "time_score": 16.667,
+        },
+    })
+
+    assert any("2 loop headers" in weakness for weakness in feedback["weaknesses"])
+    assert any("repeated full pass" in step for step in feedback["improvement_steps"])
+
+
 def test_offline_feedback_for_a_compile_failure_uses_the_first_diagnostic():
     feedback = build_evidence_feedback({
         "problem": {"title": "Reverse String"},

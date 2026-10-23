@@ -30,9 +30,20 @@ try:
         max_retries=settings.GROQ_MAX_RETRIES,
         model_kwargs={"response_format": {"type": "json_object"}}
     )
+    # Some Groq-compatible models intermittently reject response_format on a
+    # valid request.  Revision is learner-triggered and already asks for JSON,
+    # so retain a plain-client retry before falling back to non-code guidance.
+    plain_llm = ChatGroq(
+        model_name=settings.GROQ_MODEL,
+        temperature=0.0,
+        groq_api_key=groq_api_key,
+        timeout=settings.GROQ_TIMEOUT_SECONDS,
+        max_retries=0,
+    )
 except Exception as e:
     logger.warning(f"Could not initialize ChatGroq ({e}). Mocking LLM for offline testing.")
     llm = None
+    plain_llm = None
 
 def load_prompt(agent_name: str) -> str:
     """Load agent system prompt from text file."""
@@ -69,17 +80,27 @@ async def invoke_agent(system_prompt: str, user_payload: Dict[str, Any], schema:
         logger.info("Using deterministic fallback logic (No GROQ_API_KEY provided)")
         return {**fallback_dict, "analysis_source": "fallback"}
 
+    messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=json.dumps(user_payload))
+    ]
     try:
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=json.dumps(user_payload))
-        ]
         response = await llm.ainvoke(messages)
         content = extract_clean_json(response.content)
-        
         validated = schema.model_validate_json(content)
         return {**validated.model_dump(), "analysis_source": "groq"}
     except Exception as exc:
+        # Retry only malformed-provider-request failures without the optional
+        # response-format parameter. Do not retry rate limits, timeouts, or
+        # invalid model output indefinitely.
+        if getattr(exc, "status_code", None) == 400 and plain_llm is not None:
+            try:
+                response = await plain_llm.ainvoke(messages)
+                content = extract_clean_json(response.content)
+                validated = schema.model_validate_json(content)
+                return {**validated.model_dump(), "analysis_source": "groq"}
+            except Exception as retry_error:
+                exc = retry_error
         # AI feedback is optional.  Preserve deterministic AST/execution
         # results and return immediately instead of retrying a rate-limited
         # provider request until the whole submission times out. Log only the

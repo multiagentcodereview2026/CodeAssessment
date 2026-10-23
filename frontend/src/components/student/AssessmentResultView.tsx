@@ -12,6 +12,13 @@ const str = (x: unknown) => typeof x === 'string' ? x : '';
 const list = (x: unknown): string[] => Array.isArray(x) ? x.filter((v): v is string => typeof v === 'string' && !!v.trim()) : [];
 const num = (x: unknown): number | null => typeof x === 'number' && Number.isFinite(x) ? x : null;
 const formatScore = (score: number) => Number(score.toFixed(1));
+// Older assessments may contain a Python-serialized style-finding object.
+// New records are normalized by the backend; this keeps historical feedback
+// readable without changing its meaning.
+const readableEvidenceStep = (step: string) => {
+  const message = step.match(/["']message["']\s*:\s*["']([^"']+)/i);
+  return message?.[1]?.trim() || step;
+};
 const explainComplexity = (value: string, dimension: 'time' | 'space') => {
   const normalized = value.replace(/\s/g, '').toLowerCase();
   const resource = dimension === 'time' ? 'work' : 'extra memory';
@@ -85,7 +92,8 @@ export const AssessmentResultView: React.FC = () => {
     const failedPublicCases = publicCases.filter(({ result }: { result: R }) => String(result.status).toLowerCase() !== 'accepted');
     const revealedCase = obj(execution.revealed_feedback_case);
     const hasRevealedCase = Boolean(str(revealedCase.status));
-    const savedSteps = list(feedback.improvement_steps).length ? list(feedback.improvement_steps) : list(recommendations.steps).length ? list(recommendations.steps) : list(feedback.weaknesses);
+    const savedSteps = (list(feedback.improvement_steps).length ? list(feedback.improvement_steps) : list(recommendations.steps).length ? list(recommendations.steps) : list(feedback.weaknesses))
+      .map(readableEvidenceStep);
     const isGenericFallback = feedback.feedback_source === 'fallback'
       || str(feedback.mentor_feedback).includes('temporarily unavailable')
       || savedSteps.some((step: string) => step.includes('Review the correctness, complexity, and style evidence above'));
@@ -127,16 +135,10 @@ export const AssessmentResultView: React.FC = () => {
       { name: 'Space complexity', score: weightedMark(space, spaceMax, 30), max: 30, color: 'bg-amber-500', detail: [str(complexity.space_complexity), str(complexity.space_classification), explainComplexity(str(complexity.space_complexity), 'space'), 'Weight: 30%.'].filter(Boolean).join(' · ') || 'Space analysis unavailable.' },
       { name: 'Style', score: weightedMark(style, 100, 20), max: 20, color: 'bg-violet-500', detail: 'Code style assessment. Weight: 20%.' }
     ];
-    // For accepted work, lead with the dimensions that actually lost marks.
-    // This avoids generic comment/naming advice when complexity is the larger gap.
-    const scoreGapSteps = !hasCorrectnessIssue ? rows
-      .filter((row: any) => row.score != null && row.score < row.max - 0.1)
-      .sort((a: any, b: any) => (b.max - b.score) - (a.max - a.score))
-      .map((row: any) => row.name === 'Style'
-        ? `Style earned ${formatScore(row.score)}/${row.max}. Use the recorded style findings to make one focused readability or structure improvement.`
-        : `${row.name} earned ${formatScore(row.score)}/${row.max}. Review the saved ${row.name.toLowerCase()} analysis before changing a working solution.`)
-      : [];
-    const steps = hasCorrectnessIssue ? baseSteps : [...scoreGapSteps, ...baseSteps].filter((step, index, all) => all.indexOf(step) === index);
+    // The feedback cards must describe saved code, test, or analyzer evidence
+    // for this submission. Scores are already shown in the evidence panel and
+    // must not be converted into generic messages that hide the real finding.
+    const steps = baseSteps;
     const legacyFixedProjection = /top 12%|quick pass on clean naming/i.test(str(projection.motivational_message));
     const compileFailed = String(execution.compile_status || '').toLowerCase() === 'error';
     const compilerDiagnostics = str(execution.compile_error) || str(execution.stderr);
@@ -144,28 +146,29 @@ export const AssessmentResultView: React.FC = () => {
     const rawScore = num(scoreGate.raw_score);
     const correctnessFactor = num(scoreGate.correctness_factor);
     const scoreCap = num(scoreGate.score_cap);
-    const storedProjection = projection.available === false || legacyFixedProjection || str(projection.projection_basis) !== 'correctness_fix_scenario'
-      ? null
-      : num(projection.projected_score);
-    const correctnessNeedsFix = correctness != null && correctness < 100;
-    const projected = storedProjection ?? (correctnessNeedsFix && rawScore != null ? Math.max(num(submission.overall_score) ?? 0, rawScore) : null);
+    // A score scenario must originate from the persisted deterministic
+    // projection. The browser must never manufacture one from partial data:
+    // the backend may have intentionally withheld it (for example, because a
+    // generated revision did not verify or the saved breakdown is incomplete).
+    const storedProjection = projection.available === true
+      && !legacyFixedProjection
+      && str(projection.projection_basis) === 'same_components_after_correctness_fix'
+      ? num(projection.projected_score)
+      : null;
+    const projected = storedProjection;
     const gain = projected != null && submission.overall_score != null ? Math.max(0, projected - submission.overall_score) : null;
     const projectionAssumptions = storedProjection != null
       ? list(projection.assumptions)
-      : projected != null
-        ? ['The revised code passes every evaluated test case.', 'Its time complexity, space complexity, and style scores remain unchanged.']
-        : [];
+      : [];
     const projectionMessage = storedProjection != null
       ? str(projection.message)
-      : projected != null
-        ? 'This expected score scenario is calculated from saved assessment evidence. Submit the exact revised code to the judge to confirm it.'
-        : '';
+      : '';
     return { execution, complexity, feedback, recommendations, results, publicCases, publicPassingCases, failedPublicCases, revealedCase, hasRevealedCase, hasCorrectnessIssue, passed, total, accepted, steps, strengths, rows, projected, gain, projectionAssumptions, projectionMessage, compileFailed, compilerDiagnostics, isGenericFallback, unrelatedSavedFeedback, rawScore, correctnessFactor, scoreCap };
   }, [submission]);
   const revisedSuggestion = useMemo(() => parseSuggestion(submission?.improved_code), [submission?.improved_code]);
-  const revisedCode = str(revisedSuggestion?.improved_code) || str(revisedSuggestion?.code) || str(revisedSuggestion?.suggested_code) || str(revisedSuggestion?.revised_code);
+  const rawRevisedCode = str(revisedSuggestion?.improved_code) || str(revisedSuggestion?.code) || str(revisedSuggestion?.suggested_code) || str(revisedSuggestion?.revised_code);
   const taskText = `${title} ${submission?.problem_id || ''}`.toLowerCase();
-  const unrelatedTwoSumSuggestion = /\btwo\s*sum\b|\btwosum\s*\(/i.test(revisedCode)
+  const unrelatedTwoSumSuggestion = /\btwo\s*sum\b|\btwosum\s*\(/i.test(rawRevisedCode)
     && !(/\btwo\s*sum\b|\btwosum\s*\(/i.test(taskText));
   const revisedChanges = Array.isArray(revisedSuggestion?.changes) ? revisedSuggestion.changes.map(obj) : [];
   const revisedExplanation = str(revisedSuggestion?.improvement_explanation) || str(revisedSuggestion?.change_summary);
@@ -175,9 +178,23 @@ export const AssessmentResultView: React.FC = () => {
   const revisionVerificationMessage = str(revisionVerification.message);
   const revisionExplanationOnly = revisionVerificationStatus === 'explanation_only';
   const revisionGuidanceOnly = ['guidance_only', 'guided_step', 'no_change'].includes(revisionVerificationStatus);
+  // Historical guided artifacts may contain a full program. Guided learning
+  // deliberately shows only the stage snippets, never that replacement code.
+  const revisedCode = revisionGuidanceOnly ? '' : rawRevisedCode;
   const guidedSteps = list(revisedSuggestion?.guided_steps);
   const algorithmOutline = list(revisedSuggestion?.algorithm_outline);
+  const futurePlan = list(revisedSuggestion?.future_plan);
+  const revisionEvidenceLinks = list(revisedSuggestion?.evidence_links);
   const revisionStage = str(revisedSuggestion?.stage);
+  const revisionComparison = obj(revisedSuggestion?.comparison);
+  const revisionComparisonMessage = str(revisionComparison.message);
+  const revisionProjection = obj(revisedSuggestion?.score_projection);
+  const revisionProjectedScore = revisionProjection.available === true && revisionProjection.verified === true
+    ? num(revisionProjection.projected_score)
+    : null;
+  const revisionCurrentScore = revisionProjectedScore != null ? num(revisionProjection.current_score) : null;
+  const revisionGain = revisionProjectedScore != null ? num(revisionProjection.expected_improvement) : null;
+  const revisionComponents = obj(revisionProjection.stage_components);
   const noRevisionNeeded = revisionVerificationStatus === 'no_change';
   const revisionUnavailable = (!revisedCode && !revisionExplanationOnly && !revisionGuidanceOnly) || unrelatedTwoSumSuggestion;
 
@@ -233,6 +250,8 @@ export const AssessmentResultView: React.FC = () => {
 */}
     <details className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><summary className="cursor-pointer font-semibold text-slate-800">View submitted source code</summary><pre className="mt-4 max-h-[32rem] overflow-auto rounded-xl bg-slate-950 p-4 text-xs leading-relaxed text-slate-100"><code>{submission.code}</code></pre></details>
     {revisionUnavailable&&!revisionExplanationOnly&&<section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5"><h2 className="font-bold text-indigo-950">Need a learning step?</h2><p className="mt-1 text-sm text-indigo-900">Get one focused improvement for this attempt. Submit your own changed code to unlock the next step.</p><button type="button" onClick={generateRevision} disabled={revisionLoading} className="mt-3 rounded-lg bg-indigo-700 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-60">{revisionLoading ? 'Preparing guidance…' : 'Get next step'}</button>{revisionError&&<p role="alert" className="mt-2 text-sm text-rose-700">{revisionError}</p>}</section>}
-    {(revisedCode||revisionExplanationOnly||revisionGuidanceOnly)&&!unrelatedTwoSumSuggestion&&<details className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><summary className="flex cursor-pointer items-center justify-between gap-3 px-5 py-4 font-semibold text-slate-800 marker:text-indigo-600"><span>{noRevisionNeeded ? 'Revision check' : revisionGuidanceOnly || revisionExplanationOnly ? 'Guided learning step' : revisionPassed ? 'Verified reference revision' : 'Suggested revised code'}</span><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${revisionPassed || noRevisionNeeded ? 'bg-emerald-100 text-emerald-800' : revisionVerificationStatus === 'verification_failed' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>{revisionPassed ? 'Verified' : noRevisionNeeded ? 'No change needed' : revisionGuidanceOnly ? 'Guided step' : revisionExplanationOnly ? 'Explanation only' : revisionVerificationStatus === 'verification_failed' ? 'Not verified' : 'Draft'}</span></summary><div className="space-y-5 border-t border-slate-100 p-5"><p className="text-sm text-slate-700">{revisionVerificationMessage}</p>{revisionStage&&revisionStage!=='NO_CHANGE'&&<p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Stage: {revisionStage.replace(/_/g, ' ')}</p>}{revisedExplanation&&<div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4"><h3 className="text-sm font-bold text-indigo-950">What to do next</h3><p className="mt-1 text-sm leading-relaxed text-indigo-900">{revisedExplanation}</p></div>}{guidedSteps.length>0&&<div><h3 className="text-sm font-bold text-slate-800">Your next actions</h3><ol className="mt-2 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-700">{guidedSteps.map((step,index)=><li key={index}>{step}</li>)}</ol></div>}{algorithmOutline.length>0&&<div><h3 className="text-sm font-bold text-slate-800">Algorithm outline</h3><ol className="mt-2 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-700">{algorithmOutline.map((step,index)=><li key={index}>{step}</li>)}</ol></div>}{revisedChanges.length>0&&<div className="space-y-3"><h3 className="text-sm font-bold text-slate-800">Code improvements</h3>{revisedChanges.map((change:R,index:number)=><article key={index} className="rounded-xl border border-slate-200 p-4"><p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Change {index+1}</p><div className="grid gap-3 md:grid-cols-2">{str(change.line_original)&&<div><p className="mb-1 text-xs font-semibold text-rose-700">Before</p><pre className="whitespace-pre-wrap break-words rounded-lg bg-rose-50 p-3 text-xs text-slate-800"><code>{change.line_original}</code></pre></div>}{str(change.line_improved)&&<div><p className="mb-1 text-xs font-semibold text-emerald-700">After</p><pre className="whitespace-pre-wrap break-words rounded-lg bg-emerald-50 p-3 text-xs text-slate-800"><code>{change.line_improved}</code></pre></div>}</div>{str(change.reason)&&<p className="mt-3 text-sm leading-relaxed text-slate-600">{change.reason}</p>}</article>)}</div>}{revisedCode&&<div><div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-bold text-slate-800">{revisionPassed ? 'Verified reference solution' : 'Full suggested solution'}</h3><span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">{submission.language.toUpperCase()}</span></div><pre className="max-h-[36rem] overflow-auto rounded-xl bg-slate-950 p-4 text-sm leading-relaxed text-slate-100"><code>{revisedCode}</code></pre></div>}</div></details>}
+    {(revisedCode||revisionExplanationOnly||revisionGuidanceOnly)&&!unrelatedTwoSumSuggestion&&<details className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><summary className="flex cursor-pointer items-center justify-between gap-3 px-5 py-4 font-semibold text-slate-800 marker:text-indigo-600"><span>{noRevisionNeeded ? 'Revision check' : revisionGuidanceOnly || revisionExplanationOnly ? 'Guided learning step' : revisionStage ? 'Verified revision stage' : revisionPassed ? 'Verified reference revision' : 'Suggested revised code'}</span><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${revisionPassed || noRevisionNeeded ? 'bg-emerald-100 text-emerald-800' : revisionVerificationStatus === 'verification_failed' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>{revisionPassed ? 'Verified' : noRevisionNeeded ? 'No change needed' : revisionGuidanceOnly ? 'Guided step' : revisionExplanationOnly ? 'Explanation only' : revisionVerificationStatus === 'verification_failed' ? 'Not verified' : 'Draft'}</span></summary><div className="space-y-5 border-t border-slate-100 p-5"><p className="text-sm text-slate-700">{revisionVerificationMessage}</p>{revisionComparisonMessage&&<p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">{revisionComparisonMessage}</p>}{revisionGuidanceOnly&&!noRevisionNeeded&&<p className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-sm text-indigo-900">This stage gives an approach, not copy-paste code. Write it in your own solution, then submit it to unlock the next stage and updated evidence.</p>}{revisionStage&&revisionStage!=='NO_CHANGE'&&<p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Stage: {revisionStage.replace(/_/g, ' ')}</p>}{revisionProjectedScore!=null&&<section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-emerald-800">Verified stage score projection</p><div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1"><span className="font-mono text-2xl font-extrabold text-emerald-800">{revisionCurrentScore ?? '—'} → {revisionProjectedScore}/100</span>{revisionGain!=null&&<span className={`text-sm font-bold ${revisionGain >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{revisionGain >= 0 ? '+' : ''}{revisionGain} pts</span>}</div><p className="mt-2 text-xs text-emerald-900">Stage evidence: correctness {revisionComponents.correctness ?? '—'}% · time {revisionComponents.time ?? '—'}% · space {revisionComponents.space ?? '—'}% · style {revisionComponents.style ?? '—'}%.</p><p className="mt-2 text-xs text-emerald-900">{str(revisionProjection.message)}</p></section>}{revisedExplanation&&<div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4"><h3 className="text-sm font-bold text-indigo-950">What to do next</h3><p className="mt-1 text-sm leading-relaxed text-indigo-900">{revisedExplanation}</p></div>}{guidedSteps.length>0&&<div><h3 className="text-sm font-bold text-slate-800">Your next actions</h3><ol className="mt-2 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-700">{guidedSteps.map((step,index)=><li key={index}>{step}</li>)}</ol></div>}{algorithmOutline.length>0&&<div><h3 className="text-sm font-bold text-slate-800">Algorithm outline</h3><ol className="mt-2 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-700">{algorithmOutline.map((step,index)=><li key={index}>{step}</li>)}</ol></div>}{!revisionGuidanceOnly&&revisedChanges.length>0&&<div className="space-y-3"><h3 className="text-sm font-bold text-slate-800">Code improvements</h3>{revisedChanges.map((change:R,index:number)=><article key={index} className="rounded-xl border border-slate-200 p-4"><p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Change {index+1}</p><div className="grid gap-3 md:grid-cols-2">{str(change.line_original)&&<div><p className="mb-1 text-xs font-semibold text-rose-700">Before</p><pre className="whitespace-pre-wrap break-words rounded-lg bg-rose-50 p-3 text-xs text-slate-800"><code>{change.line_original}</code></pre></div>}{str(change.line_improved)&&<div><p className="mb-1 text-xs font-semibold text-emerald-700">After</p><pre className="whitespace-pre-wrap break-words rounded-lg bg-emerald-50 p-3 text-xs text-slate-800"><code>{change.line_improved}</code></pre></div>}</div>{str(change.reason)&&<p className="mt-3 text-sm leading-relaxed text-slate-600">{change.reason}</p>}</article>)}</div>}{revisedCode&&<div><div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-bold text-slate-800">{revisionStage ? 'Guided stage code' : revisionPassed ? 'Verified reference solution' : 'Full suggested solution'}</h3><span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">{submission.language.toUpperCase()}</span></div><pre className="max-h-[36rem] overflow-auto rounded-xl bg-slate-950 p-4 text-sm leading-relaxed text-slate-100"><code>{revisedCode}</code></pre></div>}</div></details>}
+    {revisionEvidenceLinks.length>0&&revisionGuidanceOnly&&<section className="rounded-2xl border border-violet-200 bg-violet-50 p-5"><h2 className="text-sm font-bold text-violet-950">Why this stage</h2><ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-violet-900">{revisionEvidenceLinks.map((item,index)=><li key={index}>{item}</li>)}</ul></section>}
+    {futurePlan.length>0&&revisionGuidanceOnly&&<section className="rounded-2xl border border-sky-200 bg-sky-50 p-5"><h2 className="text-sm font-bold text-sky-950">Future stages</h2><p className="mt-1 text-sm text-sky-900">These stay locked until you submit your own change for the current stage.</p><ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-sky-900">{futurePlan.map((step,index)=><li key={index}>{step}</li>)}</ol></section>}
   </main>;
 };

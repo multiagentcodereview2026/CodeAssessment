@@ -78,7 +78,7 @@ def test_cpp_sliding_window_left_right_names_are_not_tree_space_evidence():
     assert result.space_complexity == "O(n)"
 
 
-def test_stdin_input_buffer_is_explicitly_marked_as_non_auxiliary_space():
+def test_stdin_input_sized_vector_counts_as_student_space():
     source = (
         "#include <iostream>\n#include <vector>\nusing namespace std;\n"
         "int main(){ int n; cin >> n; vector<int> values(n); "
@@ -86,8 +86,18 @@ def test_stdin_input_buffer_is_explicitly_marked_as_non_auxiliary_space():
         "for(int value: values) total += value; cout << total; }"
     )
     result = analyze_source(source, "cpp")
-    assert result.space_complexity == "O(1)"
-    assert "structural:stdin-input-buffer-excluded-from-auxiliary-space" in result.signals
+    assert result.space_complexity == "O(n)"
+    assert "structural:stdin-input-sized-allocation" in result.signals
+
+
+def test_stdin_string_read_and_output_include_linear_work_and_space():
+    source = (
+        "#include <iostream>\n#include <string>\nusing namespace std;\n"
+        "int main(){ string word; cin >> word; cout << word; }"
+    )
+    result = analyze_source(source, "cpp")
+    assert result.time_complexity == "O(n)"
+    assert result.space_complexity == "O(n)"
 
 
 def test_linear_vote_style_scan_is_classified_from_structure_not_function_name():

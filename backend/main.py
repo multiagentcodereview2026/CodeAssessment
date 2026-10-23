@@ -80,9 +80,12 @@ from schemas import (
     utc_isoformat,
 )
 from docker_runner.executor import execute_code_sandboxed
-from agents.complexity import analyze_student_complexity, unavailable_analysis
+from agents.complexity import analyze_student_complexity, complexity_node, unavailable_analysis
+from agents.correctness import correctness_node
+from agents.style import style_node
+from agents.projection import verified_revision_projection
 from agents.base import llm, extract_clean_json
-from agents.revision import guided_revision_node, revision_node
+from agents.revision import guided_future_plan, guided_revision_fallback, guided_revision_node, revision_node
 from agents.revision_verification import summarize_revision_verification, unverified_revision
 from workflow.graph import evaluation_graph
 from workflow.state import EvaluationState
@@ -542,10 +545,217 @@ async def verify_generated_revision(revision, language, test_cases):
     return safe
 
 
+async def score_revision_stage(
+    *,
+    original_submission: models.Submission,
+    problem: models.Problem,
+    source_code: str,
+    language: str,
+    test_cases: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Judge one generated revision stage with the official scoring components.
+
+    The result is kept inside the revision artifact rather than as a saved
+    submission: generated code is not an official learner attempt. Hidden
+    inputs and outputs never leave this function.
+    """
+    unavailable = {
+        "available": False,
+        "verified": False,
+        "projected_score": None,
+        "current_score": original_submission.overall_score,
+        "expected_improvement": None,
+        "assumptions": [],
+    }
+    try:
+        execution = await execute_code_sandboxed(
+            source_code=source_code,
+            language=language,
+            test_cases=test_cases,
+            stop_on_first_failure=False,
+        )
+    except Exception:
+        return {**unavailable, "message": "The revision stage could not be judged, so no score projection is shown."}
+
+    if execution.get("execution_status") == "system_error":
+        return {**unavailable, "message": "The judge was unavailable, so this revision stage has no score projection."}
+
+    static = analyze_static_complexity(source_code, language)
+    dynamic = (
+        profile_execution_results(test_cases, execution)
+        if static.confidence < settings.COMPLEXITY_AST_DIRECT_CONFIDENCE
+        else None
+    )
+    try:
+        evidence = await analyze_submission_complexity(
+            source_code=source_code,
+            language=language,
+            static_result=static,
+            dynamic_result=dynamic,
+        )
+        analysis = asdict(evidence.final) if evidence.final is not None else unavailable_analysis(
+            "No complexity result is available for this revision stage."
+        )
+        if evidence.static is not None:
+            analysis["ast_estimate"] = {
+                "time_complexity": evidence.static.time_complexity,
+                "space_complexity": evidence.static.space_complexity,
+                "status": evidence.static.status,
+                "method": evidence.static.method,
+            }
+        if evidence.ai_review is not None:
+            analysis["ai_estimate"] = {
+                "time_complexity": evidence.ai_review.get("ai_time_complexity"),
+                "space_complexity": evidence.ai_review.get("ai_space_complexity"),
+                "status": evidence.ai_review.get("status"),
+            }
+    except Exception:
+        analysis = unavailable_analysis(
+            "The complexity analysis service was unavailable for this revision stage."
+        )
+
+    state: dict[str, Any] = {
+        "problem": {
+            "title": problem.title,
+            "statement": problem.description,
+            "constraints": problem.constraints or [],
+            "category": problem.category,
+            "difficulty": problem.difficulty,
+        },
+        "submission": {"source_code": source_code, "language": language},
+        "execution_result": execution,
+        "complexity_target": {
+            "time": problem.target_time_complexity,
+            "space": problem.target_space_complexity,
+            "constraints": [*(problem.constraints or []), problem.description or ""],
+        },
+        "precomputed_complexity_analysis": analysis,
+    }
+    correctness = await correctness_node(state)
+    state.update(correctness)
+    complexity = await complexity_node(state)
+    state.update(complexity)
+    style = await style_node(state)
+
+    return verified_revision_projection(
+        current_score=original_submission.overall_score,
+        correctness_score=correctness.get("correctness_score"),
+        complexity_details=complexity.get("complexity_details"),
+        style_score=style.get("style_score"),
+    )
+
+
 def normalized_submission_fingerprint(source_code: str) -> str:
     """Compare attempts without treating whitespace-only edits as progress."""
     normalized = re.sub(r"\s+", "", str(source_code or ""))
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def previous_guided_revision_context(db: Session, submission: models.Submission) -> dict[str, Any] | None:
+    """Return the learner's latest earlier guided stage for this same problem.
+
+    The revision model receives the previous learner attempt and its guided
+    snippets, so it can assess what the learner carried forward instead of
+    repeating a generic first-step suggestion. This data belongs to the same
+    student and contains no judge-private test information.
+    """
+    assignment_filter = (
+        models.Submission.assignment_id.is_(None)
+        if submission.assignment_id is None
+        else models.Submission.assignment_id == submission.assignment_id
+    )
+    earlier = (
+        db.query(models.Submission)
+        .filter(
+            models.Submission.student_id == submission.student_id,
+            models.Submission.problem_id == submission.problem_id,
+            assignment_filter,
+            models.Submission.id != submission.id,
+        )
+        .order_by(models.Submission.created_at.desc(), models.Submission.id.desc())
+        .all()
+    )
+    current_fingerprint = normalized_submission_fingerprint(submission.code)
+    for candidate in earlier:
+        saved = candidate.improved_code if isinstance(candidate.improved_code, dict) else {}
+        if saved.get("revision_policy") != "GUIDED_STEPS" or not saved.get("stage"):
+            continue
+        previous_fingerprint = normalized_submission_fingerprint(candidate.code)
+        return {
+            "submission_id": candidate.submission_id,
+            "stage": str(saved.get("stage") or ""),
+            "student_source_code": candidate.code,
+            "guided_changes": saved.get("changes") if isinstance(saved.get("changes"), list) else [],
+            "guided_steps": saved.get("guided_steps") if isinstance(saved.get("guided_steps"), list) else [],
+            "change_summary": str(saved.get("change_summary") or ""),
+            "current_code_changed": current_fingerprint != previous_fingerprint,
+        }
+    return None
+
+
+def complexity_growth_rank(complexity: dict[str, Any] | None) -> int | None:
+    """Rank common asymptotic labels for revision progression only.
+
+    This is deliberately separate from score calculation.  It merely prevents
+    a coaching stage from jumping to a different algorithm family before the
+    learner has demonstrated a smaller improvement.
+    """
+    label = str((complexity or {}).get("time_complexity") or "").lower()
+    compact = re.sub(r"\s+", "", label).replace("³", "^3").replace("²", "^2")
+    if not compact or "review" in compact:
+        return None
+    if "n!" in compact:
+        return 8
+    if "2^n" in compact or "^n" in compact:
+        return 7
+    if "n^4" in compact or "n4" in compact:
+        return 6
+    if "n^3" in compact or "n3" in compact:
+        return 5
+    if "n^2" in compact or "n2" in compact:
+        return 4
+    if "nlogn" in compact or "n*logn" in compact:
+        return 3
+    if "o(n)" in compact or compact == "n":
+        return 2
+    if "logn" in compact:
+        return 1
+    if "o(1)" in compact or compact == "1":
+        return 0
+    return None
+
+
+def has_measured_local_optimization_progress(db: Session, submission: models.Submission) -> bool:
+    """Require evidence of an earlier local improvement before a major rewrite."""
+    if db is None:
+        return False
+    current_rank = complexity_growth_rank(submission.complexity_details)
+    if current_rank is None:
+        return False
+    assignment_filter = (
+        models.Submission.assignment_id.is_(None)
+        if submission.assignment_id is None
+        else models.Submission.assignment_id == submission.assignment_id
+    )
+    earlier = (
+        db.query(models.Submission)
+        .filter(
+            models.Submission.student_id == submission.student_id,
+            models.Submission.problem_id == submission.problem_id,
+            assignment_filter,
+            models.Submission.id != submission.id,
+        )
+        .order_by(models.Submission.created_at.desc(), models.Submission.id.desc())
+        .all()
+    )
+    for candidate in earlier:
+        saved = candidate.improved_code if isinstance(candidate.improved_code, dict) else {}
+        if str(saved.get("stage") or "") not in {"OPTIMIZE_LOCAL", "OPTIMIZE_MANUAL_WORK"}:
+            continue
+        previous_rank = complexity_growth_rank(candidate.complexity_details)
+        if previous_rank is not None and current_rank < previous_rank:
+            return True
+    return False
 
 
 def guided_revision_stage(db: Session, submission: models.Submission) -> str:
@@ -556,21 +766,32 @@ def guided_revision_stage(db: Session, submission: models.Submission) -> str:
     total = int(execution.get("total_cases") or 0)
     accepted = compile_status == "success" and total > 0 and passed == total
 
-    # Public-only mode is useful for local demonstrations, but passing public
-    # examples is not enough evidence to reveal a reference-quality rewrite.
-    # Keep the learner on a guided stage until full evaluation is enabled.
-    public_only_mode = os.getenv("PUBLIC_ONLY_EXECUTION", "false").lower() in {"1", "true", "yes"}
-
-    if accepted and not public_only_mode:
+    # Coaching stage selection must use the saved assessment evidence even in
+    # public-only development mode.  Falling back to attempt count here made a
+    # first brute-force solution appear as a final CONVERGE-stage attempt.
+    if accepted:
         complexity = submission.complexity_details or {}
         time_class = str(complexity.get("time_classification") or "").upper()
         space_class = str(complexity.get("space_classification") or "").upper()
-        has_refinement = (
-            (submission.style_score is not None and submission.style_score < 99.9)
-            or time_class not in {"", "OPTIMAL"}
-            or space_class not in {"", "OPTIMAL"}
-        )
-        return "REFINEMENT" if has_refinement else "NO_CHANGE"
+        # An efficiency gap must be addressed before cosmetic refinement.
+        # Otherwise a correct but brute-force submission would skip directly
+        # to style feedback rather than receiving its next algorithmic step.
+        if time_class not in {"", "OPTIMAL"}:
+            source = str(submission.code or "").lower()
+            loop_headers = len(re.findall(r"\b(for|while)\s*\(", source))
+            if has_measured_local_optimization_progress(db, submission):
+                return "OPTIMIZE_DATA_STRUCTURE"
+            # Manual repeated sorting is a teachable intermediate stage.  Do
+            # not jump from a cubic bubble-sort implementation to a heap in
+            # one revision just because the final data structure is known.
+            if "swap(" in source and loop_headers >= 3 and "priority_queue" not in source:
+                return "OPTIMIZE_MANUAL_WORK"
+            return "OPTIMIZE_LOCAL"
+        if space_class not in {"", "OPTIMAL"} or (
+            submission.style_score is not None and submission.style_score < 99.9
+        ):
+            return "REFINEMENT"
+        return "NO_CHANGE"
 
     if compile_status != "success":
         return "FOUNDATION"
@@ -593,6 +814,36 @@ def guided_revision_stage(db: Session, submission: models.Submission) -> str:
     if count == 3:
         return "OPTIMIZE"
     return "CONVERGE"
+
+
+def guided_revision_evidence_links(submission: models.Submission) -> list[str]:
+    """Build local, auditable links from a revision stage to saved evidence.
+
+    These strings are deliberately constructed inside the application instead
+    of sending additional learner scores or feedback to an external provider.
+    """
+    complexity = submission.complexity_details or {}
+    feedback = submission.feedback or {}
+    links: list[str] = []
+    time = str(complexity.get("time_complexity") or "").strip()
+    raw_time = complexity.get("time_score")
+    raw_time_max = complexity.get("time_score_max") or 25
+    try:
+        time_mark = round(float(raw_time) / float(raw_time_max) * 30, 1)
+        links.append(f"Time complexity: {time or 'recorded analysis'} earned {time_mark}/30.")
+    except (TypeError, ValueError, ZeroDivisionError):
+        if time:
+            links.append(f"Time complexity evidence: {time}.")
+    try:
+        style_mark = round(float(submission.style_score) / 100 * 20, 1)
+        if style_mark < 19.9:
+            links.append(f"Style evidence: earned {style_mark}/20.")
+    except (TypeError, ValueError):
+        pass
+    insight = str(feedback.get("key_insight") or "").strip() if isinstance(feedback, dict) else ""
+    if insight:
+        links.append(f"Explainability finding: {insight}")
+    return links[:3]
 
 app = FastAPI(
     title="Explainable Multi-Agent AI Code Evaluator (Production API)",
@@ -1566,9 +1817,30 @@ async def regenerate_submission_revision(
     if policy == "GUIDED_STEPS":
         stage = guided_revision_stage(db, submission)
         saved = submission.improved_code if isinstance(submission.improved_code, dict) else {}
-        if saved.get("revision_policy") == "GUIDED_STEPS" and saved.get("stage") == stage:
+        if (
+            saved.get("revision_policy") == "GUIDED_STEPS"
+            and saved.get("stage") == stage
+            and saved.get("guidance_version") == 3
+            and str((saved.get("verification") or {}).get("status") or "")
+            in {"guided_step", "no_change"}
+            and (
+                stage == "NO_CHANGE"
+                or (
+                    not str(saved.get("improved_code") or "").strip()
+                    and isinstance(saved.get("future_plan"), list)
+                )
+            )
+        ):
             return {"improved_code": saved}
 
+    previous_revision = previous_guided_revision_context(db, submission) if policy == "GUIDED_STEPS" else None
+    # Ignore legacy stages that were generated under the earlier retry-count
+    # policy. They are not valid predecessors for the new measured ladder.
+    if stage in {"OPTIMIZE_MANUAL_WORK", "OPTIMIZE_LOCAL"}:
+        # A local optimization begins a fresh measured rung. Earlier
+        # generated stages may have been produced by the retired retry-count
+        # policy, so they must not be presented as prerequisites.
+        previous_revision = None
     state: EvaluationState = {
         "problem": {
             "title": problem.title,
@@ -1580,12 +1852,58 @@ async def regenerate_submission_revision(
         "feedback": submission.feedback,
         "complexity_details": submission.complexity_details,
         "style_details": (submission.feedback or {}).get("style_details") if isinstance(submission.feedback, dict) else None,
+        "previous_revision": previous_revision,
     }
     if policy == "GUIDED_STEPS":
-        revision = (await guided_revision_node(state, stage)).get("improved_code") or {}
+        try:
+            guided_result = await asyncio.wait_for(
+                guided_revision_node(state, stage),
+                timeout=settings.GUIDED_REVISION_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            logger.info("Guided revision provider exceeded interactive timeout; using deterministic guidance")
+            fallback = dict(guided_revision_fallback(stage, state))
+            # Keep fallback guidance on exactly the same response contract as
+            # an AI-produced stage.  Without this marker the frontend treats
+            # a successful fallback response as unavailable and leaves the
+            # "Get next step" button visible.
+            fallback["revision_source"] = "fallback"
+            fallback["improved_code"] = ""
+            fallback["changes"] = []
+            fallback["starter_fragment"] = ""
+            fallback["future_plan"] = guided_future_plan(stage) or fallback.get("future_plan") or []
+            fallback["verification"] = {
+                "status": "no_change" if stage == "NO_CHANGE" else "guided_step",
+                "verified": False,
+                "message": (
+                    "No revision is recommended for this submission."
+                    if stage == "NO_CHANGE"
+                    else "This is one scoped learning stage. Write the approach in your own code and submit it to unlock the next stage."
+                ),
+            }
+            guided_result = {"improved_code": fallback}
+        revision = guided_result.get("improved_code") or {}
         revision = dict(revision)
         revision["revision_policy"] = "GUIDED_STEPS"
+        revision["guidance_version"] = 3
         revision["stage"] = stage
+        revision["evidence_links"] = guided_revision_evidence_links(submission)
+        if previous_revision:
+            revision["comparison"] = {
+                "previous_submission_id": previous_revision["submission_id"],
+                "previous_stage": previous_revision["stage"],
+                "current_code_changed": previous_revision["current_code_changed"],
+                "message": (
+                    "This step compares your current submission with the previous guided stage "
+                    f"({previous_revision['stage'] or 'earlier step'})."
+                ),
+            }
+        # Guided mode is a coaching response, not an automatic second
+        # submission. Do not compile, judge, or score model-generated text
+        # here: those slow operations made “Get next step” appear stuck and
+        # would misleadingly judge code the learner did not submit. The next
+        # official learner submission is the only event that advances/judges
+        # the stage and produces new score evidence.
         submission.improved_code = revision
         db.commit()
         return {"improved_code": revision}
@@ -1612,6 +1930,14 @@ async def regenerate_submission_revision(
         revision = dict(revision)
         revision["improved_code"] = ""
         revision["verification"] = {"status": "explanation_only", "verified": False, "message": "Your instructor allows explanations of changes but not full revised code for this assignment."}
+    else:
+        revision["score_projection"] = await score_revision_stage(
+            original_submission=submission,
+            problem=problem,
+            source_code=str(revision.get("improved_code") or ""),
+            language=submission.language,
+            test_cases=load_problem_cases(db, problem, public_only=False),
+        )
     submission.improved_code = revision
     db.commit()
     return {"improved_code": revision}
@@ -1749,6 +2075,7 @@ def get_student_practice_analytics(
 
 @app.get("/api/student/recommendations")
 def get_student_recommendations(
+    topic: Optional[str] = Query(default=None, max_length=120),
     db: Session = Depends(get_db),
     student: models.Student = Depends(get_current_student),
 ):
@@ -1771,7 +2098,7 @@ def get_student_recommendations(
         models.Problem.is_public_practice == True,
         ~models.Problem.id.like("instructor-%"),
     ).order_by(models.Problem.id).all()
-    result = build_recommendations(problems, submissions)
+    result = build_recommendations(problems, submissions, selected_topic=topic)
     return {
         "topics": result["topics"],
         "priority_topics": result["priority_topics"],

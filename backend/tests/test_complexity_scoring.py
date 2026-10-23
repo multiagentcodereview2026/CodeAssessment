@@ -19,6 +19,29 @@ def test_normalizes_common_big_o_spellings():
     assert normalize_complexity(r"O(|\Sigma|)") == "O(1)"
 
 
+def test_normalizes_any_single_symbolic_input_variable_to_n():
+    # Keep the student's exact notation in the report; rank it privately.
+    assert normalize_complexity("O(L)") == "O(L)"
+    assert normalize_complexity("O(M^2)") == "O(M^2)"
+    assert normalize_complexity("O(log P)") == "O(log P)"
+    assert normalize_complexity("O(q log q)") == "O(q log q)"
+    assert normalize_complexity("O(2^V)") == "O(2^V)"
+    assert normalize_complexity("O(N + 26n)") == "O(N + 26n)"
+
+    linear = time_complexity_assessment("O(n)", "O(L)")
+    assert linear["status"] == "SCORED"
+    assert linear["time_score"] == 25.0
+
+    aggregate = time_complexity_assessment("O(n)", "O(N + Σ|word|)")
+    assert aggregate["student_time_complexity"] == "O(N + Σ|word|)"
+    assert aggregate["status"] == "SCORED"
+    assert aggregate["time_score"] == 25.0
+
+    # Two independently sized inputs cannot be collapsed into one n.
+    multi = time_complexity_assessment("O(n)", "O(M*N)")
+    assert multi["status"] == "REVIEW_REQUIRED"
+
+
 def test_theta_is_not_silently_mixed_into_big_o_scoring():
     assessment = time_complexity_assessment("O(n)", "Θ(n)")
     assert assessment["status"] == "REVIEW_REQUIRED"
@@ -32,12 +55,23 @@ def test_time_score_is_optimal_when_student_matches_target():
     assert assessment["classification"] == "OPTIMAL"
 
 
-def test_time_score_uses_the_approved_ladder():
-    assert time_complexity_assessment("O(n)", "O(n log n)")["time_score"] == 22.222
-    assert time_complexity_assessment("O(n)", "O(n^2)")["time_score"] == 19.444
-    assert time_complexity_assessment("O(log n)", "O(n^2)")["time_score"] == 13.889
-    assert time_complexity_assessment("O(n)", "O(n!)")["time_score"] == 8.333
+def test_time_score_uses_the_benchmark_relative_ladder():
+    # Each slower rank consumes an equal share of the ranks below the
+    # benchmark, so the same rank difference is more serious for a stronger
+    # benchmark such as O(n) than for O(1).
+    assert time_complexity_assessment("O(n)", "O(n log n)")["time_score"] == 20.833
+    assert time_complexity_assessment("O(n)", "O(n^2)")["time_score"] == 16.667
+    assert time_complexity_assessment("O(log n)", "O(n^2)")["time_score"] == 12.5
+    assert time_complexity_assessment("O(n)", "O(n!)")["time_score"] == 0.0
     assert time_complexity_assessment("O(1)", "O(n!)")["time_score"] == 0.0
+
+
+def test_last_stone_bubble_sort_is_penalized_against_its_n_log_n_target():
+    # O(n log n) is rank 5, leaving five worse ranks.  O(n^3) is two ranks
+    # slower, so it retains 15/25 internally, displayed as 18/30 in the UI.
+    assessment = time_complexity_assessment("O(n log n)", "O(n^3)")
+    assert assessment["time_score"] == 15.0
+    assert round(assessment["time_score"] * 30 / 25, 1) == 18.0
 
 
 def test_polynomial_complexities_above_cubic_share_rank_eight():
@@ -45,7 +79,7 @@ def test_polynomial_complexities_above_cubic_share_rank_eight():
     assert normalize_complexity("O(n^7)") == "O(n^4+)"
     assert complexity_rank("O(n^4)") == 8
     assert complexity_rank("O(n^4)") == complexity_rank("O(n^6)")
-    assert time_complexity_assessment("O(n)", "O(n^4)")["time_score"] == 13.889
+    assert time_complexity_assessment("O(n)", "O(n^4)")["time_score"] == 8.333
 
 
 def test_extended_hierarchy_projects_into_fixed_ten_buckets():
@@ -65,8 +99,8 @@ def test_extended_hierarchy_projects_into_fixed_ten_buckets():
 
 def test_space_score_uses_the_same_rank_distance_rule():
     assessment = space_complexity_assessment("O(n)", "O(n^2)")
-    assert assessment["space_score"] == 19.444
-    assert assessment["score_percent"] == 77.776
+    assert assessment["space_score"] == 16.667
+    assert assessment["score_percent"] == 66.668
 
 
 def test_fixed_character_alphabet_space_complexity_is_scoreable():
@@ -88,13 +122,28 @@ def test_rank_is_one_based_and_better_than_target_is_flagged_for_review():
     assert private["benchmark_review_required"] is True
 
 
-def test_multivariable_complexity_requires_problem_specific_review():
+def test_curated_additive_benchmark_is_ranked_without_rewriting_student_notation():
     assessment = time_complexity_assessment("O(V + E)", "O(V^2)")
-    assert assessment["status"] == "REVIEW_REQUIRED"
-    assert assessment["classification"] == "REVIEW_REQUIRED"
-    assert assessment["time_score"] is None
-    assert assessment["score_percent"] is None
-    assert "O(V + E)" not in str(assessment)
+    assert assessment["status"] == "SCORED"
+    assert assessment["classification"] == "MODERATE"
+    assert assessment["time_score"] == 16.667
+    assert assessment["student_time_complexity"] == "O(V^2)"
+
+
+def test_curated_multivariable_benchmark_uses_private_rank_without_rewriting_report():
+    # A public bank target can use rich notation while the student report keeps
+    # the analyzer's exact notation.  The student-side O(L) estimate is one
+    # input scale, so it can be scored against the benchmark's private bucket.
+    assessment = time_complexity_assessment("O(n*k)", "O(L)")
+    assert assessment["student_time_complexity"] == "O(L)"
+    assert assessment["status"] == "SCORED"
+    assert assessment["classification"] == "OPTIMAL"
+    assert assessment["time_score"] == 25.0
+
+    # The same multi-dimensional syntax from a student remains intentionally
+    # review-only.  We do not guess how independent input dimensions relate.
+    student_multi = time_complexity_assessment("O(n*k)", "O(M*N)")
+    assert student_multi["status"] == "REVIEW_REQUIRED"
 
 
 def test_bounded_parameter_complexities_keep_exact_display_but_score_on_n_rank():
@@ -106,7 +155,7 @@ def test_bounded_parameter_complexities_keep_exact_display_but_score_on_n_rank()
     )
     assert result["student_time_complexity"] == "O(n^2*k)"
     assert result["status"] == "SCORED"
-    assert result["time_score"] == 19.444
+    assert result["time_score"] == 16.667
 
     space = space_complexity_assessment(
         "O(k)",
@@ -118,6 +167,16 @@ def test_bounded_parameter_complexities_keep_exact_display_but_score_on_n_rank()
     assert space["space_score"] == 16.667
 
     assert bounded_parameters_from_constraints(constraints) == {"k"}
+
+
+def test_bounded_single_symbol_stays_constant_for_private_scoring():
+    result = time_complexity_assessment(
+        "O(k)",
+        "O(k)",
+        bounded_parameters={"k"},
+    )
+    assert result["status"] == "SCORED"
+    assert result["time_score"] == 25.0
 
 
 def test_no_private_target_means_no_complexity_penalty():

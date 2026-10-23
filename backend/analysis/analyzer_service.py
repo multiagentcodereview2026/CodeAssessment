@@ -76,17 +76,16 @@ def _strong_runtime(result: ComplexityAnalysis | None) -> bool:
 def _has_authoritative_space_evidence(result: ComplexityAnalysis | None) -> bool:
     """Whether a static space result is backed by a direct allocation fact.
 
-    Input buffers are not auxiliary storage under this application's scoring
-    convention.  When the analyzer can prove that a collection is filled
-    directly from stdin, an optional AI review may refine time complexity but
-    must not replace this deterministic space conclusion.  This keeps a
-    byte-identical submission from receiving different space marks merely
-    because an external model phrases memory usage differently.
+    A collection allocated by a stdin/main submission belongs to the student
+    program and counts as O(n) space under this application's scoring policy.
+    An optional AI review may refine time complexity but must not replace that
+    direct allocation fact with O(1) merely because it uses a function-input
+    auxiliary-space convention.
     """
     return bool(
         result
         and result.space_complexity
-        and "structural:stdin-input-buffer-excluded-from-auxiliary-space"
+        and "structural:stdin-input-sized-allocation"
         in (result.signals or [])
     )
 
@@ -191,7 +190,7 @@ async def analyze_submission_complexity(
                     *(static_result.signals if static_result else []),
                     "ai-fallback:lower-confidence-ast",
                     *(
-                        ["ast-space-preserved:authoritative-input-buffer"]
+                        ["ast-space-preserved:authoritative-stdin-allocation"]
                         if preserve_static_space
                         else []
                     ),
