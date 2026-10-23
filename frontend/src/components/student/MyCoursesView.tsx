@@ -167,7 +167,8 @@ export const MyCoursesView: React.FC = () => {
                           {assignment.description && <p className="mt-1 text-sm text-slate-600">{assignment.description}</p>}
                         </div>
                         <div className="text-left text-xs text-slate-500 sm:text-right">
-                          <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{assignment.due_date ? new Date(assignment.due_date).toLocaleDateString() : 'No due date'}</span>
+                          <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{assignment.due_date ? new Date(assignment.due_date).toLocaleString() : 'No due date'}</span>
+                          {(assignment.status === 'CLOSED' || (assignment.due_date && Date.now() >= Date.parse(assignment.due_date))) && <p className="font-semibold text-amber-700">Closed · View only</p>}
                           <p className="mt-1">{completed}/{assignment.problems.length} problems submitted</p>
                         </div>
                       </div>

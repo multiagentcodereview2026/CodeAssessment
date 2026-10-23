@@ -232,7 +232,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 submittedCount: Number(assignment.submitted_count ?? 0),
                 totalCount: Number(assignment.total_students ?? 0),
                 avgScore: assignment.avg_score == null ? null : Number(assignment.avg_score),
-                dueDate: assignment.due_date ? new Date(assignment.due_date).toLocaleDateString() : 'No due date',
+                dueDate: assignment.due_date || '',
                 status: assignment.status === 'ACTIVE' ? 'Active' : assignment.status === 'UPCOMING' ? 'Upcoming' : 'Closed'
                 ,revisionPolicy: assignment.revision_policy || 'GUIDED_STEPS'
               })));

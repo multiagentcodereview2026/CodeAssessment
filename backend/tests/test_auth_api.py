@@ -1,4 +1,6 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException, Response
@@ -50,6 +52,37 @@ from main import (
 )
 from schemas import AssignmentCreate, AssignmentUpdate, CourseCreate, CourseUpdate, EnrollmentCreate, InstructorProblemCreate, CourseRequestCreate, LoginRequest, RegisterRequest, SubmissionRequest
 import main as main_module
+
+
+def test_assignment_deadline_boundary_and_timezone():
+    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    for due, closed in [(None, False), (now + timedelta(seconds=1), False), (now, True), (now - timedelta(seconds=1), True), (now.replace(tzinfo=None), True), (now.astimezone(timezone(timedelta(hours=5, minutes=30))), True)]:
+        assert main_module.assignment_is_closed(SimpleNamespace(status="ACTIVE", due_date=due), now) is closed
+    assert main_module.assignment_is_closed(SimpleNamespace(status="CLOSED", due_date=None), now)
+    # Evaluation may finish later; acceptance uses the recorded arrival time.
+    main_module.require_open_assignment(SimpleNamespace(status="ACTIVE", due_date=now), now - timedelta(seconds=1))
+
+
+@pytest.mark.parametrize("action", ["run", "submit"])
+def test_expired_assignment_rejected_before_execution(db_session, monkeypatch, action):
+    from schemas import QuickRunRequest
+    problem = models.Problem(id="deadline-test", title="Deadline", description="Test", is_public_practice=True, examples=[], constraints=[], starter_codes={}, test_cases=[])
+    db_session.add(problem)
+    db_session.commit()
+    assignment = SimpleNamespace(status="ACTIVE", due_date=datetime.now(timezone.utc) - timedelta(seconds=1))
+    monkeypatch.setattr(main_module, "get_student_assignment_for_problem", lambda *args, **kwargs: assignment)
+    async def must_not_execute(**kwargs):
+        pytest.fail("Expired work reached execution")
+    monkeypatch.setattr(main_module, "execute_code_sandboxed", must_not_execute)
+    student = SimpleNamespace(student_id="deadline-student")
+    payload = dict(problem_id=problem.id, assignment_id=123, language="python", code="print(1)")
+    with pytest.raises(HTTPException) as error:
+        if action == "run":
+            asyncio.run(main_module.quick_run_code(QuickRunRequest(**payload), db_session, student))
+        else:
+            asyncio.run(submit_and_evaluate_code(SubmissionRequest(**payload), db_session, student))
+    assert error.value.status_code == 403
+    assert "closed" in error.value.detail
 
 
 @pytest.fixture
@@ -514,6 +547,13 @@ def test_assigned_submission_requires_active_enrollment_and_linked_problem(db_se
     db_session.commit()
 
     assert get_student_assignment_for_problem(db_session, student.student_id, assignment.id, problem.id).id == assignment.id
+    assert main_module.assignment_access(assignment.id, problem.id, db_session, student)["closed"] is False
+    assignment.due_date = datetime.now(timezone.utc) - timedelta(seconds=1)
+    db_session.commit()
+    assert main_module.assignment_access(assignment.id, problem.id, db_session, student)["closed"] is True
+    assignment.due_date = datetime.now(timezone.utc) + timedelta(days=1)
+    db_session.commit()
+    assert main_module.assignment_access(assignment.id, problem.id, db_session, student)["closed"] is False
     with pytest.raises(HTTPException) as not_enrolled:
         get_student_assignment_for_problem(db_session, other_student.student_id, assignment.id, problem.id)
     assert not_enrolled.value.status_code == 403
@@ -555,6 +595,8 @@ def test_assignment_content_is_frozen_after_submission_but_status_can_change(db_
 
     closed = update_assignment(assignment.id, AssignmentUpdate(status="CLOSED"), db_session, instructor_user.instructor_profile)
     assert closed.status == "CLOSED"
+    extended = update_assignment(assignment.id, AssignmentUpdate(status="ACTIVE", due_date=datetime.now(timezone.utc) + timedelta(days=1)), db_session, instructor_user.instructor_profile)
+    assert not main_module.assignment_is_closed(db_session.get(models.Assignment, extended.id))
     assert db_session.query(models.Submission).filter_by(submission_id="existing-submission").count() == 1
 
 

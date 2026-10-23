@@ -81,6 +81,35 @@ export const ProblemWorkspace: React.FC = () => {
   const selectedProblem = remoteProblem || fallbackProblem;
   const requestedProblemId = routeProblemId || fallbackProblem.id;
   const workspaceProblemId = remoteProblem?.id || requestedProblemId;
+  const [assignmentAccess, setAssignmentAccess] = useState<any>(null);
+  const [deadlineClock, setDeadlineClock] = useState(0);
+  const assignmentLocked = Boolean(assignmentId && (!assignmentAccess || assignmentAccess.closed ||
+    (assignmentAccess.due_date && deadlineClock >= Date.parse(assignmentAccess.due_date))));
+
+  useEffect(() => {
+    setAssignmentAccess(null);
+    if (!assignmentId) return;
+    let cancelled = false;
+    let serverOffset = 0;
+    const refresh = async () => {
+      try {
+        const response = await authFetch(`/api/student/assignments/${encodeURIComponent(assignmentId)}/access/${encodeURIComponent(requestedProblemId)}`, { cache: 'no-store' });
+        if (!response.ok) throw new Error('Assignment access unavailable');
+        const access = await response.json();
+        if (cancelled) return;
+        serverOffset = Date.parse(access.server_time) - Date.now();
+        setDeadlineClock(Date.now() + serverOffset);
+        setAssignmentAccess(access);
+      } catch {
+        if (!cancelled) setAssignmentAccess({ closed: true, unavailable: true });
+      }
+    };
+    void refresh();
+    const refreshTimer = window.setInterval(refresh, 15000);
+    const clockTimer = window.setInterval(() => setDeadlineClock(Date.now() + serverOffset), 500);
+    window.addEventListener('focus', refresh);
+    return () => { cancelled = true; clearInterval(refreshTimer); clearInterval(clockTimer); window.removeEventListener('focus', refresh); };
+  }, [assignmentId, requestedProblemId, authFetch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -161,7 +190,7 @@ export const ProblemWorkspace: React.FC = () => {
   const currentRunKey = JSON.stringify([workspaceProblemId, language, code]);
   // Require a successful sample run for the exact current code and language
   // before enabling the full assessment submission.
-  const canSubmit = Boolean(code.trim() && remoteProblem && verifiedRunKey === currentRunKey);
+  const canSubmit = Boolean(!assignmentLocked && code.trim() && remoteProblem && verifiedRunKey === currentRunKey);
 
   const revealHint = async () => {
     setHintError('');
@@ -264,6 +293,7 @@ export const ProblemWorkspace: React.FC = () => {
   };
 
   const handleResetCode = () => {
+    if (assignmentLocked || isSubmitting) return;
     localStorage.removeItem(draftKey(workspaceProblemId, language));
     localStorage.removeItem(legacyDraftKey(workspaceProblemId, language));
     setCode(getStarterCode(language));
@@ -340,6 +370,7 @@ export const ProblemWorkspace: React.FC = () => {
 
   // Run Code (Sandbox Test Cases via Live FastAPI Backend)
   const handleRunCode = async () => {
+    if (assignmentLocked) return;
     saveDraft(workspaceProblemId, language, code);
     if (!remoteProblem) {
       setRunOutput({
@@ -364,6 +395,7 @@ export const ProblemWorkspace: React.FC = () => {
           language,
           code,
           problem_id: remoteProblem.id,
+          assignment_id: assignmentId ? Number(assignmentId) : null,
           // These are the only three public cases returned to the browser.
           test_cases: selectedProblem.testCases.slice(0, 3).map((tc, idx) => ({
             id: tc.id || String(idx + 1),
@@ -470,6 +502,7 @@ export const ProblemWorkspace: React.FC = () => {
 
   // Submit Code (Live 10-Agent LangGraph AI Assessment Pipeline)
   const handleSubmitCode = async () => {
+    if (assignmentLocked) return;
     if (!code.trim()) {
       setRunOutput((current) => current || {
         status: 'error',
@@ -776,6 +809,9 @@ export const ProblemWorkspace: React.FC = () => {
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-[1800px] space-y-4 pb-12">
+      {assignmentId && <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        {!assignmentAccess ? 'Checking assignment availability…' : assignmentAccess.unavailable ? 'Assignment availability could not be verified. Editing and submission are paused until access is restored.' : assignmentLocked ? 'This assignment is closed. You can review the instructions and your draft, but cannot run or submit code.' : assignmentAccess.due_date ? `Due ${new Date(assignmentAccess.due_date).toLocaleString()}` : 'Assignment open · No deadline'}
+      </div>}
       {/* Keep the workspace entry point quiet so the problem and editor lead. */}
       <div className="flex items-center">
         <button
@@ -953,6 +989,7 @@ export const ProblemWorkspace: React.FC = () => {
 
                 {/* Language Selector */}
                 <select
+                  disabled={assignmentLocked || isSubmitting}
                   value={language}
                   onChange={(e) => handleLanguageChange(e.target.value)}
                   className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono font-medium rounded-lg px-3 py-1.5 border border-slate-700 focus:outline-none focus:border-indigo-500 cursor-pointer"
@@ -971,7 +1008,7 @@ export const ProblemWorkspace: React.FC = () => {
                     <MoreHorizontal className="h-4 w-4" /> More
                   </summary>
                   <div className="absolute left-0 top-full z-20 mt-2 w-44 rounded-lg border border-slate-700 bg-slate-900 p-1.5 shadow-xl">
-                    <button onClick={() => setResetCodeConfirmOpen(true)} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-slate-200 hover:bg-slate-800">
+                    <button disabled={assignmentLocked || isSubmitting} onClick={() => setResetCodeConfirmOpen(true)} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-slate-200 hover:bg-slate-800">
                       <RotateCcw className="h-3.5 w-3.5" /> Reset to starter code
                     </button>
                     <button onClick={() => setIsEditorFullscreen((value) => !value)} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-slate-200 hover:bg-slate-800">
@@ -981,7 +1018,7 @@ export const ProblemWorkspace: React.FC = () => {
                 </details>
                 <button
                   onClick={handleRunCode}
-                  disabled={isRunning || isSubmitting || isProblemLoading || !remoteProblem}
+                  disabled={assignmentLocked || isRunning || isSubmitting || isProblemLoading || !remoteProblem}
                   title="Run public test cases (Ctrl + F11)"
                   className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
                 >
@@ -1037,7 +1074,7 @@ export const ProblemWorkspace: React.FC = () => {
                   padding: { top: 14, bottom: 14 },
                   suggest: { showKeywords: true, showSnippets: true },
                   quickSuggestions: { other: true, comments: false, strings: false },
-                  readOnly: isSubmitting
+                  readOnly: isSubmitting || assignmentLocked
                 }}
               />
             </div>

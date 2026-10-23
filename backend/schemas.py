@@ -141,6 +141,7 @@ class SubmissionRequest(BaseModel):
     test_cases: Optional[List[Dict[str, Any]]] = None
 
 class QuickRunRequest(BaseModel):
+    assignment_id: Optional[int] = None
     language: str
     code: str
     problem_id: Optional[str] = None

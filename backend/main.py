@@ -166,11 +166,13 @@ def get_student_assignment_for_problem(
     student_id: str,
     assignment_id: int,
     problem_id: str,
+    *,
+    allow_closed: bool = False,
 ) -> models.Assignment:
     assignment = db.query(models.Assignment).join(models.Course).filter(
         models.Assignment.id == assignment_id,
         models.Course.is_active == True,
-        models.Assignment.status == "ACTIVE",
+        models.Assignment.status.in_(["ACTIVE", "CLOSED"] if allow_closed else ["ACTIVE"]),
     ).first()
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment is not available")
@@ -190,6 +192,19 @@ def get_student_assignment_for_problem(
     if assigned_problem is None:
         raise HTTPException(status_code=403, detail="Problem is not part of this assignment")
     return assignment
+
+
+def assignment_is_closed(assignment, now=None):
+    now = now or datetime.now(timezone.utc)
+    due = assignment.due_date
+    if due is not None and due.tzinfo is None:
+        due = due.replace(tzinfo=timezone.utc)
+    return assignment.status != "ACTIVE" or (due is not None and now >= due)
+
+
+def require_open_assignment(assignment, received_at=None):
+    if assignment_is_closed(assignment, received_at):
+        raise HTTPException(status_code=403, detail="The assignment is closed. Its deadline has passed or the instructor has closed it.")
 
 
 def latest_assessed_attempts(
@@ -1074,7 +1089,7 @@ def get_problem(
         raise HTTPException(status_code=404, detail=f"Problem '{problem_id}' not found.")
     assignments = db.query(models.Assignment).join(models.AssignmentProblem).join(models.Course).filter(
         models.AssignmentProblem.problem_id == problem_id,
-        models.Assignment.status.in_(["ACTIVE", "UPCOMING"]),
+        models.Assignment.status.in_(["ACTIVE", "UPCOMING", "CLOSED"]),
         models.Course.is_active == True,
     ).all()
     assignment = assignments[0] if assignments else None
@@ -1168,6 +1183,12 @@ async def generate_problem_hints(
 # Code Execution & Submission Endpoints
 # ==========================================
 
+@app.get("/api/student/assignments/{assignment_id}/access/{problem_id}")
+def assignment_access(assignment_id: int, problem_id: str, db: Session = Depends(get_db), student: models.Student = Depends(get_current_student)):
+    assignment = get_student_assignment_for_problem(db, student.student_id, assignment_id, canonical_problem_id(problem_id), allow_closed=True)
+    return {"closed": assignment_is_closed(assignment), "due_date": utc_isoformat(assignment.due_date) if assignment.due_date else None, "server_time": datetime.now(timezone.utc).isoformat()}
+
+
 @app.post("/api/submissions/run", response_model=QuickRunResponse)
 async def quick_run_code(
     payload: QuickRunRequest,
@@ -1175,12 +1196,19 @@ async def quick_run_code(
     student: models.Student = Depends(get_current_student),
 ):
     """Executes code against test cases in the sandbox without triggering AI evaluation."""
+    received_at = datetime.now(timezone.utc)
     test_cases = payload.test_cases
+    if payload.assignment_id is not None and not payload.problem_id:
+        raise HTTPException(status_code=422, detail="An assignment run requires a problem ID")
     if payload.problem_id:
         problem_id = canonical_problem_id(payload.problem_id)
         problem = db.query(models.Problem).filter(models.Problem.id == problem_id).first()
         if not problem:
             raise HTTPException(status_code=404, detail="Problem not found")
+        if payload.assignment_id is not None:
+            require_open_assignment(get_student_assignment_for_problem(db, student.student_id, payload.assignment_id, problem_id), received_at)
+        elif not problem.is_public_practice:
+            raise HTTPException(status_code=403, detail="This problem requires assignment context")
         test_cases = load_problem_cases(db, problem, public_only=True)
     if not test_cases:
         raise HTTPException(status_code=400, detail="No public test cases are available for this problem")
@@ -1205,6 +1233,7 @@ async def submit_and_evaluate_code(
        complexity against a private backend target.
     4. Atomic DB Persistence.
     """
+    received_at = datetime.now(timezone.utc)
     problem_id = canonical_problem_id(payload.problem_id)
     logger.info(f"Received submission for student '{student.student_id}' on problem '{problem_id}'")
 
@@ -1221,6 +1250,9 @@ async def submit_and_evaluate_code(
             payload.assignment_id,
             problem_id,
         )
+        require_open_assignment(assignment, received_at)
+    elif not problem.is_public_practice:
+        raise HTTPException(status_code=403, detail="This problem requires assignment context")
 
     stored_cases = (
         db.query(models.ProblemTestCase)
@@ -2837,11 +2869,11 @@ def update_assignment(
         models.Submission.assignment_id == assignment.id
     ).first() is not None
 
-    semantic_fields = {"title", "description", "due_date"}
+    semantic_fields = {"title", "description"}
     if has_submissions and (semantic_fields.intersection(updates) or requested_problem_ids is not None):
         raise HTTPException(
             status_code=409,
-            detail="Assignment content cannot change after a student submission exists; status changes remain allowed",
+            detail="Assignment content cannot change after a student submission exists; deadline and status changes remain allowed",
         )
 
     if requested_problem_ids is not None:

@@ -104,7 +104,8 @@ export const AssignmentsManagerView: React.FC = () => {
     setEditAssignmentId(String(assignment.id));
     setEditTitle(assignment.title);
     setEditDescription(assignment.description || '');
-    setEditDueDate(assignment.dueDate || '');
+    const deadline = assignment.dueDate ? new Date(assignment.dueDate) : null;
+    setEditDueDate(deadline && !Number.isNaN(deadline.getTime()) ? new Date(deadline.getTime() - deadline.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '');
     setEditStatus(assignment.status.toUpperCase() === 'CLOSED' ? 'CLOSED' : 'ACTIVE');
     setEditHasSubmissions(assignment.submittedCount > 0);
     setEditProblemIds(assignment.problemIds || []);
@@ -125,7 +126,7 @@ export const AssignmentsManagerView: React.FC = () => {
         body: JSON.stringify({
           title: editHasSubmissions ? undefined : editTitle.trim(),
           description: editHasSubmissions ? undefined : editDescription.trim(),
-          due_date: editHasSubmissions ? undefined : (editDueDate ? new Date(editDueDate).toISOString() : null),
+          due_date: editDueDate ? new Date(editDueDate).toISOString() : null,
           status: editStatus,
           problem_ids: editHasSubmissions ? undefined : editProblemIds,
           revision_policy: editRevisionPolicy
@@ -172,7 +173,7 @@ export const AssignmentsManagerView: React.FC = () => {
                 <div>
                   <h2 className="font-semibold text-slate-900">{assignment.title}</h2>
                   <p className="mt-1 text-xs text-slate-500">{assignment.course} · {assignment.problemsCount} problems · {assignment.status}</p>
-                  <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500"><Calendar className="h-3.5 w-3.5" />{assignment.dueDate}</p>
+                  <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500"><Calendar className="h-3.5 w-3.5" />{assignment.dueDate ? new Date(assignment.dueDate).toLocaleString() : 'No due date'}</p>
                 </div>
               </div>
               <div className="flex items-center gap-5">
@@ -190,11 +191,11 @@ export const AssignmentsManagerView: React.FC = () => {
       )}
 
       {/* Edit Modal */}
-      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Edit assignment" subtitle={editHasSubmissions ? "Submissions exist. You can only update the status." : "Update assignment details and problems."} maxWidth="xl">
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Edit assignment" subtitle={editHasSubmissions ? "Submissions exist. You can update the deadline and status." : "Update assignment details and problems."} maxWidth="xl">
         <form onSubmit={updateAssignment} className="space-y-4 text-sm">
           {editHasSubmissions && (
              <div className="p-3 bg-yellow-50 text-yellow-800 text-xs rounded border border-yellow-200">
-                This assignment has submissions. Content, problems, and dates are locked.
+                This assignment has submissions. Content and problems are locked; the deadline can be extended.
              </div>
           )}
           <label className="block font-semibold text-slate-700">Title
@@ -211,7 +212,7 @@ export const AssignmentsManagerView: React.FC = () => {
                </select>
             </label>
             <label className="block font-semibold text-slate-700">Due date
-              <input type="date" value={editDueDate} onChange={(event) => setEditDueDate(event.target.value)} disabled={editHasSubmissions} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 disabled:bg-slate-100" />
+              <input type="datetime-local" value={editDueDate} onChange={(event) => setEditDueDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
             </label>
           </div>
           <label className="block font-semibold text-slate-700">AI learning support
@@ -278,7 +279,7 @@ export const AssignmentsManagerView: React.FC = () => {
               </select>
             </label>
             <label className="block font-semibold text-slate-700">Due date
-              <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
+              <input type="datetime-local" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
             </label>
           </div>
           <fieldset>
