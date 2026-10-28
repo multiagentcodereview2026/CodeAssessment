@@ -250,7 +250,7 @@ def build_submission_groups(
                 "groupKind": kind,
                 "groupLabel": group_label,
                 "approachSummary": summary,
-                "evidenceSummary": ([f"AST classification: {label} ({summary})."] if summary else [f"AST classification: {label}."]),
+                "evidenceSummary": ([f"Both solutions were grouped because their code has a similar overall shape: {summary}."] if summary else ["Both solutions were grouped because the structure checker found a similar overall approach."]),
                 "members": ordered_members,
                 "representativeCode": representative.get("sourceCode") or "",
                 "pairCount": 0,

@@ -84,6 +84,7 @@ def structural_fingerprint(source: str, language: str) -> dict[str, Any]:
         "dynamicAllocation": bool(getattr(ir, "has_dynamic_allocation", False)),
         "matrixState": bool(getattr(ir, "has_2d_allocation", False) or getattr(ir.loop, "has_matrix_bounds", False)),
         "algorithm": pattern.name,
+        "structures": sorted(set(tokens)),
     }
     return {"tokens": tokens, "shingles": _shingles(tokens), "facts": facts}
 
@@ -98,22 +99,43 @@ def structural_overlap(left: dict[str, Any], right: dict[str, Any]) -> float:
 
 
 def structural_explanation(left: dict[str, Any], right: dict[str, Any], overlap: float) -> list[str]:
-    """Explain shared evidence deterministically; no model call is required."""
+    """Explain shared code structure in plain language; no model call is required."""
     left_facts, right_facts = left.get("facts") or {}, right.get("facts") or {}
     details: list[str] = []
-    if overlap >= 0.70:
-        details.append("Their normalized AST control-flow fingerprints strongly overlap.")
-    elif overlap >= 0.40:
-        details.append("Their AST control-flow fingerprints have a moderate structural overlap.")
+    left_patterns = set(left.get("shingles") or set())
+    right_patterns = set(right.get("shingles") or set())
+    shared_count = len(left_patterns & right_patterns)
+    union_count = len(left_patterns | right_patterns)
+    if union_count:
+        details.append(
+            f"The solutions share {shared_count} unique short sequences of programming structure "
+            f"out of {union_count} compared ({overlap:.0%} structural overlap)."
+        )
+    shared_structures = set(left_facts.get("structures") or []) & set(right_facts.get("structures") or [])
+    readable_structures = {
+        "LOOP": "Both solutions repeat work using a loop.",
+        "BRANCH": "Both solutions make decisions with conditions such as if or switch.",
+        "ASSIGN": "Both solutions assign intermediate values while processing the input.",
+        "RETURN": "Both solutions return a computed result.",
+        "CALL": "Both solutions call helper or library functions.",
+        "COLLECTION": "Both solutions use a collection such as an array, list, map, or set.",
+        "INDEX": "Both solutions access values by position or index.",
+        "OPERATION": "Both solutions use similar kinds of arithmetic or comparison operations.",
+    }
+    for structure, explanation in readable_structures.items():
+        if structure in shared_structures:
+            details.append(explanation)
     if left_facts.get("loopDepth") == right_facts.get("loopDepth") and left_facts.get("loopDepth", 0):
-        details.append(f"Both contain nesting depth {left_facts['loopDepth']} loop structure.")
+        depth = left_facts["loopDepth"]
+        details.append("Both use loops at the same nesting level." if depth == 1 else f"Both nest loops to depth {depth}.")
     if left_facts.get("recursive") and right_facts.get("recursive"):
-        details.append("Both use recursion.")
+        details.append("Both solutions call themselves again to solve smaller parts of the problem.")
     if left_facts.get("matrixState") and right_facts.get("matrixState"):
-        details.append("Both use a matrix-like dynamic state structure.")
-    if left_facts.get("algorithm") == right_facts.get("algorithm"):
-        details.append(f"Both match the structural approach label: {left_facts['algorithm']}.")
-    return details or ["Both submissions share the same problem scope; inspect source before drawing conclusions."]
+        details.append("Both solutions store intermediate results in a two-dimensional table.")
+    if left_facts.get("algorithm") == right_facts.get("algorithm") and left_facts.get("algorithm") != "unknown":
+        approach = str(left_facts["algorithm"]).replace("-", " ")
+        details.append(f"The structure checker classified both as using a {approach} approach.")
+    return details or ["The submissions solve the same assigned problem, but no specific shared structure stood out. Compare the source code before drawing conclusions."]
 
 
 def approach_label(fingerprint: dict[str, Any]) -> str:

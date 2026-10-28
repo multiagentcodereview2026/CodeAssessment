@@ -1,5 +1,7 @@
 import asyncio
 import copy
+from collections import Counter
+from math import sqrt
 import re
 from itertools import combinations
 import hashlib
@@ -3326,8 +3328,8 @@ def _similarity_source_without_comments(code: str, language: Optional[str] = Non
     return "".join(output)
 
 
-def similarity_tokens(code: str, language: Optional[str] = None) -> set[tuple[str, ...]]:
-    """Create identifier-normalized token shingles for a conservative overlap screen.
+def similarity_token_shingles(code: str, language: Optional[str] = None) -> list[tuple[str, ...]]:
+    """Create identifier-normalized token shingles for cosine comparison.
 
     Comments are deliberately discarded.  A class-provided starter comment or
     a student's explanatory notes should never be the reason two submissions
@@ -3337,7 +3339,26 @@ def similarity_tokens(code: str, language: Optional[str] = None) -> set[tuple[st
     raw_tokens = re.findall(r"[A-Za-z_][A-Za-z_0-9]*|\d+(?:\.\d+)?|==|!=|<=|>=|\S", source)
     keywords = {"if", "else", "for", "while", "return", "def", "class", "function", "int", "float", "double", "string", "const", "let", "var", "void", "public", "private", "new", "true", "false", "null", "None", "import", "from", "include", "using", "namespace", "try", "catch", "break", "continue"}
     tokens = [token if token in keywords or not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", token) else "IDENT" for token in raw_tokens]
-    return {tuple(tokens[index:index + 5]) for index in range(max(0, len(tokens) - 4))}
+    return [tuple(tokens[index:index + 5]) for index in range(max(0, len(tokens) - 4))]
+
+
+def similarity_tokens(code: str, language: Optional[str] = None) -> set[tuple[str, ...]]:
+    """Return unique normalized shingles for legacy overlap diagnostics."""
+    return set(similarity_token_shingles(code, language))
+
+
+def cosine_similarity_score(code_a: str, code_b: str, language_a: Optional[str] = None, language_b: Optional[str] = None) -> float:
+    """Calculate cosine similarity over term-frequency vectors of code shingles."""
+    vector_a = Counter(similarity_token_shingles(code_a, language_a))
+    vector_b = Counter(similarity_token_shingles(code_b, language_b))
+    if not vector_a or not vector_b:
+        return 0.0
+    dot_product = sum(count * vector_b.get(shingle, 0) for shingle, count in vector_a.items())
+    norm_a = sqrt(sum(count * count for count in vector_a.values()))
+    norm_b = sqrt(sum(count * count for count in vector_b.values()))
+    if not norm_a or not norm_b:
+        return 0.0
+    return max(0.0, min(1.0, dot_product / (norm_a * norm_b)))
 
 
 def _similarity_student_payload(student: models.Student, submission: models.Submission) -> dict[str, Any]:
@@ -3409,8 +3430,10 @@ def instructor_similarity_cases(db: Session, instructor_id: int, course_id: Opti
             tokens_b = similarity_tokens(sub_b.code, sub_b.language)
             if not tokens_a or not tokens_b:
                 continue
-            overlap = len(tokens_a & tokens_b) / len(tokens_a | tokens_b)
-            percentage = round(overlap * 100)
+            cosine_similarity = cosine_similarity_score(
+                sub_a.code, sub_b.code, sub_a.language, sub_b.language
+            )
+            percentage = round(cosine_similarity * 100, 1)
             if percentage < 72:
                 continue
             fingerprint_a = fingerprints[sub_a.submission_id]
@@ -3432,6 +3455,7 @@ def instructor_similarity_cases(db: Session, instructor_id: int, course_id: Opti
                 "studentA": _similarity_student_payload(student_a, sub_a),
                 "studentB": _similarity_student_payload(student_b, sub_b),
                 "similarityPercentage": percentage,
+                "similarityMethod": "cosine_token_shingles",
                 "riskLevel": "High" if percentage >= 85 else "Medium",
                 "matchedLinesCount": len(tokens_a & tokens_b),
                 "timestamp": utc_isoformat(created_at) if created_at else "Unknown",

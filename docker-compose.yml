@@ -30,7 +30,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      # Keep the API available on the usual host port when it is free, but
+      # allow Compose to start when another local service already owns 8000.
+      - "${BACKEND_HOST_PORT:-8000}:8000"
     env_file:
       - path: ./backend/.env
         required: false

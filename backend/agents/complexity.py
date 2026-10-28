@@ -16,6 +16,7 @@ from scoring.complexity import (
     space_complexity_assessment,
     time_complexity_assessment,
 )
+from analysis.confidence_policy import REVIEW_THRESHOLD
 from workflow.state import EvaluationState
 
 
@@ -295,6 +296,41 @@ async def complexity_node(state: EvaluationState) -> Dict[str, Any]:
         analysis,
         state.get("complexity_target"),
     )
+
+    # The analyzer can return a plausible Big-O guess while explicitly marking
+    # its evidence as REVIEW_REQUIRED.  Do not award efficiency marks from an
+    # uncertain estimate (for example, reporting O(1) when the submitted code
+    # appears to allocate input-sized storage).  Keep the estimate visible for
+    # review, but make both complexity dimensions unavailable to the rubric.
+    confidence = analysis.get("confidence")
+    try:
+        confidence = float(confidence)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    analysis_status = str(analysis.get("status") or "").upper()
+    if analysis_status != "ANALYZED" or confidence < REVIEW_THRESHOLD:
+        details = scored["complexity_details"]
+        reason = (
+            "The code analyzer could not classify this submission's complexity "
+            "with enough confidence. Complexity marks are withheld until it is reviewed."
+        )
+        details.update(
+            {
+                "time_score": None,
+                "space_score": None,
+                "classification": "REVIEW_REQUIRED",
+                "time_classification": "REVIEW_REQUIRED",
+                "space_classification": "REVIEW_REQUIRED",
+                "analysis_status": "REVIEW_REQUIRED",
+                "time_status": "REVIEW_REQUIRED",
+                "space_status": "REVIEW_REQUIRED",
+                "scoring_reason": reason,
+                "space_scoring_reason": reason,
+                "analysis_confidence": round(max(0.0, min(1.0, confidence)), 3),
+                "analysis_explanation": analysis.get("explanation") or reason,
+            }
+        )
+        return {"complexity_score": None, "complexity_details": details}
 
     # A program that did not compile has no runnable algorithm to grade for
     # efficiency. A compile-successful partial/wrong-answer submission still
