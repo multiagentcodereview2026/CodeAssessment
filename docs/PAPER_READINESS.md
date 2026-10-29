@@ -45,12 +45,21 @@ Do not claim that software regression pass rate is application accuracy.
    and AI-disclosure rules. Recheck its official submission page at delivery.
    Inspect every rendered page, citations, equations, tables and figures.
 
-## Separate pending feature
+## Integrated projection, with bounded claims
 
-Score projection and its verification remain the teammate's unfinished work.
-Do not claim a verified gain, improved-code score guarantee or projection
-accuracy until that work is integrated and tested with custom saved rubrics.
-Existing historical artifacts are not regraded by this change.
+The teammate's private candidate generation is now integrated with the saved
+v2 rubric, judge verification, incomplete-score handling, bounded retries and
+private evidence storage. A cached candidate cannot override fresh official
+results, cross assignment contexts, or match source after changing whitespace
+inside a literal. Pending work survives restart with a persisted attempt
+budget; unavailable verification ends explicitly and can be retried by the
+learner. Historical assessments without a compatible rubric are not regraded.
+
+The displayed number is a measured score for a private candidate implementing
+the guided stage. Guidance is not the exact candidate source, so the learner's
+implementation may receive a different grade. Do not promise a gain or claim
+AI-generation accuracy from the controlled fixtures below. Actual provider
+quality and educational benefit still require independent evaluation.
 
 The current contribution can be described as a complexity-focused assessment
 system with an auditable correctness ceiling. Strong accuracy or educational
@@ -58,10 +67,12 @@ benefit claims require the experiments above; do not invent numbers to fill
 the results section. See RESEARCH_EVALUATION_PROTOCOL.md for the protocol.
 Use RESEARCH_REVIEW_FORM.md for the independent labeling and feedback review.
 
-## Software verification observed in this batch
+## Software verification
 
-- 142 selected backend regressions passed in the final combined run; the
-  unfinished projection suite was intentionally excluded.
+- The previous focused run passed 142 selected tests; a subsequent full CI
+  run passed 288. The post-pull integration now includes the projection suite,
+  background privacy/budget tests and the reproducibility tools. See the
+  latest verification log for its full count; do not add counts across runs.
 - Frontend production build and lint passed.
 - Eight live execution checks met their expected outcomes: sum programs in
   Python/C/C++/Java/JavaScript, C++ nested-array Merge Intervals, a changed
@@ -71,7 +82,20 @@ Use RESEARCH_REVIEW_FORM.md for the independent labeling and feedback review.
   The correctness ceiling held in every scenario; human validation is pending.
 - Backend startup recovered after additive schema reconciliation. No database
   reset, volume removal or historical regrading was performed.
+- The live synthetic candidate-to-official-score contract matched under both
+  default weights (85.4 -> 97.4) and custom weights (81.9 -> 98.7), with 3/3
+  candidate cases passing in each. These are original fixtures run with the
+  AI provider disabled and an isolated in-memory database, not AI success-rate
+  measurements. Reproduce with `analysis.verify_candidate_score_contract`.
+- The independent review pack contains 20 original AI-assisted synthetic
+  snippets across five languages and only two problem groups. Reviewer A/B
+  labels remain blank; that pack must fail reviewed-corpus validation until
+  your team completes the reviews. It is a pilot, not a generalization set.
 
 These are software checks, not evidence of human grading agreement, model
 accuracy or improved learning outcomes. No publication-ready accuracy figure
 has been established by this batch.
+
+`analysis.research_manifest` records the exact commit, source/prompt hashes,
+allowlisted configuration and runtime without exporting keys or datasets.
+Use CONFERENCE_SUBMISSION_CHECKLIST.md for the verified venue requirements.

@@ -8,6 +8,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import time
 from pathlib import Path
 from docker_runner.executor import execute_code_sandboxed
 
@@ -35,10 +36,12 @@ int main(){
 async def run():
     checks = []
     async def check(name, language, source, cases, expected_passes):
+        started = time.perf_counter()
         result = await execute_code_sandboxed(source_code=source, language=language, test_cases=cases, stop_on_first_failure=False)
         passed = result.get("compile_status") == "success" and result.get("passed_cases") == expected_passes and result.get("total_cases") == len(cases)
         checks.append({"name": name, "language": language, "source_sha256": hashlib.sha256(source.encode()).hexdigest(),
                        "ok": passed, "compile_status": result.get("compile_status"), "execution_status": result.get("execution_status"),
+                       "judge_request_wall_ms": round((time.perf_counter() - started) * 1000, 2),
                        "passed_cases": result.get("passed_cases"), "total_cases": result.get("total_cases")})
     sum_cases = [{"id": "sum-positive", "input": "2 3\n", "expected_output": "5"}, {"id": "sum-negative", "input": "-8\n3\n", "expected_output": "-5"}, {"id": "sum-zero", "input": "0 0", "expected_output": "0"}]
     for language, source in SUM_SOURCES.items():
@@ -54,6 +57,7 @@ async def run():
     await check("changed-source-rejected", "cpp", '#include <iostream>\nint main(){std::cout<<"wrong";}', merge_cases, 0)
     await check("correct-source-rerun", "cpp", MERGE_SOURCE, merge_cases, 3)
     return {"kind": "synthetic_execution_contract", "all_passed": all(row["ok"] for row in checks), "checks": checks,
+            "latency_scope": "One request per check, including compilation and containers; not page latency, algorithmic growth, or a representative latency benchmark.",
             "warning": "This smoke matrix is not a measured application accuracy benchmark."}
 
 

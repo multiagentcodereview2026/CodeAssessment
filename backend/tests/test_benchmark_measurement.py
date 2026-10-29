@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 import pytest
 from analysis import benchmark_ai_ast as benchmark
+from analysis.models import ComplexityAnalysis
 
 
 def row():
@@ -24,7 +25,7 @@ def test_ast_comparator_uses_static_only_and_reports_both_dimensions(monkeypatch
 
 
 def test_unreviewed_estimate_is_abstention_not_an_accuracy_success(monkeypatch):
-    monkeypatch.setattr(benchmark, "analyze_static_complexity", lambda *_: SimpleNamespace(time_complexity="O(n)", space_complexity="O(1)", confidence=.2, signals=[], explanation="uncertain", status="REVIEW_REQUIRED"))
+    monkeypatch.setattr(benchmark, "analyze_static_complexity", lambda *_: ComplexityAnalysis(time_complexity="O(n)", space_complexity="O(1)", confidence=.2, signals=[], explanation="uncertain", status="REVIEW_REQUIRED"))
     report = benchmark.evaluate_rows([row()])
     assert report["ast"]["eligible"] == 0
     assert report["ast"]["accuracy"] is None
@@ -32,3 +33,12 @@ def test_unreviewed_estimate_is_abstention_not_an_accuracy_success(monkeypatch):
     assert report["ast"]["coverage"] == 0
     with pytest.raises(ValueError):
         benchmark.evaluate_rows([{**row(), "snippet_time_complexity": None}])
+
+
+def test_frozen_combined_benchmark_uses_production_ast_preservation(monkeypatch):
+    monkeypatch.setattr(benchmark, "analyze_static_complexity", lambda *_: ComplexityAnalysis(time_complexity="O(n)", space_complexity="O(1)", confidence=.75, method="ast", status="ANALYZED"))
+    prediction = {"time_complexity": "O(n^2)", "space_complexity": "O(n)", "confidence": .99, "evidence": ["Model disagrees"], "status": "ANALYZED"}
+    report = benchmark.evaluate_rows([row()], {"s1": prediction})
+    assert report["records"][0]["hybrid_time"] == "O(n)"
+    assert report["records"][0]["hybrid_status"] == "REVIEW_REQUIRED"
+    assert report["hybrid"]["coverage"] == 0

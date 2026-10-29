@@ -55,9 +55,13 @@ original synthetic programs. The matrix covers five languages, nested array
 stdin, unsorted and endpoint-sharing intervals, and changed-source execution.
 Report these as software verification, separately from analyzer accuracy.
 
-Score projection is explicitly excluded from this evaluation batch while the
-teammate completes it. New v2 submissions withhold projections until that
-integration uses their saved rubric. No projection-quality result is claimed.
+Score projection is integrated for compatible saved v2 rubrics. A private
+candidate must compile, pass all evaluated cases, have complete scored
+components and improve the saved grade before a measured gain is displayed.
+Unavailable verification ends without an invented number. The learner's
+implementation is assessed freshly; private candidate evidence cannot import
+an old grade into a new attempt or assignment context. Model-generation
+quality is a separate empirical outcome, not established by software tests.
 
 ## Research objective
 
@@ -155,6 +159,24 @@ beside it; `accuracy_all_rows` uses the full denominator with abstentions as
 non-successes. `time_accuracy` and `space_accuracy` show the separate dimensions.
 REVIEW_REQUIRED/NEEDS_REVIEW rows are abstentions, not confident predictions.
 These field definitions are not a substitute for a reviewed evaluation set.
+The combined comparator now replays the production orchestration with frozen
+provider predictions. In particular, AI disagreement cannot replace a
+complete AST formula: it triggers review, following the deployed policy.
+The threshold 0.85 is a heuristic configuration value, not an empirically
+calibrated 85% probability of correctness; do not describe it as such.
+
+Generate an independent pilot with `python -m analysis.build_research_review_pack
+--output-dir <new-folder>`. It supplies separate readable and JSONL forms for
+two reviewers with no analyzer labels. The 20 translated variants cover only
+two problem groups; do not count them as 20 independent problems or create a
+train/test split that shares either problem. Store completed reviews outside
+Git and retain the original independent judgments before adjudication.
+
+`python -m analysis.verify_candidate_score_contract --output <report.json>`
+compares measured candidates with real fresh official submissions under
+default and custom weights. It forces an isolated in-memory database and
+disables the provider. This verifies the judge/scorer integration on original
+synthetic inputs and must not be labeled AI accuracy or human-grade agreement.
 
 Record the following for each run: repository commit, operating system,
 Python version, Docker version, runtime image digests, CPU/memory/time/output

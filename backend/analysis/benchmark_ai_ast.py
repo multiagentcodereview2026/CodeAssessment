@@ -8,13 +8,32 @@ reproducible and API limits cannot silently change the benchmark.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 from collections import Counter
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
-from .ai_complexity_reviewer import AIComplexityReview, resolve_review
+from .ai_complexity_reviewer import AIComplexityReview, AIReviewRateLimiter, ComplexityReviewCache
 from .analyzer_service import analyze_static_complexity
+from . import analyzer_service
+from config.settings import settings
+
+
+def _offline_combined(source, language, ast, prediction):
+    """Replay the production orchestration against frozen provider evidence.
+
+    Never call a real provider or substitute the lower-level review resolver
+    for the production decision about retaining an AST formula.
+    """
+    async def frozen_provider(_payload):
+        return AIComplexityReview.model_validate(prediction or {}).model_dump()
+    with patch.object(settings, "COMPLEXITY_AI_REVIEW_ENABLED", True), patch.multiple(
+        analyzer_service, _invoke_complexity_reviewer=frozen_provider,
+        _review_cache=ComplexityReviewCache(60), _review_limiter=AIReviewRateLimiter(1000, 1),
+    ):
+        return asyncio.run(analyzer_service.analyze_submission_complexity(source, language, static_result=ast)).final
 
 
 def _rows(path: str) -> list[dict[str, Any]]:
@@ -73,15 +92,8 @@ def evaluate_rows(rows: list[dict[str, Any]], ai_rows: dict[str, dict[str, Any]]
         # The AST comparator must be static-only. The production combined
         # workflow can invoke the model and must not be mislabeled an AST run.
         ast = analyze_static_complexity(source, language)
-        ast_dict = {
-            "time_complexity": ast.time_complexity,
-            "space_complexity": ast.space_complexity,
-            "confidence": ast.confidence,
-            "signals": ast.signals,
-            "explanation": ast.explanation,
-        }
         ai = ai_rows.get(solution_id)
-        hybrid = resolve_review(ast_dict, AIComplexityReview.model_validate(ai)) if ai else None
+        hybrid = _offline_combined(source, language, ast, ai)
         record = {
             "solution_id": solution_id,
             "problem_id": row.get("problem_id"),
@@ -117,6 +129,7 @@ def evaluate_rows(rows: list[dict[str, Any]], ai_rows: dict[str, dict[str, Any]]
         }
     return {
         "benchmark": "ai_ast_complexity_comparison",
+        "hybrid_scope": "production orchestration replay with frozen optional provider predictions; no live provider calls",
         "total": len(records),
         "ast": _metrics(records, "ast"),
         "ai": _metrics(records, "ai"),
