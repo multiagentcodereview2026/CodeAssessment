@@ -12,6 +12,9 @@ New submissions use `complexity-focused-v2`: C, T, M and Y are percentages
 for correctness, time, auxiliary space and style. Default weighted quality is
 Q = 0.30C + 0.35T + 0.25M + 0.10Y and the final mark is S = min(Q, C).
 The 79-point cap and second correctness multiplication are removed.
+Correctness is not rounded before applying the gate. The final one-decimal
+mark is rounded without crossing the correctness ceiling, so a failed case
+cannot become 100 through rounding; the UI preserves the decimal mark.
 Question-specific instructor weights must be nonnegative and total 100%.
 The correctness ceiling applies to every custom rubric. Store the version,
 weights and component contributions with the assessment; do not regrade old
@@ -19,7 +22,8 @@ records or mix rubric versions in research comparisons.
 
 For complete finite components in [0,100], nonnegative normalized weights
 imply 0 <= Q <= 100. Therefore 0 <= S <= C <= 100. Increasing a component
-cannot lower S, and the formula is continuous in the components. These are
+cannot lower S, and the unrounded policy is continuous in the components
+(the displayed mark is quantized to one decimal). These are
 mathematical properties, not evidence that a particular weighting matches
 instructor judgment. Complexity receives 60% because it is the platform's
 instructional focus; 30/35/25/10 is a prespecified design hypothesis, not a

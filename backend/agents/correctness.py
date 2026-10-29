@@ -44,7 +44,7 @@ def calculate_correctness_score(exec_res: Dict[str, Any]) -> Optional[float]:
         if total == 0:
             return None
 
-        return round((passed / total) * 100, 2)
+        return (passed / total) * 100
 
     # Fallback only if individual results are unavailable.
     passed = int(exec_res.get("passed_cases", 0) or 0)
@@ -54,7 +54,7 @@ def calculate_correctness_score(exec_res: Dict[str, Any]) -> Optional[float]:
     if total <= 0:
         return None
 
-    return round((passed / total) * 100, 2)
+    return (passed / total) * 100
 
 
 def sanitize_execution_for_llm(exec_res: Dict[str, Any]) -> Dict[str, Any]:

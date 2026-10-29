@@ -55,3 +55,14 @@ def test_monotonicity_bounds_and_determinism():
             assert 0 <= result[0] <= c
             assert result[0] >= previous
             previous = result[0]
+
+
+@pytest.mark.parametrize("passed,total", [(99999, 100000), (1999, 2000), (999, 1000), (1499, 2000)])
+def test_rounding_cannot_award_full_marks_to_a_failed_submission(passed, total):
+    from agents.correctness import calculate_correctness_score
+    correctness = calculate_correctness_score({"compile_status": "success", "passed_cases": passed, "total_cases": total})
+    assert correctness < 100
+    score, breakdown = student_rubric_score(correctness, details(), 100)
+    assert score <= correctness
+    assert score < 100
+    assert breakdown["correctness_gate"]["accepted"] is False

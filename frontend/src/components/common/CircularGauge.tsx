@@ -62,7 +62,7 @@ export const CircularGauge: React.FC<CircularGaugeProps> = ({
         ) : null}
         <div className="flex items-baseline justify-center">
           <span className="text-xl font-bold tracking-tight text-slate-800">
-            {Math.round(score)}
+            {Number(score.toFixed(1))}
           </span>
           {showPercent ? (
             <span className="text-xs font-semibold text-slate-500 ml-0.5">%</span>

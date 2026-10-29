@@ -61,12 +61,17 @@ def student_rubric_score(correctness, complexity_details, style, weights=None):
     lower = min(known, c) if c is not None else 0.0
     upper = min(known + sum(percentages[key] for key in missing), ceiling)
     raw = round(known, 1) if not missing else None
-    final = 0.0 if c == 0 else (round(min(known, ceiling), 1) if not missing else None)
+    # Round marks for display without rounding a partial correctness ceiling
+    # upward. In particular 99.999% correctness must never become 100 points.
+    def bounded_mark(value):
+        return min(round(min(value, ceiling), 1), math.floor(ceiling * 10) / 10)
+    final = 0.0 if c == 0 else (bounded_mark(known) if not missing else None)
     breakdown["correctness_gate"] = {"raw_score": raw, "score_before_cap": raw, "score_cap": c,
         "final_score": final, "accepted": None if c is None else c == 100, "rule": "min(weighted_score, correctness)"}
     breakdown["assessment"] = {"status": "incomplete" if missing else "complete", "missing_components": missing,
-                               "score_lower_bound": round(lower, 1), "score_upper_bound": round(upper, 1)}
-    breakdown["rubric"] = {"version": RUBRIC_VERSION, "weights": percentages, "correctness_ceiling": True}
+                               "score_lower_bound": bounded_mark(lower), "score_upper_bound": bounded_mark(upper)}
+    breakdown["rubric"] = {"version": RUBRIC_VERSION, "weights": percentages, "correctness_ceiling": True,
+                          "rounding": "one_decimal_without_crossing_correctness_ceiling"}
     return final, breakdown
 
 

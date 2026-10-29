@@ -72,7 +72,8 @@ Use RESEARCH_REVIEW_FORM.md for the independent labeling and feedback review.
 - The previous focused run passed 142 selected tests; a subsequent full CI
   run passed 288. The post-pull integration now includes the projection suite,
   background privacy/budget tests and the reproducibility tools: its complete
-  run passed 311 tests. Do not add counts across runs.
+  run passed 315 tests, including near-perfect-score rounding boundaries.
+  Do not add counts across runs.
 - Frontend production build and lint passed.
 - Eight live execution checks met their expected outcomes: sum programs in
   Python/C/C++/Java/JavaScript, C++ nested-array Merge Intervals, a changed
