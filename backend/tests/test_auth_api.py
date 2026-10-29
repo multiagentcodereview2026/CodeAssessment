@@ -523,6 +523,16 @@ def test_assignment_create_persists_ordered_links_and_rejects_partial_invalid_cr
     assert [(link.position, link.problem_id) for link in links] == [(1, "p-2"), (2, "p-1")]
 
 
+def test_student_problem_response_keeps_private_targets_private(db_session):
+    problem = models.Problem(id="private-targets", title="Private targets", description="Test", examples=[], constraints=[], starter_codes={}, test_cases=[], is_public_practice=True, target_time_complexity="O(n)", target_space_complexity="O(1)")
+    db_session.add(problem)
+    db_session.commit()
+    response = get_problem(problem.id, db_session, SimpleNamespace(role="student"))
+    assert response["target_time_complexity"] is None
+    assert response["target_space_complexity"] is None
+    assert response["scoring_weights"]["time"] == 35
+
+
 def test_question_weights_are_scoped_and_frozen_after_submission(db_session):
     teacher = add_account(db_session, username="weights-teacher", role="instructor", password="test-password-123").instructor_profile
     course = models.Course(course_code="WEIGHTS", title="Weights", instructor_id=teacher.id)

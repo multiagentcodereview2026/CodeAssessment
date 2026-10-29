@@ -6,6 +6,59 @@ ground-truth corpus suitable for measuring complexity-agent accuracy or
 student-feedback quality. Run the experimental protocol only after the data
 and licensing gates below are resolved.
 
+## Frozen scoring policy for the next evaluation
+
+New submissions use `complexity-focused-v2`: C, T, M and Y are percentages
+for correctness, time, auxiliary space and style. Default weighted quality is
+Q = 0.30C + 0.35T + 0.25M + 0.10Y and the final mark is S = min(Q, C).
+The 79-point cap and second correctness multiplication are removed.
+Question-specific instructor weights must be nonnegative and total 100%.
+The correctness ceiling applies to every custom rubric. Store the version,
+weights and component contributions with the assessment; do not regrade old
+records or mix rubric versions in research comparisons.
+
+For complete finite components in [0,100], nonnegative normalized weights
+imply 0 <= Q <= 100. Therefore 0 <= S <= C <= 100. Increasing a component
+cannot lower S, and the formula is continuous in the components. These are
+mathematical properties, not evidence that a particular weighting matches
+instructor judgment. Complexity receives 60% because it is the platform's
+instructional focus; 30/35/25/10 is a prespecified design hypothesis, not a
+literature-proven optimum. The correctness ceiling may make improvements in
+complexity leave the final mark unchanged until correctness improves.
+
+Unavailable weighted evidence leaves the assessment incomplete with lower
+and upper score bounds; never redistribute its weights. Confirmed zero
+correctness fixes the mark at zero even when the other analyses are pending.
+Acceptance is a separate verdict requiring every evaluated case to pass.
+Passing finite tests is not a proof of algorithm correctness on all inputs.
+
+Public-test admission is enforced by the backend on the exact submitted code.
+Passing the public cases is required before full assessment; it does not
+guarantee passing private cases. One failed private feedback case may be
+released for learning, with remaining private cases redacted. State that
+release policy explicitly in the paper; do not claim that every hidden case
+remains secret. Numerical grades and similarity review are separate.
+
+Run `python -m analysis.scoring_policy_audit --output /tmp/scoring-audit.json`
+for synthetic sensitivity checks. With independently reviewed component
+percentages and instructor grades, add `--reviews /path/to/reviews.jsonl` to
+compare mean absolute error against equal-weight and correctness-heavier
+comparators. Each row needs `id`, `correctness`, `time`, `space`, `style`,
+`instructor_score`, and two distinct `reviewed_by` identifiers. Preselect
+comparators before opening the holdout; compare on matched solutions and
+report sample size, uncertainty and disagreements. Reviewer identifiers in a
+file are an audit trail, not proof that review was independent.
+
+Run `python -m analysis.verify_execution_contract --output /tmp/execution.json`
+inside the backend Compose network for real sandbox smoke checks using
+original synthetic programs. The matrix covers five languages, nested array
+stdin, unsorted and endpoint-sharing intervals, and changed-source execution.
+Report these as software verification, separately from analyzer accuracy.
+
+Score projection is explicitly excluded from this evaluation batch while the
+teammate completes it. New v2 submissions withhold projections until that
+integration uses their saved rubric. No projection-quality result is claimed.
+
 ## Research objective
 
 Evaluate whether CodeAssessment's static complexity analysis and assessment
@@ -94,6 +147,14 @@ privacy. Report inter-rater agreement and disagreements. Do not treat LLM
 judges as ground truth without human validation.
 
 ## Execution and provider manifest
+
+The offline comparison runner uses `analyze_static_complexity` for its AST
+baseline, rather than accidentally invoking the production combined workflow.
+Its `accuracy` is joint exact agreement among answered rows. Report `coverage`
+beside it; `accuracy_all_rows` uses the full denominator with abstentions as
+non-successes. `time_accuracy` and `space_accuracy` show the separate dimensions.
+REVIEW_REQUIRED/NEEDS_REVIEW rows are abstentions, not confident predictions.
+These field definitions are not a substitute for a reviewed evaluation set.
 
 Record the following for each run: repository commit, operating system,
 Python version, Docker version, runtime image digests, CPU/memory/time/output

@@ -8,14 +8,13 @@ reproducible and API limits cannot silently change the benchmark.
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 from .ai_complexity_reviewer import AIComplexityReview, resolve_review
-from .analyzer_service import analyze_submission_complexity, final_complexity_result
+from .analyzer_service import analyze_static_complexity
 
 
 def _rows(path: str) -> list[dict[str, Any]]:
@@ -46,13 +45,19 @@ def _exact(actual_time: Any, actual_space: Any, row: dict[str, Any]) -> bool:
 
 
 def _metrics(records: list[dict[str, Any]], prefix: str) -> dict[str, Any]:
-    eligible = [record for record in records if record[f"{prefix}_status"] != "UNAVAILABLE"]
+    # REVIEW_REQUIRED and failed guesses are abstentions, not confident answers.
+    eligible = [record for record in records if record[f"{prefix}_status"] in {"ANALYZED", "AVAILABLE", "AGREEMENT", "AI_FALLBACK", "AST_CONFIRMED"}
+                and record.get(f"{prefix}_time") and record.get(f"{prefix}_space")]
     exact = sum(record[f"{prefix}_exact"] for record in eligible)
     return {
         "total": len(records),
         "eligible": len(eligible),
         "exact": exact,
         "accuracy": round(exact / len(eligible), 4) if eligible else None,
+        "coverage": round(len(eligible) / len(records), 4) if records else None,
+        "accuracy_all_rows": round(exact / len(records), 4) if records else None,
+        "time_accuracy": round(sum(record[f"{prefix}_time_exact"] for record in eligible) / len(eligible), 4) if eligible else None,
+        "space_accuracy": round(sum(record[f"{prefix}_space_exact"] for record in eligible) / len(eligible), 4) if eligible else None,
     }
 
 
@@ -63,8 +68,11 @@ def evaluate_rows(rows: list[dict[str, Any]], ai_rows: dict[str, dict[str, Any]]
         source = str(_value(row, "source", "reference_source") or "")
         language = str(row.get("language", "")).lower().strip()
         solution_id = str(_value(row, "solution_id", "problem_id") or index)
-        evidence = asyncio.run(analyze_submission_complexity(source, language))
-        ast = final_complexity_result(evidence)
+        if not source.strip() or not language or not _value(row, "true_time_complexity", "snippet_time_complexity", "expected_time") or not _value(row, "true_space_complexity", "snippet_space_complexity", "expected_space"):
+            raise ValueError("Each benchmark row needs source, language and code-specific time/space labels")
+        # The AST comparator must be static-only. The production combined
+        # workflow can invoke the model and must not be mislabeled an AST run.
+        ast = analyze_static_complexity(source, language)
         ast_dict = {
             "time_complexity": ast.time_complexity,
             "space_complexity": ast.space_complexity,
@@ -86,7 +94,7 @@ def evaluate_rows(rows: list[dict[str, Any]], ai_rows: dict[str, dict[str, Any]]
             "ai_time": ai.get("time_complexity") if ai else None,
             "ai_space": ai.get("space_complexity") if ai else None,
             "ai_confidence": ai.get("confidence") if ai else None,
-            "ai_status": "AVAILABLE" if ai else "UNAVAILABLE",
+            "ai_status": str(ai.get("status") or "AVAILABLE").upper() if ai else "UNAVAILABLE",
             "ai_exact": _exact(ai.get("time_complexity"), ai.get("space_complexity"), row) if ai else False,
             "hybrid_time": hybrid.time_complexity if hybrid else None,
             "hybrid_space": hybrid.space_complexity if hybrid else None,
@@ -94,6 +102,9 @@ def evaluate_rows(rows: list[dict[str, Any]], ai_rows: dict[str, dict[str, Any]]
             "hybrid_status": hybrid.status if hybrid else "UNAVAILABLE",
             "hybrid_exact": _exact(hybrid.time_complexity, hybrid.space_complexity, row) if hybrid else False,
         }
+        for prefix in ("ast", "ai", "hybrid"):
+            record[f"{prefix}_time_exact"] = _canonical(record[f"{prefix}_time"]) == _canonical(_value(row, "true_time_complexity", "snippet_time_complexity", "expected_time"))
+            record[f"{prefix}_space_exact"] = _canonical(record[f"{prefix}_space"]) == _canonical(_value(row, "true_space_complexity", "snippet_space_complexity", "expected_space"))
         records.append(record)
 
     by_language: dict[str, Any] = {}
