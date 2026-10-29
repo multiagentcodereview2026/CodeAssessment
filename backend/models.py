@@ -160,6 +160,7 @@ class Problem(Base):
     # Course-only questions remain private unless an instructor deliberately
     # publishes them to the reusable practice catalogue.
     is_public_practice = Column(Boolean, nullable=False, default=True, server_default="true", index=True)
+    scoring_weights = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     submissions = relationship("Submission", back_populates="problem")
@@ -209,6 +210,7 @@ class AssignmentProblem(Base):
     assignment_id = Column(Integer, ForeignKey("assignments.id"), nullable=False, index=True)
     problem_id = Column(String(100), ForeignKey("problems.id"), nullable=False, index=True)
     position = Column(Integer, default=1)  # order in assignment
+    scoring_weights = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

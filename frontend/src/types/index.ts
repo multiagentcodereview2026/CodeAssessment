@@ -40,6 +40,7 @@ export interface ProblemInputField {
 }
 
 export interface Problem {
+  scoringWeights?: { correctness: number; time: number; space: number; style: number };
   id: string;
   title: string;
   slug: string;
@@ -224,6 +225,7 @@ export interface Assignment {
   course: string;
   problemsCount: number;
   problemIds: string[];
+  problemWeights?: Record<string, { correctness: number; time: number; space: number; style: number }>;
   submittedCount: number;
   totalCount: number;
   avgScore: number | null;

@@ -1,6 +1,20 @@
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List, Literal
-from pydantic import BaseModel, Field, field_serializer, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator, model_validator, ConfigDict
+from scoring.rubric import validate_weights
+
+
+class ScoringWeights(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    correctness: float = Field(ge=0, le=100)
+    time: float = Field(ge=0, le=100)
+    space: float = Field(ge=0, le=100)
+    style: float = Field(ge=0, le=100)
+
+    @model_validator(mode="after")
+    def total_is_100(self):
+        validate_weights(self.model_dump())
+        return self
 
 
 def utc_isoformat(value: datetime) -> str:
@@ -69,6 +83,7 @@ class ProblemListItem(BaseModel):
         from_attributes = True
 
 class ProblemDetail(BaseModel):
+    scoring_weights: Optional[Dict[str, float]] = None
     id: str
     title: str
     difficulty: str
@@ -97,6 +112,7 @@ class InstructorProblemTestCase(BaseModel):
 
 
 class InstructorProblemCreate(BaseModel):
+    scoring_weights: Optional[ScoringWeights] = None
     title: str
     description: str
     difficulty: Literal["Easy", "Medium", "Hard"]
@@ -342,6 +358,7 @@ class StudentAssignmentResponse(BaseModel):
     problem_titles: List[str]
 
 class AssignmentCreate(BaseModel):
+    problem_weights: Dict[str, ScoringWeights] = Field(default_factory=dict)
     title: str
     description: Optional[str] = None
     course_id: int
@@ -369,6 +386,7 @@ class AssignmentCreate(BaseModel):
         return normalized
 
 class AssignmentUpdate(BaseModel):
+    problem_weights: Optional[Dict[str, ScoringWeights]] = None
     title: Optional[str] = None
     description: Optional[str] = None
     due_date: Optional[datetime] = None
@@ -401,6 +419,7 @@ class AssignmentUpdate(BaseModel):
         return normalized
 
 class AssignmentResponse(BaseModel):
+    problem_weights: Dict[str, Dict[str, float]] = Field(default_factory=dict)
     id: int
     title: str
     description: Optional[str] = None

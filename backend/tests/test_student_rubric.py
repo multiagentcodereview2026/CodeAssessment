@@ -1,108 +1,57 @@
-from agents.aggregation import aggregation_node
-from scoring.rubric import instructor_rubric_score, student_rubric_score
 import asyncio
+import math
 import pytest
+from agents.aggregation import aggregation_node
+from scoring.rubric import DEFAULT_WEIGHT_PERCENT, instructor_rubric_score, student_rubric_score, validate_weights
 
 
-def test_student_rubric_uses_declared_20_30_30_20_weights_without_double_counting():
-    score, breakdown = student_rubric_score(
-        80,
-        {"time_score": 20, "time_score_max": 25, "space_score": 15, "space_score_max": 25},
-        90,
-    )
-    assert score == 76.0
-    assert breakdown["correctness"]["weight"] == 0.20
-    assert breakdown["time"]["weight"] == 0.30
-    assert breakdown["space"]["weight"] == 0.30
-    assert breakdown["style"]["weight"] == 0.20
-    assert breakdown["correctness_gate"] == {
-        "raw_score": 76.0,
-        "score_before_cap": 76.0,
-        "score_cap": 79.0,
-        "final_score": 76.0,
-        "accepted": False,
-    }
+def details(time=100, space=100):
+    return {"time_score": time, "time_score_max": 100, "space_score": space, "space_score_max": 100}
 
 
-def test_non_accepted_solution_cannot_receive_an_excellent_score():
-    score, breakdown = student_rubric_score(
-        99,
-        {"time_score": 25, "time_score_max": 25, "space_score": 25, "space_score_max": 25},
-        100,
-    )
-
-    assert breakdown["correctness_gate"]["raw_score"] == 99.8
-    assert breakdown["correctness_gate"]["score_before_cap"] == 99.8
-    assert score == 79.0
-
-
-def test_similarity_cannot_change_a_student_score():
-    base = {
-        "correctness_score": 80,
-        "complexity_details": {"time_score": 20, "time_score_max": 25, "space_score": 15, "space_score_max": 25},
-        "style_score": 90,
-    }
-    low_risk = asyncio.run(aggregation_node({**base, "similarity_score": 0}))
-    high_risk = asyncio.run(aggregation_node({**base, "similarity_score": 100}))
-    assert low_risk["overall_score"] == high_risk["overall_score"] == 76.0
-    assert "originality" not in low_risk["score_breakdown"]
+def test_default_weighted_quality_and_continuous_correctness_ceiling():
+    score, breakdown = student_rubric_score(80, details(80, 60), 90)
+    assert score == 76
+    assert breakdown["rubric"]["weights"] == DEFAULT_WEIGHT_PERCENT
+    assert breakdown["correctness_gate"]["rule"] == "min(weighted_score, correctness)"
+    for c in [0, 20, 44/61*100, 79, 80, 99, 100]:
+        score, breakdown = student_rubric_score(c, details(), 100)
+        assert score == round(min(.3*c+70, c), 1)
+        assert breakdown["correctness_gate"]["accepted"] is (c == 100)
 
 
-def test_missing_correctness_is_reported_as_unknown_and_available_weights_renormalize():
-    score, breakdown = student_rubric_score(
-        None,
-        {"time_score": 20, "time_score_max": 25, "space_score": 25, "space_score_max": 25},
-        100,
-    )
-
-    assert score == 92.5
-    assert breakdown["correctness"]["score"] is None
-    assert breakdown["correctness"]["effective_weight"] == 0.0
-    assert breakdown["time"]["effective_weight"] == pytest.approx(0.375)
-    assert breakdown["space"]["effective_weight"] == pytest.approx(0.375)
-    assert breakdown["style"]["effective_weight"] == pytest.approx(0.25)
-    assert breakdown["correctness_gate"]["accepted"] is None
-    assert breakdown["correctness_gate"]["score_cap"] is None
+def test_custom_weights_and_staff_marks_use_identical_policy_without_similarity():
+    weights = {"correctness": 0, "time": 70, "space": 20, "style": 10}
+    expected = student_rubric_score(65, details(), 100, weights)
+    assert expected[0] == 65
+    assert instructor_rubric_score(65, details(), 100, similarity=99, weights=weights) == expected
+    for similarity in [0, 100]:
+        state = {"correctness_score": 65, "complexity_details": details(), "style_score": 100, "scoring_weights": weights, "similarity_score": similarity}
+        assert asyncio.run(aggregation_node(state))["overall_score"] == 65
 
 
-def test_fully_accepted_solution_has_no_nonaccepted_cap():
-    score, breakdown = student_rubric_score(
-        100,
-        {"time_score": 25, "time_score_max": 25, "space_score": 25, "space_score_max": 25},
-        100,
-    )
-
-    assert score == 100.0
-    assert breakdown["correctness_gate"]["accepted"] is True
-    assert breakdown["correctness_gate"]["score_cap"] is None
+def test_unavailable_component_has_bounds_and_never_renormalizes():
+    score, breakdown = student_rubric_score(100, {"space_score": 25}, 100)
+    assert score is None
+    assert breakdown["assessment"] == {"status": "incomplete", "missing_components": ["time"], "score_lower_bound": 65, "score_upper_bound": 100}
+    assert breakdown["time"]["effective_weight"] == .35
+    assert student_rubric_score(None, details(), 100)[0] is None
+    assert student_rubric_score(0, {}, 100)[0] == 0
+    assert student_rubric_score(100, {}, 100, {"correctness": 90, "time": 0, "space": 0, "style": 10})[0] == 100
 
 
-def test_instructor_review_uses_separate_weights_and_similarity_as_originality():
-    score, breakdown = instructor_rubric_score(
-        80,
-        {"time_score": 20, "time_score_max": 25, "space_score": 15, "space_score_max": 25},
-        90,
-        20,
-    )
-
-    assert score == 77.0
-    assert breakdown["correctness"]["weight"] == 0.20
-    assert breakdown["time"]["weight"] == 0.25
-    assert breakdown["space"]["weight"] == 0.25
-    assert breakdown["style"]["weight"] == 0.20
-    assert breakdown["originality"]["weight"] == 0.10
-    assert breakdown["originality"]["score"] == 80.0
+@pytest.mark.parametrize("weights", [{}, {"correctness": 30, "time": 35, "space": 25, "style": 20}, {"correctness": math.nan, "time": 35, "space": 25, "style": 10}, {"correctness": -1, "time": 66, "space": 25, "style": 10}])
+def test_invalid_weights_rejected(weights):
+    with pytest.raises(ValueError):
+        validate_weights(weights)
 
 
-def test_invalid_scores_are_clamped_and_missing_complexity_is_renormalized():
-    score, breakdown = student_rubric_score(
-        120,
-        {"time_score": "invalid", "space_score": 20, "space_score_max": 25},
-        -10,
-    )
-
-    assert score == 62.9
-    assert breakdown["correctness"]["score"] == 100.0
-    assert breakdown["time"]["score"] is None
-    assert breakdown["space"]["score"] == 80.0
-    assert breakdown["style"]["score"] == 0.0
+def test_monotonicity_bounds_and_determinism():
+    for c in range(0, 101, 5):
+        previous = -1
+        for t in range(0, 101, 5):
+            result = student_rubric_score(c, details(t, 65), 80)
+            assert result == student_rubric_score(c, details(t, 65), 80)
+            assert 0 <= result[0] <= c
+            assert result[0] >= previous
+            previous = result[0]

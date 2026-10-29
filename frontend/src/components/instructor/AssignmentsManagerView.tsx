@@ -5,6 +5,7 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/useAuth';
 import { Assignment } from '../../types';
 import { Modal } from '../common/Modal';
+import { ScoringWeightsEditor, ScoringWeights } from '../common/ScoringWeightsEditor';
 import { DoubleConfirmDialog } from '../common/DoubleConfirmDialog';
 
 type ProblemOption = { id: string; title: string; difficulty: string; category?: string };
@@ -21,6 +22,7 @@ export const AssignmentsManagerView: React.FC = () => {
   const [dueDate, setDueDate] = useState('');
   const [revisionPolicy, setRevisionPolicy] = useState<'HINTS_ONLY' | 'EXPLAIN_CHANGES' | 'VERIFIED_REFERENCE' | 'GUIDED_STEPS'>('GUIDED_STEPS');
   const [selectedProblemIds, setSelectedProblemIds] = useState<string[]>([]);
+  const [problemWeights, setProblemWeights] = useState<Record<string, ScoringWeights>>({});
   const [problemOptions, setProblemOptions] = useState<ProblemOption[]>([]);
   const [problemsLoading, setProblemsLoading] = useState(true);
   const [problemLoadError, setProblemLoadError] = useState('');
@@ -65,6 +67,7 @@ export const AssignmentsManagerView: React.FC = () => {
       course: `${course.code} ${course.title}`,
       problemsCount: selectedProblemIds.length,
       problemIds: selectedProblemIds,
+      problemWeights: Object.fromEntries(Object.entries(problemWeights).filter(([id]) => selectedProblemIds.includes(id))),
       submittedCount: 0,
       totalCount: 0,
       avgScore: 0,
@@ -82,6 +85,7 @@ export const AssignmentsManagerView: React.FC = () => {
       setDueDate('');
       setRevisionPolicy('GUIDED_STEPS');
       setSelectedProblemIds([]);
+      setProblemWeights({});
     } catch {
       // AppContext displays the API error and leaves the draft available to retry.
     } finally {
@@ -97,6 +101,7 @@ export const AssignmentsManagerView: React.FC = () => {
   const [editStatus, setEditStatus] = useState('ACTIVE');
   const [editHasSubmissions, setEditHasSubmissions] = useState(false);
   const [editProblemIds, setEditProblemIds] = useState<string[]>([]);
+  const [editProblemWeights, setEditProblemWeights] = useState<Record<string, ScoringWeights>>({});
   const [editCourseId, setEditCourseId] = useState('');
   const [editRevisionPolicy, setEditRevisionPolicy] = useState<'HINTS_ONLY' | 'EXPLAIN_CHANGES' | 'VERIFIED_REFERENCE' | 'GUIDED_STEPS'>('GUIDED_STEPS');
 
@@ -109,6 +114,7 @@ export const AssignmentsManagerView: React.FC = () => {
     setEditStatus(assignment.status.toUpperCase() === 'CLOSED' ? 'CLOSED' : 'ACTIVE');
     setEditHasSubmissions(assignment.submittedCount > 0);
     setEditProblemIds(assignment.problemIds || []);
+    setEditProblemWeights(assignment.problemWeights || {});
     setEditCourseId(String(assignment.courseId || ''));
     setEditRevisionPolicy(assignment.revisionPolicy || 'VERIFIED_REFERENCE');
     setIsEditModalOpen(true);
@@ -129,6 +135,7 @@ export const AssignmentsManagerView: React.FC = () => {
           due_date: editDueDate ? new Date(editDueDate).toISOString() : null,
           status: editStatus,
           problem_ids: editHasSubmissions ? undefined : editProblemIds,
+          problem_weights: editHasSubmissions ? undefined : Object.fromEntries(Object.entries(editProblemWeights).filter(([id]) => editProblemIds.includes(id))),
           revision_policy: editRevisionPolicy
         })
       });
@@ -248,6 +255,7 @@ export const AssignmentsManagerView: React.FC = () => {
               })}
             </div>
           </fieldset>
+          {editProblemIds.map((id) => <div key={id}><p className="mb-1 text-sm font-semibold">{problemOptions.find((p) => p.id === id)?.title || id}</p><ScoringWeightsEditor disabled={editHasSubmissions} value={editProblemWeights[id]} onChange={(weights) => setEditProblemWeights((current) => { const next = { ...current }; if (weights) next[id] = weights; else delete next[id]; return next; })} /></div>)}
           <footer className="flex justify-end gap-2 border-t border-slate-200 pt-4">
             <button type="button" onClick={() => setIsEditModalOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-700">Cancel</button>
             <button type="submit" disabled={saving || (!editHasSubmissions && !editProblemIds.length)} className="rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white disabled:opacity-50">{saving ? 'Saving…' : 'Save changes'}</button>
@@ -299,6 +307,7 @@ export const AssignmentsManagerView: React.FC = () => {
               })}
             </div>
           </fieldset>
+          {selectedProblemIds.map((id) => <div key={id}><p className="mb-1 text-sm font-semibold">{problemOptions.find((p) => p.id === id)?.title || id}</p><ScoringWeightsEditor value={problemWeights[id]} onChange={(weights) => setProblemWeights((current) => { const next = { ...current }; if (weights) next[id] = weights; else delete next[id]; return next; })} /></div>)}
           <footer className="flex justify-end gap-2 border-t border-slate-200 pt-4">
             <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-700">Cancel</button>
             <button type="submit" disabled={saving || !courses.length || !selectedProblemIds.length || problemsLoading || Boolean(problemLoadError)} className="rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white disabled:opacity-50">{saving ? 'Saving…' : 'Publish assignment'}</button>

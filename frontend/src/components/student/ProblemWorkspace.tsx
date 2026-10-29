@@ -155,7 +155,8 @@ export const ProblemWorkspace: React.FC = () => {
             time: problem.target_time_complexity || '—',
             space: problem.target_space_complexity || '—'
           },
-          inputSchema
+          inputSchema,
+          scoringWeights: problem.scoring_weights
         });
         setProblemLoadError(null);
       })
@@ -467,8 +468,8 @@ export const ProblemWorkspace: React.FC = () => {
 
       setRunOutput({
         status: allPublicCasesPassed ? 'success' : 'error',
-        time: `${data.runtime_ms || 18} ms`,
-        memory: '4.2 MB',
+        time: data.runtime_ms == null ? 'Unavailable' : `${data.runtime_ms} ms`,
+        memory: data.memory_kb > 0 ? `${(data.memory_kb / 1024).toFixed(1)} MB` : 'Not measured',
         reason: compilationFailed
           ? 'Compilation failed. No test cases were executed.'
           : !allPublicCasesPassed
@@ -617,7 +618,7 @@ export const ProblemWorkspace: React.FC = () => {
         code: code,
         status: accepted ? 'Accepted' : passedCases > 0 ? 'Partial' : 'Wrong Answer',
         executionTime: `${execution.runtime_ms || 0} ms`,
-        memory: '5.2 MB',
+        memory: execution.memory_kb > 0 ? `${(execution.memory_kb / 1024).toFixed(1)} MB` : 'Not measured',
         multiScores: {
           correctness: {
             score: Math.round(((data.correctness_score ?? 0) / 100) * 20),
@@ -849,6 +850,7 @@ export const ProblemWorkspace: React.FC = () => {
         </button>
       </div>
 
+      <details className="text-xs text-slate-500"><summary className="cursor-pointer">Scoring rubric</summary><p className="mt-2">Correctness {(assignmentAccess?.scoring_weights || selectedProblem.scoringWeights)?.correctness ?? 30}% · time {(assignmentAccess?.scoring_weights || selectedProblem.scoringWeights)?.time ?? 35}% · space {(assignmentAccess?.scoring_weights || selectedProblem.scoringWeights)?.space ?? 25}% · style {(assignmentAccess?.scoring_weights || selectedProblem.scoringWeights)?.style ?? 10}%. Final score is the lower of weighted quality and correctness. Pass every public test to submit; acceptance requires all evaluation tests to pass.</p></details>
       {/* Main Split Grid */}
       <div className="grid min-w-0 grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(390px,1fr)_minmax(500px,1.2fr)] xl:grid-cols-[minmax(450px,1fr)_minmax(660px,1.2fr)]">
         {/* LEFT PANEL: Problem Details & Constraints (Col span 5) */}

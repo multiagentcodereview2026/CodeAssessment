@@ -200,6 +200,7 @@ def test_compile_failure_does_not_receive_a_complexity_mark():
                 "execution_result": {"compile_status": "error"},
                 "complexity_target": {"time": "O(n)", "space": "O(1)"},
                 "precomputed_complexity_analysis": {
+                    "status": "ANALYZED", "confidence": 1.0,
                     "time_complexity": "O(n)",
                     "space_complexity": "O(1)",
                     "bottlenecks": [],
@@ -224,6 +225,7 @@ def test_zero_correct_cases_receive_no_efficiency_marks():
                 "correctness_score": 0.0,
                 "complexity_target": {"time": "O(n)", "space": "O(1)"},
                 "precomputed_complexity_analysis": {
+                    "status": "ANALYZED", "confidence": 1.0,
                     "time_complexity": "O(n)",
                     "space_complexity": "O(1)",
                     "bottlenecks": [],

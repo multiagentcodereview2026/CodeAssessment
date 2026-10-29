@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { ScoringWeightsEditor, ScoringWeights } from '../common/ScoringWeightsEditor';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Code2,
@@ -180,6 +181,7 @@ export const ProblemsListView: React.FC = () => {
           starterCode: problem.starter_codes || {},
           solutionCode: {},
           optimalComplexity: { time: problem.target_time_complexity || '—', space: problem.target_space_complexity || '—' },
+          scoringWeights: problem.scoring_weights,
           isInstructorAssigned: true,
           assignmentId: Number(problem.assignment_id),
           courseCode: problem.course_code || '',
@@ -211,6 +213,7 @@ export const ProblemsListView: React.FC = () => {
   const [formTags, setFormTags] = useState('');
   const [formTimeComp, setFormTimeComp] = useState('');
   const [formSpaceComp, setFormSpaceComp] = useState('');
+  const [formWeights, setFormWeights] = useState<ScoringWeights | undefined>();
   const [formTestCases, setFormTestCases] = useState<TestCaseItem[]>([]);
   const [isSavingQuestion, setIsSavingQuestion] = useState(false);
   const [questionError, setQuestionError] = useState('');
@@ -272,6 +275,7 @@ export const ProblemsListView: React.FC = () => {
     setFormTags('');
     setFormTimeComp('');
     setFormSpaceComp('');
+    setFormWeights(undefined);
     setFormTestCases([{ id: `tc-${Date.now()}`, input: '', output: '', isHidden: false }]);
     setQuestionError('');
     setIsQuestionModalOpen(true);
@@ -288,6 +292,7 @@ export const ProblemsListView: React.FC = () => {
     setFormTags(prob.tags.join(', '));
     setFormTimeComp(prob.optimalComplexity.time);
     setFormSpaceComp(prob.optimalComplexity.space);
+    setFormWeights(prob.scoringWeights);
     setFormTestCases(prob.testCases.map((tc, idx) => ({
       id: `tc-${idx + 1}`, input: tc.input, output: tc.expectedOutput, isHidden: Boolean(tc.isHidden)
     })));
@@ -345,6 +350,7 @@ export const ProblemsListView: React.FC = () => {
         title: formTitle.trim(), description: formDescription.trim(), difficulty: formDifficulty,
         category: parsedTags[0] || 'Algorithms', topic_tags: parsedTags, target_time_complexity: formTimeComp.trim(),
         target_space_complexity: formSpaceComp.trim(),
+        scoring_weights: formWeights || null,
         starter_codes: editingProblemId ? instructorProblems.find((problem) => problem.id === editingProblemId)?.starterCode || {} : {},
         test_cases: formTestCases.map((tc) => ({ input: tc.input.trim(), expected_output: tc.output.trim(), is_hidden: tc.isHidden })),
         course_id: Number(formCourseId), due_date: formDueDate ? new Date(formDueDate).toISOString() : null
@@ -1514,6 +1520,7 @@ export const ProblemsListView: React.FC = () => {
           </div>
 
           {/* Dynamic Test Cases Builder */}
+          <ScoringWeightsEditor value={formWeights} onChange={setFormWeights} />
           <div className="space-y-2 pt-2 border-t border-slate-100">
             <div className="flex items-center justify-between">
               <span className="font-extrabold text-slate-900 block">

@@ -112,5 +112,7 @@ def test_fresh_database_migration_is_repeatable(tmp_path):
     )
     with engine.connect() as connection:
         version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert version == "20261022_0008"
+    assert version == "20261029_0010"
+    for table in ("problems", "assignment_problems"):
+        assert "scoring_weights" in {column["name"] for column in inspector.get_columns(table)}
     engine.dispose()

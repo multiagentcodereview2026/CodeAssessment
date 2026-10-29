@@ -21,7 +21,7 @@ from sqlalchemy import func, or_, text
 from analysis.analyzer_service import analyze_submission_complexity, analyze_static_complexity
 from analysis.dynamic_profiler import profile_execution_results
 from config.settings import settings
-from scoring.rubric import complexity_dimension_percent
+from scoring.rubric import complexity_dimension_percent, validate_weights
 from similarity_analysis import approach_label, approach_summary, structural_explanation, structural_fingerprint, structural_overlap
 from similarity_clustering import build_approach_groups, build_similarity_clusters, build_submission_groups
 from recommendation_engine import build_recommendations, build_roadmap, normalize_topics
@@ -296,6 +296,15 @@ def student_score_extremes(db: Session, submissions: List[models.Submission]) ->
     }
 
 
+def resolved_scoring_weights(db: Session, problem: models.Problem, assignment=None) -> dict:
+    link = db.query(models.AssignmentProblem).filter_by(assignment_id=assignment.id, problem_id=problem.id).first() if assignment else None
+    return validate_weights((link.scoring_weights if link else None) or problem.scoring_weights)
+
+
+def assignment_weight_overrides(db: Session, assignment_id: int) -> dict:
+    return {link.problem_id: link.scoring_weights for link in db.query(models.AssignmentProblem).filter_by(assignment_id=assignment_id).all() if link.scoring_weights is not None}
+
+
 def build_assignment_stats(db: Session, assignment: models.Assignment) -> AssignmentWithStats:
     links = db.query(models.AssignmentProblem).filter(
         models.AssignmentProblem.assignment_id == assignment.id
@@ -326,6 +335,7 @@ def build_assignment_stats(db: Session, assignment: models.Assignment) -> Assign
         status=assignment.status,
         created_at=assignment.created_at,
         problems=[link.problem_id for link in links],
+        problem_weights=assignment_weight_overrides(db, assignment.id),
         total_students=enrollment_count,
         submitted_count=len(submitters),
         total_attempts=len(submissions),
@@ -569,6 +579,8 @@ async def score_revision_stage(
         "expected_improvement": None,
         "assumptions": [],
     }
+    if (original_submission.score_breakdown or {}).get("rubric", {}).get("version") == "complexity-focused-v2":
+        return {**unavailable, "message": "Revision score projection is awaiting integration with the saved scoring rubric."}
     try:
         execution = await execute_code_sandboxed(
             source_code=source_code,
@@ -1174,6 +1186,9 @@ def instructor_problem_payload(db: Session, problem: models.Problem, assignment:
         "examples": problem.examples or [],
         "constraints": problem.constraints or [],
         "starter_codes": problem.starter_codes or {},
+        "scoring_weights": resolved_scoring_weights(db, problem, assignment),
+        "target_time_complexity": problem.target_time_complexity,
+        "target_space_complexity": problem.target_space_complexity,
         "test_cases": load_problem_cases(db, problem, public_only=False),
         "is_instructor_assigned": True,
         "assignment_id": assignment.id,
@@ -1206,6 +1221,7 @@ def create_instructor_problem(
         target_space_complexity=payload.target_space_complexity,
         complexity_source="instructor-provided",
         is_public_practice=False,
+        scoring_weights=payload.scoring_weights.model_dump() if payload.scoring_weights else None,
     )
     assignment = models.Assignment(
         title=payload.title,
@@ -1282,6 +1298,7 @@ def update_instructor_problem(
         problem.starter_codes = payload.starter_codes
         problem.target_time_complexity = payload.target_time_complexity
         problem.target_space_complexity = payload.target_space_complexity
+        problem.scoring_weights = payload.scoring_weights.model_dump() if payload.scoring_weights else None
         problem.test_cases = [{"input": c["input"], "expected_output": c["expected_output"], "is_hidden": c["is_hidden"]} for c in cases if not c["is_hidden"]][:3]
         assignment.title = payload.title
         assignment.description = payload.description
@@ -1378,8 +1395,9 @@ def get_problem(
             "due_date": utc_isoformat(assignment.due_date) if assignment.due_date else None,
             "assignment_id": assignment.id,
         } if (assignment and not problem.is_public_practice) else assignment_metadata(problem.id)),
-        "target_time_complexity": problem.target_time_complexity,
-        "target_space_complexity": problem.target_space_complexity,
+        "scoring_weights": resolved_scoring_weights(db, problem, assignment if not problem.is_public_practice else None),
+        "target_time_complexity": problem.target_time_complexity if current_user.role == "instructor" else None,
+        "target_space_complexity": problem.target_space_complexity if current_user.role == "instructor" else None,
     }
 
 
@@ -1439,7 +1457,8 @@ async def generate_problem_hints(
 @app.get("/api/student/assignments/{assignment_id}/access/{problem_id}")
 def assignment_access(assignment_id: int, problem_id: str, db: Session = Depends(get_db), student: models.Student = Depends(get_current_student)):
     assignment = get_student_assignment_for_problem(db, student.student_id, assignment_id, canonical_problem_id(problem_id), allow_closed=True)
-    return {"closed": assignment_is_closed(assignment), "due_date": utc_isoformat(assignment.due_date) if assignment.due_date else None, "server_time": datetime.now(timezone.utc).isoformat()}
+    problem = db.query(models.Problem).filter_by(id=canonical_problem_id(problem_id)).one()
+    return {"closed": assignment_is_closed(assignment), "due_date": utc_isoformat(assignment.due_date) if assignment.due_date else None, "server_time": datetime.now(timezone.utc).isoformat(), "scoring_weights": resolved_scoring_weights(db, problem, assignment)}
 
 
 @app.post("/api/submissions/run", response_model=QuickRunResponse)
@@ -1514,6 +1533,9 @@ async def submit_and_evaluate_code(
         .all()
     )
 
+    # Snapshot before asynchronous execution; later question edits cannot alter this attempt.
+    scoring_weights = resolved_scoring_weights(db, problem, assignment)
+
     public_only = os.getenv(
         "PUBLIC_ONLY_EXECUTION",
         "false",
@@ -1560,6 +1582,17 @@ async def submit_and_evaluate_code(
             status_code=400,
             detail="No test cases are configured for this problem",
         )
+
+    # Admission is enforced on the exact submitted source, never a client flag.
+    public_cases = [case for case in test_cases if not case.get("is_hidden", False)]
+    if not public_cases:
+        raise HTTPException(status_code=409, detail="This question needs at least one public test before submissions can be assessed")
+    preflight = await execute_code_sandboxed(source_code=payload.code, language=payload.language,
+                                            test_cases=public_cases, stop_on_first_failure=False)
+    if preflight.get("execution_status") == "system_error" or preflight.get("compile_status") == "unavailable":
+        raise HTTPException(status_code=503, detail="Public-test verification is unavailable. Please retry.")
+    if preflight.get("compile_status") != "success" or preflight.get("total_cases") != len(public_cases) or preflight.get("passed_cases") != len(public_cases):
+        raise HTTPException(status_code=422, detail="Pass every public test with this code before submitting. Run Code to review failures.")
     
     # Docker execution decides correctness. Complexity begins with a local AST
     # pass; lower-confidence results can later use observed runtime evidence
@@ -1703,6 +1736,7 @@ async def submit_and_evaluate_code(
         "style_details": None,
         "overall_score": None,
         "score_breakdown": None,
+        "scoring_weights": scoring_weights,
         "confidence": None,
         "feedback": None,
         "recommendations": None,
@@ -1715,6 +1749,10 @@ async def submit_and_evaluate_code(
 
     # 3. Execute LangGraph Multi-Agent Engine
     final_state = await evaluation_graph.ainvoke(initial_state)
+    # Projection integration is intentionally pending; do not publish a v2
+    # promised gain until its separate implementation uses the saved rubric.
+    final_state["projected_score"] = {"available": False, "verified": False, "projected_score": None,
+        "expected_improvement": None, "message": "Score projection is awaiting integration with the versioned scoring rubric."}
     safe_execution_result = redact_hidden_execution(
         final_state.get("execution_result"),
         student_view=True,
@@ -3135,6 +3173,8 @@ def create_assignment(
     if missing_ids:
         raise HTTPException(status_code=422, detail={"unknown_problem_ids": missing_ids})
 
+    if set(assignment.problem_weights) - set(assignment.problem_ids):
+        raise HTTPException(status_code=422, detail="Weight overrides must refer to selected questions")
     try:
         new_assignment = models.Assignment(
             title=assignment.title,
@@ -3151,6 +3191,7 @@ def create_assignment(
                 assignment_id=new_assignment.id,
                 problem_id=problem_id,
                 position=position,
+                scoring_weights=assignment.problem_weights[problem_id].model_dump() if problem_id in assignment.problem_weights else None,
             ))
         enrolled_students = db.query(models.Student).join(models.Enrollment).filter(
             models.Enrollment.course_id == assignment.course_id,
@@ -3180,7 +3221,8 @@ def create_assignment(
         status=new_assignment.status,
         revision_policy=new_assignment.revision_policy,
         created_at=new_assignment.created_at,
-        problems=assignment.problem_ids
+        problems=assignment.problem_ids,
+        problem_weights=assignment_weight_overrides(db, new_assignment.id),
     )
 
 
@@ -3194,17 +3236,22 @@ def update_assignment(
     assignment = get_owned_assignment(db, instructor.id, assignment_id)
     updates = payload.model_dump(exclude_unset=True)
     requested_problem_ids = updates.pop("problem_ids", None)
+    requested_weights = updates.pop("problem_weights", None)
     has_submissions = db.query(models.Submission.id).filter(
         models.Submission.assignment_id == assignment.id
     ).first() is not None
 
     semantic_fields = {"title", "description"}
-    if has_submissions and (semantic_fields.intersection(updates) or requested_problem_ids is not None):
+    if has_submissions and (semantic_fields.intersection(updates) or requested_problem_ids is not None or requested_weights is not None):
         raise HTTPException(
             status_code=409,
             detail="Assignment content cannot change after a student submission exists; deadline and status changes remain allowed",
         )
 
+    existing_weights = assignment_weight_overrides(db, assignment.id)
+    current_ids = [link.problem_id for link in db.query(models.AssignmentProblem).filter_by(assignment_id=assignment.id).all()]
+    if requested_weights is not None and set(requested_weights) - set(requested_problem_ids if requested_problem_ids is not None else current_ids):
+        raise HTTPException(status_code=422, detail="Weight overrides must refer to selected questions")
     if requested_problem_ids is not None:
         existing_problem_ids = [link.problem_id for link in db.query(models.AssignmentProblem).filter(
             models.AssignmentProblem.assignment_id == assignment.id
@@ -3227,7 +3274,13 @@ def update_assignment(
                     assignment_id=assignment.id,
                     problem_id=problem_id,
                     position=position,
+                    scoring_weights=existing_weights.get(problem_id),
                 ))
+
+    if requested_weights is not None:
+        db.flush()
+        for link in db.query(models.AssignmentProblem).filter_by(assignment_id=assignment.id).all():
+            link.scoring_weights = requested_weights.get(link.problem_id)
 
     for field, value in updates.items():
         setattr(assignment, field, value)
@@ -3251,6 +3304,7 @@ def update_assignment(
         revision_policy=assignment.revision_policy,
         created_at=assignment.created_at,
         problems=[link.problem_id for link in links],
+        problem_weights=assignment_weight_overrides(db, assignment.id),
     )
 
 

@@ -1,139 +1,75 @@
-"""Deterministic scoring policy shared by the assessment and staff views.
-
-Student marks must be based only on the work visible in the student rubric.
-Similarity remains persisted for staff review, but is deliberately excluded from
-the student score.
-"""
-
+"""Versioned shared assessment policy. Similarity never contributes marks."""
 from __future__ import annotations
+import math
+from typing import Any, Mapping
 
-from typing import Any, Mapping, Optional
-
-
-STUDENT_RUBRIC_WEIGHTS = {
-    "correctness": 0.20,
-    "time": 0.30,
-    "space": 0.30,
-    "style": 0.20,
-}
-
-# A submission that is not accepted can still receive credit for efficient,
-# maintainable work, but it must not be presented as an excellent solution.
-NON_ACCEPTED_SCORE_CAP = 79.0
-
-# The instructor score is a review metric, not a replacement for the student
-# grade.  Its final component is originality (100 - similarity risk).
-INSTRUCTOR_RUBRIC_WEIGHTS = {
-    "correctness": 0.20,
-    "time": 0.25,
-    "space": 0.25,
-    "style": 0.20,
-    "originality": 0.10,
-}
+RUBRIC_VERSION = "complexity-focused-v2"
+DEFAULT_WEIGHT_PERCENT = {"correctness": 30.0, "time": 35.0, "space": 25.0, "style": 10.0}
+STUDENT_RUBRIC_WEIGHTS = {key: value / 100 for key, value in DEFAULT_WEIGHT_PERCENT.items()}
+INSTRUCTOR_RUBRIC_WEIGHTS = STUDENT_RUBRIC_WEIGHTS
 
 
-def _clamp(value: Any) -> Optional[float]:
-    if value is None:
-        return None
+def _clamp(value: Any) -> float | None:
     try:
-        return max(0.0, min(100.0, float(value)))
+        parsed = float(value)
+        return max(0.0, min(100.0, parsed)) if math.isfinite(parsed) else None
     except (TypeError, ValueError):
         return None
 
 
-def complexity_dimension_percent(details: Any, dimension: str) -> Optional[float]:
-    """Return one complexity dimension as a percentage, if evidence exists."""
+def validate_weights(weights: Mapping | None = None) -> dict[str, float]:
+    if weights is None:
+        return dict(DEFAULT_WEIGHT_PERCENT)
+    if set(weights) != set(DEFAULT_WEIGHT_PERCENT):
+        raise ValueError("Provide correctness, time, space and style weights")
+    result = {key: float(weights[key]) for key in DEFAULT_WEIGHT_PERCENT}
+    if any(not math.isfinite(v) or v < 0 or v > 100 for v in result.values()):
+        raise ValueError("Weights must be finite percentages between 0 and 100")
+    if not math.isclose(sum(result.values()), 100.0, abs_tol=1e-6):
+        raise ValueError("Scoring weights must total 100%")
+    return result
+
+
+def complexity_dimension_percent(details: Any, dimension: str) -> float | None:
     if not isinstance(details, Mapping):
         return None
-    score = details.get(f"{dimension}_score")
-    maximum = details.get(f"{dimension}_score_max", 25)
     try:
-        score = float(score)
-        maximum = float(maximum)
+        maximum = float(details.get(f"{dimension}_score_max", 25))
+        score = float(details.get(f"{dimension}_score"))
+        return _clamp(score / maximum * 100) if math.isfinite(maximum) and maximum > 0 else None
     except (TypeError, ValueError):
         return None
-    if maximum <= 0:
-        return None
-    return _clamp(score / maximum * 100)
 
 
-def weighted_rubric_score(
-    components: Mapping[str, Optional[float]],
-    weights: Mapping[str, float],
-) -> tuple[float, dict[str, dict[str, float | None]]]:
-    """Calculate a score and an auditable breakdown.
-
-    When a dimension is unavailable, its weight is proportionally shared by
-    available dimensions. This keeps a missing analyser from silently acting as
-    a zero while still preserving declared and effective weights in the result.
-    """
-    normalized = {name: _clamp(components.get(name)) for name in weights}
-    available_weight = sum(weights[name] for name, value in normalized.items() if value is not None)
-    if not available_weight:
-        return 0.0, {
-            name: {"score": normalized[name], "weight": weights[name], "effective_weight": 0.0, "weighted": 0.0}
-            for name in weights
-        }
-
-    breakdown: dict[str, dict[str, float | None]] = {}
-    total = 0.0
-    for name, declared_weight in weights.items():
-        score = normalized[name]
-        effective_weight = declared_weight / available_weight if score is not None else 0.0
-        weighted = (score or 0.0) * effective_weight
-        total += weighted
-        breakdown[name] = {
-            "score": score,
-            "weight": declared_weight,
-            "effective_weight": effective_weight,
-            "weighted": round(weighted, 2),
-        }
-    return round(total, 1), breakdown
+def student_rubric_score(correctness, complexity_details, style, weights=None):
+    """S=min(weighted sum,correctness). Missing weights are never redistributed."""
+    percentages = validate_weights(weights)
+    components = {"correctness": _clamp(correctness),
+                  "time": complexity_dimension_percent(complexity_details, "time"),
+                  "space": complexity_dimension_percent(complexity_details, "space"), "style": _clamp(style)}
+    missing = [key for key, value in components.items() if value is None and (percentages[key] > 0 or key == "correctness")]
+    breakdown = {}
+    known = 0.0
+    for key, value in components.items():
+        weight = percentages[key] / 100
+        contribution = None if value is None and weight > 0 else (value or 0) * weight
+        known += contribution or 0
+        breakdown[key] = {"score": value, "weight": weight, "effective_weight": weight,
+                          "weighted": round(contribution, 4) if contribution is not None else None}
+    c = components["correctness"]
+    ceiling = c if c is not None else 100.0
+    lower = min(known, c) if c is not None else 0.0
+    upper = min(known + sum(percentages[key] for key in missing), ceiling)
+    raw = round(known, 1) if not missing else None
+    final = 0.0 if c == 0 else (round(min(known, ceiling), 1) if not missing else None)
+    breakdown["correctness_gate"] = {"raw_score": raw, "score_before_cap": raw, "score_cap": c,
+        "final_score": final, "accepted": None if c is None else c == 100, "rule": "min(weighted_score, correctness)"}
+    breakdown["assessment"] = {"status": "incomplete" if missing else "complete", "missing_components": missing,
+                               "score_lower_bound": round(lower, 1), "score_upper_bound": round(upper, 1)}
+    breakdown["rubric"] = {"version": RUBRIC_VERSION, "weights": percentages, "correctness_ceiling": True}
+    return final, breakdown
 
 
-def student_rubric_score(
-    correctness: Any,
-    complexity_details: Any,
-    style: Any,
-) -> tuple[float, dict[str, dict[str, float | None]]]:
-    raw_score, breakdown = weighted_rubric_score(
-        {
-            "correctness": correctness,
-            "time": complexity_dimension_percent(complexity_details, "time"),
-            "space": complexity_dimension_percent(complexity_details, "space"),
-            "style": style,
-        },
-        STUDENT_RUBRIC_WEIGHTS,
-    )
-    correctness_percent = _clamp(correctness)
-    score_before_cap = raw_score
-    accepted = None if correctness_percent is None else correctness_percent >= 100.0
-    score_cap = NON_ACCEPTED_SCORE_CAP if accepted is False else None
-    final_score = min(score_before_cap, score_cap) if score_cap is not None else score_before_cap
-    breakdown["correctness_gate"] = {
-        "raw_score": raw_score,
-        "score_before_cap": score_before_cap,
-        "score_cap": score_cap,
-        "final_score": final_score,
-        "accepted": accepted,
-    }
-    return final_score, breakdown
-
-
-def instructor_rubric_score(
-    correctness: Any,
-    complexity_details: Any,
-    style: Any,
-    similarity: Any,
-) -> tuple[float, dict[str, dict[str, float | None]]]:
-    similarity_percent = _clamp(similarity)
-    return weighted_rubric_score(
-        {
-            "correctness": correctness,
-            "time": complexity_dimension_percent(complexity_details, "time"),
-            "space": complexity_dimension_percent(complexity_details, "space"),
-            "style": style,
-            "originality": None if similarity_percent is None else 100.0 - similarity_percent,
-        },
-        INSTRUCTOR_RUBRIC_WEIGHTS,
-    )
+def instructor_rubric_score(correctness, complexity_details, style, similarity=None, weights=None):
+    """Faculty see the same mark; similarity is separate review evidence."""
+    return student_rubric_score(correctness, complexity_details, style, weights)

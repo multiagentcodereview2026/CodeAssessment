@@ -523,6 +523,51 @@ def test_assignment_create_persists_ordered_links_and_rejects_partial_invalid_cr
     assert [(link.position, link.problem_id) for link in links] == [(1, "p-2"), (2, "p-1")]
 
 
+def test_question_weights_are_scoped_and_frozen_after_submission(db_session):
+    teacher = add_account(db_session, username="weights-teacher", role="instructor", password="test-password-123").instructor_profile
+    course = models.Course(course_code="WEIGHTS", title="Weights", instructor_id=teacher.id)
+    problem = models.Problem(id="weights-problem", title="Weights", description="Test", examples=[], constraints=[], starter_codes={}, test_cases=[])
+    db_session.add_all([course, problem])
+    db_session.commit()
+    custom = {"correctness": 20, "time": 50, "space": 25, "style": 5}
+    created = create_assignment(AssignmentCreate(title="Custom", course_id=course.id, problem_ids=[problem.id], problem_weights={problem.id: custom}), db_session, teacher)
+    assignment = db_session.get(models.Assignment, created.id)
+    assert created.problem_weights == {problem.id: custom}
+    assert main_module.resolved_scoring_weights(db_session, problem, assignment) == custom
+    assert main_module.resolved_scoring_weights(db_session, problem) == {"correctness": 30, "time": 35, "space": 25, "style": 10}
+    changed = update_assignment(created.id, AssignmentUpdate(problem_weights={}), db_session, teacher)
+    assert changed.problem_weights == {}
+    learner = models.Student(student_id="weights-student", name="Learner")
+    db_session.add(learner)
+    db_session.flush()
+    db_session.add(models.Submission(submission_id="weights-submission", student_id=learner.student_id, problem_id=problem.id, assignment_id=created.id, language="python", code="print(1)"))
+    db_session.commit()
+    with pytest.raises(HTTPException) as frozen:
+        update_assignment(created.id, AssignmentUpdate(problem_weights={problem.id: custom}), db_session, teacher)
+    assert frozen.value.status_code == 409
+    with pytest.raises(ValidationError):
+        AssignmentCreate(title="Bad", course_id=course.id, problem_ids=[problem.id], problem_weights={problem.id: {**custom, "time": 100}})
+
+
+@pytest.mark.parametrize("passed,total,status", [(0, 1, "success"), (1, 2, "success"), (0, 1, "error")])
+def test_submit_cannot_bypass_public_tests(db_session, monkeypatch, passed, total, status):
+    problem = models.Problem(id="public-gate", title="Gate", description="Test", examples=[], constraints=[], starter_codes={}, is_public_practice=True, test_cases=[{"input": "1", "expected_output": "1"}])
+    db_session.add(problem)
+    db_session.commit()
+    async def execute(**kwargs):
+        assert kwargs["source_code"] == "exact submitted code"
+        assert len(kwargs["test_cases"]) == 1
+        return {"compile_status": status, "passed_cases": passed, "total_cases": total}
+    async def graph(_state):
+        pytest.fail("Rejected public work reached AI assessment")
+    monkeypatch.setattr(main_module, "execute_code_sandboxed", execute)
+    monkeypatch.setattr(main_module.evaluation_graph, "ainvoke", graph)
+    with pytest.raises(HTTPException) as rejected:
+        asyncio.run(submit_and_evaluate_code(SubmissionRequest(problem_id=problem.id, language="cpp", code="exact submitted code"), db_session, SimpleNamespace(student_id="test")))
+    assert rejected.value.status_code == 422
+    assert db_session.query(models.Submission).count() == 0
+
+
 def test_assigned_submission_requires_active_enrollment_and_linked_problem(db_session):
     instructor_user = add_account(
         db_session,
@@ -643,9 +688,12 @@ def test_submit_persists_authenticated_student_and_assignment_context(db_session
         return {"time_complexity": "O(1)", "space_complexity": "O(1)"}
 
     async def fake_graph(_state):
+        from scoring.rubric import student_rubric_score
+        _, breakdown = student_rubric_score(100, {"time_score": 25, "space_score": 25}, 90, _state["scoring_weights"])
         return {
             "execution_result": {"compile_status": "success", "passed_cases": 1, "failed_cases": 0, "total_cases": 1, "results": []},
             "overall_score": 90.0,
+            "score_breakdown": breakdown,
             "correctness_score": 100.0,
             "complexity_score": 90.0,
             "style_score": 90.0,
@@ -690,6 +738,8 @@ def test_submit_persists_authenticated_student_and_assignment_context(db_session
     assert assigned_record.assignment_id == assignment.id
     assert practice_record.student_id == student.student_id
     assert practice_record.assignment_id is None
+    assert assigned_record.score_breakdown["rubric"]["version"] == "complexity-focused-v2"
+    assert practice_record.score_breakdown["rubric"]["weights"] == {"correctness": 30, "time": 35, "space": 25, "style": 10}
 
 
 def test_instructor_overview_uses_latest_owned_assignment_attempts_only(db_session):

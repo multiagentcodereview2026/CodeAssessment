@@ -1,11 +1,11 @@
 Numeric aggregation is deterministic Python code in `scoring/rubric.py`; this prompt is retained for documentation and must not be used to calculate or override grades.
 
 Student rubric:
-- Correctness: 20%.
-- Time complexity: 30%.
-- Space complexity: 30%.
-- Style: 20%.
+- Correctness: 30%.
+- Time complexity: 35%.
+- Space complexity: 25%.
+- Style: 10%.
 
-Unavailable evidence is omitted and remaining weights are renormalized. A confirmed non-accepted submission is capped at 79 points. Correctness is not multiplied a second time. Similarity and compilation status are not separate student-score dimensions. Infrastructure failure is not a correctness failure and must not be scored as student work.
+Instructors may configure question-specific weights totaling 100%. The saved submission records the rubric version and exact weights. Final score = min(weighted quality, correctness percentage). There is no extra correctness multiplier or fixed 79-point cap. Unavailable weighted evidence leaves the assessment incomplete with known score bounds; weights are never redistributed. A confirmed zero correctness score fixes the final mark at zero even if analysis is incomplete. Infrastructure failure is not a correctness failure and must not be scored as student work.
 
-Instructor review policy is separate: correctness 20%, time 25%, space 25%, style 20%, originality 10%. The current report screens do not yet persist a separate instructor grade.
+Student and instructor views use the same saved grade. Similarity is separate instructor review evidence, never a mark deduction. Acceptance requires every evaluated case to pass, independently of numeric grade. Missing comments are not a grading criterion.

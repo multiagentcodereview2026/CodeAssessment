@@ -228,6 +228,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 course: courseMap.get(String(assignment.course_id)) || `Course ${assignment.course_id}`,
                 problemsCount: Array.isArray(assignment.problems) ? assignment.problems.length : 0,
                 problemIds: Array.isArray(assignment.problems) ? assignment.problems : [],
+                problemWeights: assignment.problem_weights || {},
                 submittedCount: Number(assignment.submitted_count ?? 0),
                 totalCount: Number(assignment.total_students ?? 0),
                 avgScore: assignment.avg_score == null ? null : Number(assignment.avg_score),
@@ -567,6 +568,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           description: newAssignment.description,
           course_id: courseId,
           problem_ids: newAssignment.problemIds || [],
+          problem_weights: newAssignment.problemWeights || {},
           due_date: newAssignment.dueDate ? new Date(newAssignment.dueDate).toISOString() : null,
           status: newAssignment.status.toUpperCase()
           ,revision_policy: newAssignment.revisionPolicy || 'GUIDED_STEPS'
@@ -585,6 +587,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         course: newAssignment.course,
         problemsCount: Array.isArray(created.problems) ? created.problems.length : newAssignment.problemsCount,
         problemIds: Array.isArray(created.problems) ? created.problems : newAssignment.problemIds || [],
+        problemWeights: created.problem_weights || {},
         submittedCount: 0,
         totalCount: 0,
         avgScore: null,

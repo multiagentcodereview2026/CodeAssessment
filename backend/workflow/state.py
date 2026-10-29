@@ -28,6 +28,7 @@ class EvaluationState(TypedDict):
     # Aggregated & Pedagogical Layers
     overall_score: Optional[float]
     score_breakdown: Optional[Dict[str, Any]]
+    scoring_weights: Optional[Dict[str, float]]
     confidence: Optional[float]
     feedback: Optional[Dict[str, Any]]
     recommendations: Optional[Dict[str, Any]]
