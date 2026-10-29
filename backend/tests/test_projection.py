@@ -75,12 +75,12 @@ def test_verified_revision_stage_projection_uses_the_actual_stage_components():
         style_score=75.0,
     )
 
-    # 20% correctness + 24% time + 30% space + 15% style.
+    # Current shared rubric: 30 correctness + 28 time + 25 space + 7.5 style.
     assert result["available"] is True
     assert result["verified"] is True
     assert result["projection_basis"] == "verified_revision_stage"
-    assert result["projected_score"] == 89.0
-    assert result["expected_improvement"] == 14.0
+    assert result["projected_score"] == 90.5
+    assert result["expected_improvement"] == 15.5
     assert result["stage_components"] == {
         "correctness": 100.0,
         "time": 80.0,

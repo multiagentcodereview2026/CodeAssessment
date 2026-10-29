@@ -1,10 +1,10 @@
-import asyncio
 import pytest
 from workflow.graph import evaluation_graph
 from workflow.state import EvaluationState
 
 @pytest.mark.asyncio
-async def test_langgraph_pipeline_dry_run(monkeypatch):
+@pytest.mark.parametrize("analysis_available", [False, True])
+async def test_langgraph_pipeline_dry_run(monkeypatch, analysis_available):
     # Keep this graph test deterministic and offline even when a developer has
     # a provider key in their local environment.
     import agents.base as agent_base
@@ -53,12 +53,33 @@ async def test_langgraph_pipeline_dry_run(monkeypatch):
         "errors": []
     }
 
+    # These fixtures test orchestration, not analyzer accuracy. Supply known
+    # evidence for the complete path; leave it unavailable for the other path.
+    initial_state["precomputed_complexity_analysis"] = {
+        "time_complexity": "O(n)" if analysis_available else None,
+        "space_complexity": "O(n)" if analysis_available else None,
+        "status": "ANALYZED" if analysis_available else "ANALYSIS_FAILED",
+        "confidence": 1.0 if analysis_available else 0.0,
+        "method": "test-fixture",
+    }
+    initial_state["complexity_target"] = {"time": "O(n)", "space": "O(n)"}
+
     # Execute workflow graph
     result = await evaluation_graph.ainvoke(initial_state)
 
     assert result["status"] == "complete", f"Expected complete, got {result['status']}"
-    assert result["overall_score"] is not None
-    assert 0 <= result["overall_score"] <= 100
+    assert result["correctness_score"] == 100
+    assert result["score_breakdown"]["rubric"]["version"] == "complexity-focused-v2"
+    if analysis_available:
+        assert result["score_breakdown"]["assessment"]["status"] == "complete"
+        assert result["overall_score"] == round(90 + result["style_score"] * .10, 1)
+        assert 0 <= result["overall_score"] <= 100
+    else:
+        assert result["overall_score"] is None
+        assessment = result["score_breakdown"]["assessment"]
+        assert assessment["status"] == "incomplete"
+        assert set(assessment["missing_components"]) == {"time", "space"}
+        assert assessment["score_upper_bound"] - assessment["score_lower_bound"] == pytest.approx(60)
     assert result["feedback"] is not None
     assert "strengths" in result["feedback"]
     # Revision is requested separately after a saved submission; the scoring
@@ -76,6 +97,3 @@ async def test_langgraph_pipeline_dry_run(monkeypatch):
     print(f"Strengths       : {result['feedback']['strengths']}")
     print(f"Insight         : {result['feedback']['key_insight']}")
     print("==========================================\n")
-
-if __name__ == "__main__":
-    asyncio.run(test_langgraph_pipeline_dry_run())
