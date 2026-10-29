@@ -133,9 +133,9 @@ export const SubmissionsList: React.FC = () => {
                     <td className="py-4 px-6">
                       <div className="flex items-baseline gap-1 font-mono">
                         <span className={`font-extrabold text-sm ${
-                          sub.score >= 80 ? 'text-emerald-600' : sub.score >= 60 ? 'text-indigo-600' : 'text-rose-600'
+                          sub.score == null ? 'text-slate-500' : sub.score >= 80 ? 'text-emerald-600' : sub.score >= 60 ? 'text-indigo-600' : 'text-rose-600'
                         }`}>
-                          {sub.score}
+                          {sub.score ?? 'Pending'}
                         </span>
                         <span className="text-slate-400 text-[10px]">/100</span>
                       </div>

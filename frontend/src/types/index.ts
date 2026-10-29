@@ -169,7 +169,7 @@ export interface SubmissionItem {
   problemId: string;
   problemSlug?: string;
   problemTitle: string;
-  score: number;
+  score: number | null;
   evaluationStatus?: string;
   status: 'Passed' | 'Partial' | 'Failed';
   language: string;

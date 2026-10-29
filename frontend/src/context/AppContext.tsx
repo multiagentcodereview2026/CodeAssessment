@@ -77,6 +77,7 @@ interface AppContextType {
   submissionsLoadState: 'loading' | 'ready' | 'error';
   submissionsOwnerId: string | null;
   addSubmission: (submission: SubmissionItem, assessment: AssessmentResult) => void;
+  refreshSubmissions: () => void;
   studentProgress: StudentProgress;
   courses: CourseItem[];
   addCourse: (course: CourseItem) => void;
@@ -126,6 +127,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [selectedProblemId, setSelectedProblemId] = useState<string>('prob-1');
   const [activeAssessment, setActiveAssessment] = useState<AssessmentResult | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
+  const [submissionRefresh, setSubmissionRefresh] = useState(0);
+  const refreshSubmissions = () => setSubmissionRefresh((version) => version + 1);
   const [submissionsLoadState, setSubmissionsLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [submissionsOwnerId, setSubmissionsOwnerId] = useState<string | null>(null);
   const [studentProgress, setStudentProgress] = useState<StudentProgress>(EMPTY_STUDENT_PROGRESS);
@@ -308,7 +311,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             problemId: record.problem_id,
             problemSlug: record.problem_id,
             problemTitle: titles.get(record.problem_id) || record.problem_id,
-            score: Math.round(Number(record.overall_score ?? 0)),
+            score: record.overall_score == null ? null : Number(record.overall_score),
             evaluationStatus: String(record.status || ''),
             feedbackSummary: typeof feedback.summary === 'string' ? feedback.summary : '',
             status: passedAll ? 'Passed' : passed > 0 ? 'Partial' : 'Failed',
@@ -329,7 +332,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     void loadSavedSubmissions();
     return () => { cancelled = true; };
-  }, [auth?.user, auth?.authFetch]);
+  }, [auth?.user, auth?.authFetch, submissionRefresh]);
 
   useEffect(() => {
     let cancelled = false;
@@ -458,7 +461,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // update student progress
     setStudentProgress(prev => ({
       ...prev,
-      overallScore: Number(((prev.overallScore * prev.problemsSolved + newSub.score) / (prev.problemsSolved + 1)).toFixed(1)),
+      overallScore: newSub.score == null ? prev.overallScore : Number((((prev.overallScore ?? 0) * prev.problemsSolved + newSub.score) / (prev.problemsSolved + 1)).toFixed(1)),
       problemsSolved: Math.min(prev.totalProblems, prev.problemsSolved + 1)
     }));
 
@@ -678,6 +681,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         submissionsLoadState,
         submissionsOwnerId,
         addSubmission,
+        refreshSubmissions,
         studentProgress,
         courses,
         addCourse,

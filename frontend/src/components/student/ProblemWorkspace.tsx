@@ -28,7 +28,6 @@ import { useTheme } from '../../context/ThemeContext';
 import { CompilerFeedback } from './CompilerFeedback';
 import { DifficultyBadge } from '../common/Badge';
 import { DoubleConfirmDialog } from '../common/DoubleConfirmDialog';
-import { AssessmentResult, SubmissionItem, TestCaseResult } from '../../types';
 import {
   formatInputForDisplay,
   parseProblemInputSchema
@@ -75,7 +74,7 @@ export const ProblemWorkspace: React.FC = () => {
     currentUser,
     selectedProblem: fallbackProblem,
     setCurrentView,
-    addSubmission
+    refreshSubmissions
   } = useApp();
 
   const [remoteProblem, setRemoteProblem] = useState<any | null>(null);
@@ -553,159 +552,9 @@ export const ProblemWorkspace: React.FC = () => {
       const data = await res.json();
       setSubmissionStep(5);
 
-      const newSubmissionId = data.submission_id || `SUB${Math.floor(100000 + Math.random() * 900000)}`;
-      const execution = data.execution_result || {};
-      const totalCases = Number(execution.total_cases || (Number(execution.passed_cases || 0) + Number(execution.failed_cases || 0)));
-      const passedCases = Number(execution.passed_cases || 0);
-      const accepted = totalCases > 0 && passedCases === totalCases;
-      const timeComplexity = typeof data.complexity_details?.time_complexity === 'string'
-        ? data.complexity_details.time_complexity
-        : 'Not available';
-      const spaceComplexity = typeof data.complexity_details?.space_complexity === 'string'
-        ? data.complexity_details.space_complexity
-        : 'Not available';
-      const timeMarks = typeof data.complexity_details?.time_score === 'number'
-        ? data.complexity_details.time_score
-        : null;
-      const spaceMarks = typeof data.complexity_details?.space_score === 'number'
-        ? data.complexity_details.space_score
-        : null;
-      const complexityClassification = typeof data.complexity_details?.classification === 'string'
-        ? data.complexity_details.classification
-        : 'REVIEW_REQUIRED';
-      const spaceClassification = typeof data.complexity_details?.space_classification === 'string'
-        ? data.complexity_details.space_classification
-        : 'REVIEW_REQUIRED';
-      const testResults: TestCaseResult[] = (execution.results || []).map((result: any, index: number) => {
-        const hidden = Boolean(result.is_hidden);
-        return {
-          id: String(result.test_case_id || index + 1),
-          testCaseNumber: index + 1,
-          input: hidden ? 'Hidden test case' : (result.input || ''),
-          expectedOutput: hidden ? 'Hidden test case' : (result.expected_output || ''),
-          actualOutput: hidden ? 'Hidden test case' : (result.actual_output || ''),
-          passed: result.status === 'accepted' || result.status === 'ACCEPTED',
-          executionTimeMs: Number(result.runtime_ms || 0),
-          memoryMb: Number(result.memory_kb || 0) / 1024,
-          isHidden: hidden,
-          verdict: typeof result.status === 'string' ? result.status : undefined,
-          reason: hidden ? undefined : (result.stderr || result.error_message || undefined),
-          stderr: hidden ? undefined : (result.stderr || result.error_message || undefined)
-        };
-      });
-      const rawLastFailedCase = execution.last_failed_case;
-      const lastFailedCaseOrdinal = Number(
-        rawLastFailedCase?.ordinal ?? rawLastFailedCase?.test_case_number ?? rawLastFailedCase?.case_number
-      );
-      const lastFailedCase = rawLastFailedCase && Number.isFinite(lastFailedCaseOrdinal) && lastFailedCaseOrdinal > 0
-        ? {
-            ordinal: lastFailedCaseOrdinal,
-            isHidden: Boolean(rawLastFailedCase.is_hidden ?? rawLastFailedCase.isHidden),
-            status: typeof rawLastFailedCase.status === 'string' ? rawLastFailedCase.status : undefined,
-            // Hidden diagnostics remain intentionally unavailable in browser state.
-            reason: Boolean(rawLastFailedCase.is_hidden ?? rawLastFailedCase.isHidden)
-              ? undefined
-              : typeof rawLastFailedCase.reason === 'string' ? rawLastFailedCase.reason : undefined
-          }
-        : undefined;
-
-      const newAssessment: AssessmentResult = {
-        submissionId: newSubmissionId,
-        problemId: selectedProblem.id,
-        problemTitle: selectedProblem.title,
-        timestamp: 'Just now',
-        language: language === 'cpp' ? 'C++' : language === 'c' ? 'C' : language === 'python' ? 'Python 3' : language === 'java' ? 'Java' : 'JavaScript',
-        code: code,
-        status: accepted ? 'Accepted' : passedCases > 0 ? 'Partial' : 'Wrong Answer',
-        executionTime: `${execution.runtime_ms || 0} ms`,
-        memory: execution.memory_kb > 0 ? `${(execution.memory_kb / 1024).toFixed(1)} MB` : 'Not measured',
-        multiScores: {
-          correctness: {
-            score: Math.round(((data.correctness_score ?? 0) / 100) * 20),
-            max: 20,
-            notes: accepted
-              ? `Accepted: ${passedCases}/${totalCases} test cases passed.`
-              : `Judge result: ${passedCases}/${totalCases} tests passed. Review the last failed test below.`
-          },
-          timeComplexity: {
-            score: timeMarks === null ? 0 : Math.round((timeMarks / 25) * 30),
-            max: timeMarks === null ? 0 : 30,
-            detected: timeComplexity,
-            notes: timeMarks === null
-              ? `${complexityClassification}: complexity was recorded but is awaiting a private benchmark or problem-specific review.`
-              : `${complexityClassification}: detected complexity was compared against the private benchmark.`
-          },
-          spaceComplexity: {
-            score: spaceMarks === null ? 0 : Math.round((spaceMarks / 25) * 30),
-            max: spaceMarks === null ? 0 : 30,
-            detected: spaceComplexity,
-            notes: spaceMarks === null
-              ? `${spaceClassification}: space complexity is awaiting a private benchmark or problem-specific review.`
-              : `${spaceClassification}: detected auxiliary space was compared against the private benchmark.`
-          },
-          codeQuality: {
-            score: Math.round(((data.style_score ?? 90) / 100) * 20),
-            max: 20,
-            styleScore: 9,
-            structureScore: 9,
-            notes: 'Clean idiomatic code and modular structure.'
-          },
-          overallScore: Math.round(data.overall_score ?? 85)
-        },
-        explainableFeedback: accepted
-          ? (data.feedback?.summary || `Accepted: all ${totalCases} test cases passed.`)
-          : `Not accepted: ${passedCases} of ${totalCases} test cases passed. ${testResults.find((result) => !result.passed)?.stderr || 'The output did not match the expected result.'}`,
-        suggestedImprovements: Array.isArray(data.recommendations?.steps) ? data.recommendations.steps : [
-          'Use descriptive variable names (e.g. `numToIndexMap`, `complement`)',
-          'Add structured comments to document hash map lookup edge cases'
-        ],
-        recommendedTopics: selectedProblem.tags || ['Arrays & Hashing', 'Two Pointers'],
-        practiceProblems: [
-          { id: 'p1', title: 'Two Sum II', difficulty: 'Medium', tags: ['Array', 'Two Pointers'] },
-          { id: 'p2', title: 'Subarray Sum Equals K', difficulty: 'Medium', tags: ['Hash Table', 'Prefix Sum'] }
-        ],
-        scoreProjection: {
-          currentScore: Math.round(data.overall_score ?? 85),
-          projectedScore: Math.round(data.projected_score?.projected_score ?? data.overall_score ?? 85),
-          improvementDelta: Number(data.projected_score?.expected_improvement ?? 0),
-          isExpected: Boolean(data.projected_score?.available),
-          focusAreas: [
-            'Optimize Space Complexity & bucket allocation',
-            'Improve Code Readability & variable naming standards'
-          ],
-          iterationTimeline: [
-            { stage: 'Initial Submission', score: Math.round(data.overall_score ?? 85), note: 'Current solution evaluated' },
-            { stage: 'Expected score scenario', score: Math.round(data.projected_score?.projected_score ?? data.overall_score ?? 85), note: data.projected_score?.available ? 'Expected if the revision passes all evaluated cases' : 'Submit a revision for a verified score' }
-          ]
-        },
-        // Some analysis providers return an object with an `improved_code`
-        // property rather than the source text directly.
-        aiRevisedCode: typeof data.improved_code === 'string'
-          ? data.improved_code
-          : typeof data.improved_code?.improved_code === 'string'
-            ? data.improved_code.improved_code
-            : code,
-        testResults,
-        totalTestCases: totalCases,
-        lastFailedCase
-      };
-
-      const newSubItem: SubmissionItem = {
-        id: newSubmissionId,
-        problemId: selectedProblem.id,
-        problemTitle: selectedProblem.title,
-        problemSlug: selectedProblem.slug,
-        status: accepted ? 'Passed' : 'Failed',
-        score: newAssessment.multiScores.overallScore,
-        date: 'Just now',
-        language: newAssessment.language,
-        source: assignmentId ? 'Instructor Assigned' : 'Independent Practice',
-        executionTime: newAssessment.executionTime,
-        passedTestCases: passedCases,
-        totalTestCases: totalCases
-      };
-
-      addSubmission(newSubItem, newAssessment);
+      const newSubmissionId = data.submission_id;
+      if (typeof newSubmissionId !== 'string' || !newSubmissionId) throw new Error('The server did not return a saved submission ID.');
+      refreshSubmissions();
       navigate(`/submissions/${newSubmissionId}`);
     } catch (e) {
       setRunOutput({

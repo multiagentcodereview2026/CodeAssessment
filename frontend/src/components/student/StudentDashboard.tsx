@@ -449,8 +449,8 @@ export const StudentDashboard: React.FC = () => {
                         </div>
                       </td>
                       <td className="py-4 font-mono font-bold">
-                        <span className={sub.score >= 80 ? 'text-emerald-600' : sub.score >= 60 ? 'text-indigo-600' : 'text-rose-600'}>
-                          {sub.score} / 100
+                        <span className={sub.score == null ? 'text-slate-500' : sub.score >= 80 ? 'text-emerald-600' : sub.score >= 60 ? 'text-indigo-600' : 'text-rose-600'}>
+                          {sub.score == null ? 'Pending' : `${sub.score} / 100`}
                         </span>
                       </td>
                       <td className="py-4">
