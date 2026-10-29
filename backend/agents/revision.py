@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
-from agents.base import load_prompt, invoke_agent
+from agents.base import load_prompt, invoke_agent, sanitize_code_comments
 from agents.revision_verification import unverified_revision
 from workflow.state import EvaluationState
 
@@ -34,6 +34,9 @@ def guided_future_plan(stage: str) -> list[str]:
         "OPTIMIZE_DATA_STRUCTURE": [
             "REFINEMENT: after the new approach is assessed, improve readability and boundary handling without changing the algorithm again.",
         ],
+        "OPTIMIZE_SPACE": [
+            "REFINEMENT: after the measured memory allocation is removed, improve naming, formatting, and edge-case clarity without changing the algorithm again.",
+        ],
     }
     return plans.get(stage, [])
 
@@ -51,6 +54,21 @@ class RevisionOutput(BaseModel):
     improvement_explanation: Optional[str] = "Refactored with clean naming conventions and robust boundary checks."
 
 
+class PrivateStageRevisionOutput(BaseModel):
+    """Tolerant private-draft contract used only before Docker verification.
+
+    Providers sometimes format explanatory ``changes`` as text bullets. That
+    metadata is not shown or scored for a private projection, so accepting it
+    must not discard an otherwise valid source file. Compilation, tests, and
+    rubric evaluation remain mandatory afterwards.
+    """
+
+    improved_code: str
+    changes: List[Any] = []
+    change_summary: Optional[str] = ""
+    improvement_explanation: Optional[str] = ""
+
+
 class GuidedRevisionOutput(BaseModel):
     """One bounded coaching stage, never a replacement solution."""
 
@@ -64,6 +82,47 @@ class GuidedRevisionOutput(BaseModel):
     future_plan: List[str] = []
     change_summary: Optional[str] = ""
     improvement_explanation: Optional[str] = ""
+
+
+async def private_stage_revision_node(
+    state: EvaluationState,
+    stage: str,
+    *,
+    projection_attempt: int = 1,
+) -> Dict[str, Any]:
+    """Create one complete stage draft for private judge verification only.
+
+    Guided coaching still never returns code. This separate function is used
+    only by score projection, which needs executable code to make its score
+    claim truthful.
+    """
+    prompt = load_prompt("private_stage_revision")
+    submission = state.get("submission") or {}
+    problem = state.get("problem") or {}
+    payload = {
+        "stage": stage,
+        "problem": {
+            "title": problem.get("title", ""),
+            "statement": problem.get("statement") or problem.get("description") or "",
+            "constraints": problem.get("constraints") or [],
+        },
+        "source_code": sanitize_code_comments(submission.get("source_code", "")),
+        "language": submission.get("language", "cpp"),
+        "feedback": state.get("feedback"),
+        "complexity_details": state.get("complexity_details"),
+        "style_details": state.get("style_details"),
+        # The model receives no hidden-test details or diagnostics from a
+        # previous attempt; this only asks it to independently re-check the
+        # complete public contract.
+        "projection_attempt": max(1, int(projection_attempt)),
+    }
+    result = await invoke_agent(
+        prompt, payload, PrivateStageRevisionOutput, unavailable_revision(state),
+        capability="score_projection",
+    )
+    result = dict(result)
+    result["revision_source"] = "ai" if result.get("analysis_source") == "groq" else "fallback"
+    return {"private_revision": result}
 
 
 def unavailable_revision(state: EvaluationState) -> Dict[str, Any]:
@@ -149,6 +208,22 @@ def guided_revision_fallback(stage: str, state: EvaluationState) -> Dict[str, An
             "change_summary": "The earlier local optimization has been measured; this stage can now address the remaining structural bottleneck.",
             "improvement_explanation": "After this implementation is assessed, the remaining work should be limited to correctness edges and readability.",
         },
+        "OPTIMIZE_SPACE": {
+            "title": "Remove the measured extra memory",
+            "next_goal": "Keep the working algorithm, but remove the input-sized collection or table identified by the space analysis.",
+            "guided_steps": [
+                "Find the collection whose size grows with the input and identify the one value or small fixed state it is preserving.",
+                "Read or process each item while updating that fixed state instead of storing every item for later.",
+                "Keep the existing correctness condition, then submit this memory-focused change for measurement.",
+            ],
+            "algorithm_outline": [
+                "Initialize only the constant-size state required by the current algorithm.",
+                "Process each input item once and update that state immediately.",
+                "Use the final state to produce the answer without retaining the full input collection.",
+            ],
+            "change_summary": "This stage targets the measured input-sized allocation while preserving the working algorithm.",
+            "improvement_explanation": "The time result is already strong. Removing the growing collection is the next measurable step toward constant extra space.",
+        },
     }.get(stage)
     if stage_guidance:
         return {
@@ -209,7 +284,7 @@ async def guided_revision_node(state: EvaluationState, stage: str) -> Dict[str, 
             "statement": problem.get("statement") or problem.get("description") or "",
             "constraints": problem.get("constraints") or [],
         },
-        "source_code": submission.get("source_code", ""),
+        "source_code": sanitize_code_comments(submission.get("source_code", "")),
         "language": submission.get("language", "cpp"),
         "public_execution_results": public_results,
         "feedback": state.get("feedback"),
@@ -222,6 +297,7 @@ async def guided_revision_node(state: EvaluationState, stage: str) -> Dict[str, 
         payload,
         GuidedRevisionOutput,
         guided_revision_fallback(stage, state),
+        capability="revision",
     )
     result = dict(result)
     result["revision_source"] = "ai" if result.get("analysis_source") == "groq" else "fallback"
@@ -267,7 +343,7 @@ async def revision_node(state: EvaluationState) -> Dict[str, Any]:
             "statement": problem.get("statement") or problem.get("description") or "",
             "constraints": problem.get("constraints") or [],
         },
-        "source_code": submission.get("source_code", ""),
+        "source_code": sanitize_code_comments(submission.get("source_code", "")),
         "language": submission.get("language", "cpp"),
         "public_execution_results": public_results,
         "feedback": state.get("feedback"),
@@ -276,7 +352,10 @@ async def revision_node(state: EvaluationState) -> Dict[str, Any]:
     }
     fallback = unavailable_revision(state)
 
-    result = await invoke_agent(prompt, payload, RevisionOutput, fallback)
+    result = await invoke_agent(
+        prompt, payload, RevisionOutput, fallback,
+        capability="revision",
+    )
     used_fallback = result.get("analysis_source") != "groq"
     # Protect older prompts/model responses from the known unrelated Two Sum
     # template. A suggestion is only useful when it belongs to this task.

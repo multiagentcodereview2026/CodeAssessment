@@ -95,7 +95,7 @@ def test_complexity_ai_payload_excludes_private_target_data():
 def test_groq_complexity_call_never_receives_private_target_data(monkeypatch):
     captured = {}
 
-    async def inspect_payload(_prompt, payload, _schema, _fallback):
+    async def inspect_payload(_prompt, payload, _schema, _fallback, **_kwargs):
         captured.update(payload)
         return {
             "time_complexity": "O(n)",

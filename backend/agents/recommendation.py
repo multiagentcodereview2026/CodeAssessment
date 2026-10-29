@@ -38,5 +38,8 @@ async def recommendation_node(state: EvaluationState) -> Dict[str, Any]:
         "learning_path": [], "estimated_improvement": "Unavailable until assessment evidence is available"
     }
 
-    result = await invoke_agent(prompt, payload, RecommendationOutput, fallback)
+    result = await invoke_agent(
+        prompt, payload, RecommendationOutput, fallback,
+        capability="recommendation",
+    )
     return {"recommendations": result}

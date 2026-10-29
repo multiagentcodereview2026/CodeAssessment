@@ -21,7 +21,7 @@ def test_revision_fallback_never_offers_a_different_problem_solution():
 def test_revision_node_rejects_the_known_unrelated_two_sum_template(monkeypatch):
     captured = {}
 
-    async def return_unrelated_solution(_prompt, payload, _schema, _fallback):
+    async def return_unrelated_solution(_prompt, payload, _schema, _fallback, **_kwargs):
         captured.update(payload)
         return {
             "improved_code": "vector<int> twoSum(vector<int> nums, int target) { return {}; }",
@@ -100,7 +100,7 @@ def test_offline_feedback_names_observed_loop_structure_for_a_time_gap():
     })
 
     assert any("2 loop headers" in weakness for weakness in feedback["weaknesses"])
-    assert any("repeated full pass" in step for step in feedback["improvement_steps"])
+    assert any("not rebuilt or rescanned" in step for step in feedback["improvement_steps"])
 
 
 def test_offline_feedback_for_a_compile_failure_uses_the_first_diagnostic():
@@ -122,7 +122,7 @@ def test_offline_feedback_for_a_compile_failure_uses_the_first_diagnostic():
 def test_feedback_keeps_public_case_numbering_and_sanitizes_code_before_ai(monkeypatch):
     captured = {}
 
-    async def capture_payload(_prompt, payload, _schema, fallback):
+    async def capture_payload(_prompt, payload, _schema, fallback, **_kwargs):
         captured.update(payload)
         return fallback
 
@@ -160,7 +160,7 @@ def test_missing_execution_evidence_is_not_reported_as_a_compile_failure():
 
 
 def test_revealed_feedback_case_drives_feedback_before_style_advice(monkeypatch):
-    async def generic_style_advice(_prompt, _payload, _schema, _fallback):
+    async def generic_style_advice(_prompt, _payload, _schema, _fallback, **_kwargs):
         return {
             "strengths": [],
             "weaknesses": ["Add comments."],
@@ -189,3 +189,44 @@ def test_revealed_feedback_case_drives_feedback_before_style_advice(monkeypatch)
     assert "Input: 10" in result["mentor_feedback"]
     assert "expected: false" in result["mentor_feedback"]
     assert "comment" not in " ".join(result["improvement_steps"]).lower()
+
+
+def test_feedback_does_not_append_ungrounded_ai_advice(monkeypatch):
+    async def generic_advice(_prompt, _payload, _schema, _fallback, **_kwargs):
+        return {
+            "strengths": [], "weaknesses": ["Use dynamic programming."],
+            "deductions": [], "improvement_steps": ["Use dynamic programming."],
+            "mentor_feedback": "Use dynamic programming.", "key_insight": "DP.",
+        }
+
+    monkeypatch.setattr(explainability, "invoke_agent", generic_advice)
+    result = asyncio.run(explainability.explainability_node({
+        "problem": {"title": "Compile me"},
+        "submission": {"language": "cpp", "source_code": "int main( {"},
+        "execution_result": {"compile_status": "error", "compile_error": "expected ')'"},
+    }))["feedback"]
+
+    assert "dynamic programming" not in " ".join(result["improvement_steps"]).lower()
+    assert "compiler" in result["mentor_feedback"].lower()
+
+
+def test_feedback_keeps_specific_ai_complexity_step(monkeypatch):
+    async def specific_advice(_prompt, _payload, _schema, _fallback, **_kwargs):
+        return {
+            "strengths": [], "weaknesses": ["The nested loop repeats reachability work."],
+            "deductions": [],
+            "improvement_steps": [
+                "Replace the inner loop that repeatedly extends d with a Greedy farthest-reach bound, changing the observed O(n^2) scan to O(n)."
+            ],
+            "mentor_feedback": "Specific.", "key_insight": "Specific.",
+        }
+
+    monkeypatch.setattr(explainability, "invoke_agent", specific_advice)
+    result = asyncio.run(explainability.explainability_node({
+        "problem": {"title": "Jump Game", "category": "Greedy"},
+        "submission": {"language": "cpp", "source_code": "for(int i=0;i<n;i++) for(int j=0;j<a[i];j++) d[i+j]=1;"},
+        "execution_result": {"compile_status": "success", "results": [{"status": "accepted", "is_hidden": False}]},
+        "complexity_details": {"time_complexity": "O(n^2)", "time_classification": "MODERATE", "time_score": 15},
+    }))["feedback"]
+
+    assert "farthest-reach" in result["improvement_steps"][0]

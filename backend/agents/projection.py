@@ -25,6 +25,7 @@ def verified_revision_projection(
     correctness_score: Any,
     complexity_details: Dict[str, Any] | None,
     style_score: Any,
+    scoring_weights: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Build an exact score scenario from a judge-assessed revision stage.
 
@@ -37,6 +38,7 @@ def verified_revision_projection(
         correctness_score,
         complexity_details,
         style_score,
+        scoring_weights,
     )
     time = complexity_dimension_percent(complexity_details, "time")
     space = complexity_dimension_percent(complexity_details, "space")
@@ -52,6 +54,16 @@ def verified_revision_projection(
         }
 
     delta = round(projected - current, 1)
+    if delta <= 0:
+        return {
+            "available": False,
+            "verified": True,
+            "projected_score": None,
+            "current_score": current,
+            "expected_improvement": None,
+            "assumptions": [],
+            "message": "The verified stage draft does not improve this score, so no projection is shown.",
+        }
     return {
         "available": True,
         "verified": True,

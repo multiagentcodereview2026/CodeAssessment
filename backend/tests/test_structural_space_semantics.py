@@ -105,6 +105,20 @@ def test_nested_vector_dimensions_preserve_time_and_space_exponents():
         assert result.space_complexity == expected
 
 
+def test_distinct_nested_scalar_bounds_keep_their_real_product_expression():
+    result = analyze_source(
+        "int main() { int m, n; cin >> m >> n; "
+        "vector<vector<long long>> dp(m, vector<long long>(n)); "
+        "for (int row = 0; row < m; ++row) "
+        "for (int col = 0; col < n; ++col) dp[row][col] = 1; "
+        "cout << dp[m - 1][n - 1]; }",
+        "cpp",
+    )
+    assert result.time_complexity == "O(m*n)"
+    assert result.space_complexity == "O(m*n)"
+    assert "structural:distinct-nested-loop-bounds" in result.signals
+
+
 def test_nested_vector_input_type_is_not_counted_as_new_storage():
     result = analyze_source(
         "int f(vector<vector<int>>& a) { return a[0][0]; }",

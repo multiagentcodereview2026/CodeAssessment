@@ -1,6 +1,8 @@
 import json
 import logging
 import re
+import asyncio
+import time
 from pathlib import Path
 from typing import Any, Dict
 from pydantic import BaseModel
@@ -16,6 +18,12 @@ except ImportError:
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
+
+# All optional AI roles share one account-level Groq allowance.  Serialising
+# requests and leaving a small token-window gap stops explainability,
+# revision, and projection from bursting together after a submission.
+_groq_request_lock = asyncio.Lock()
+_last_groq_request_at = 0.0
 
 # Initialize Groq LLM
 groq_api_key = settings.GROQ_API_KEY
@@ -60,6 +68,16 @@ def sanitize_code_comments(code: str) -> str:
     sanitized = re.sub(pattern, "[FILTERED_DIRECTIVE]", code)
     return sanitized
 
+
+def ai_capability_enabled(capability: str) -> bool:
+    """Whether this named feature may send its allowlisted payload to AI."""
+    allowed = {
+        item.strip().lower()
+        for item in str(settings.AI_ALLOWED_CAPABILITIES or "").split(",")
+        if item.strip()
+    }
+    return str(capability or "").strip().lower() in allowed
+
 def extract_clean_json(text: str) -> str:
     """Extract clean JSON string, stripping thinking tags and markdown."""
     # Remove thinking tags if present
@@ -74,8 +92,45 @@ def extract_clean_json(text: str) -> str:
         
     return text.strip()
 
-async def invoke_agent(system_prompt: str, user_payload: Dict[str, Any], schema: type[BaseModel], fallback_dict: Dict[str, Any]) -> Dict[str, Any]:
+
+def _retry_after_seconds(exc: Exception) -> float:
+    """Read the provider's safe cooldown hint without logging response data."""
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None) or {}
+    try:
+        return max(0.0, float(headers.get("retry-after", 0)))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+async def _request_groq(messages: list[Any]) -> Any:
+    """Make one rate-coordinated model request for every AI agent role."""
+    global _last_groq_request_at
+    async with _groq_request_lock:
+        elapsed = time.monotonic() - _last_groq_request_at
+        delay = max(0.0, float(settings.GROQ_MIN_REQUEST_INTERVAL_SECONDS) - elapsed)
+        if delay:
+            await asyncio.sleep(delay)
+        try:
+            response = await llm.ainvoke(messages)
+            _last_groq_request_at = time.monotonic()
+            return response
+        except Exception:
+            _last_groq_request_at = time.monotonic()
+            raise
+
+async def invoke_agent(
+    system_prompt: str,
+    user_payload: Dict[str, Any],
+    schema: type[BaseModel],
+    fallback_dict: Dict[str, Any],
+    *,
+    capability: str,
+) -> Dict[str, Any]:
     """Invoke Groq with strict validation and a machine-readable source label."""
+    if not ai_capability_enabled(capability):
+        logger.info("Using deterministic fallback logic (AI capability disabled: %s)", capability)
+        return {**fallback_dict, "analysis_source": "fallback"}
     if not llm or not settings.GROQ_API_KEY:
         logger.info("Using deterministic fallback logic (No GROQ_API_KEY provided)")
         return {**fallback_dict, "analysis_source": "fallback"}
@@ -85,11 +140,27 @@ async def invoke_agent(system_prompt: str, user_payload: Dict[str, Any], schema:
         HumanMessage(content=json.dumps(user_payload))
     ]
     try:
-        response = await llm.ainvoke(messages)
+        response = await _request_groq(messages)
         content = extract_clean_json(response.content)
         validated = schema.model_validate_json(content)
         return {**validated.model_dump(), "analysis_source": "groq"}
     except Exception as exc:
+        # Score projection runs in the background, so it can safely honour a
+        # single provider cooldown. Visible guidance does not wait here; it
+        # returns its deterministic fallback instead of holding the UI.
+        if (
+            getattr(exc, "status_code", None) == 429
+            and capability == "score_projection"
+            and int(settings.GROQ_RATE_LIMIT_RETRIES) > 0
+        ):
+            try:
+                await asyncio.sleep(max(15.0, _retry_after_seconds(exc)))
+                response = await _request_groq(messages)
+                content = extract_clean_json(response.content)
+                validated = schema.model_validate_json(content)
+                return {**validated.model_dump(), "analysis_source": "groq"}
+            except Exception as retry_error:
+                exc = retry_error
         # Retry only malformed-provider-request failures without the optional
         # response-format parameter. Do not retry rate limits, timeouts, or
         # invalid model output indefinitely.

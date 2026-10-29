@@ -112,7 +112,6 @@ async def correctness_node(state: EvaluationState) -> Dict[str, Any]:
     payload = {
         "problem": state.get("problem"),
         "execution_result": safe_exec_res,
-        "source_code": state.get("submission", {}).get("source_code", "")
     }
 
     runtime_errors = []
@@ -150,7 +149,8 @@ async def correctness_node(state: EvaluationState) -> Dict[str, Any]:
         prompt,
         payload,
         CorrectnessOutput,
-        fallback
+        fallback,
+        capability="correctness",
     )
 
     # IMPORTANT:

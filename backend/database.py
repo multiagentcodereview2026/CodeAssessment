@@ -66,6 +66,7 @@ def ensure_submission_assessment_columns() -> None:
     required_columns = {
         "complexity_details": "JSON",
         "assessment_flags": "JSON",
+        "private_projection": "JSON",
     }
     with engine.begin() as connection:
         for name, sql_type in required_columns.items():

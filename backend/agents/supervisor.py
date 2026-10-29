@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Dict, Any
-from agents.base import load_prompt, invoke_agent, sanitize_code_comments
+from agents.base import load_prompt, invoke_agent
 from workflow.state import EvaluationState
 
 class SupervisorOutput(BaseModel):
@@ -11,14 +11,12 @@ class SupervisorOutput(BaseModel):
 
 async def supervisor_node(state: EvaluationState) -> Dict[str, Any]:
     prompt = load_prompt("supervisor")
-    source_code = state.get("submission", {}).get("source_code", "")
-    sanitized_code = sanitize_code_comments(source_code)
-    
+    # Submission validation is deterministic. If this optional explanatory
+    # capability is enabled, it needs public problem context and language,
+    # never the learner's source or identity.
     payload = {
-        "user": state.get("user"),
         "problem": state.get("problem"),
         "submission": {
-            "source_code": f"<STUDENT_SUBMISSION_CODE>\n{sanitized_code}\n</STUDENT_SUBMISSION_CODE>",
             "language": state.get("submission", {}).get("language")
         }
     }
@@ -30,5 +28,8 @@ async def supervisor_node(state: EvaluationState) -> Dict[str, Any]:
         "next_step": "docker_execution"
     }
     
-    result = await invoke_agent(prompt, payload, SupervisorOutput, fallback)
+    result = await invoke_agent(
+        prompt, payload, SupervisorOutput, fallback,
+        capability="supervisor",
+    )
     return {"validation_result": result}

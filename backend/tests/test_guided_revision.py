@@ -4,7 +4,7 @@ from agents import revision
 
 
 def test_guided_revision_never_returns_a_complete_program(monkeypatch):
-    async def fake_invoke(prompt, payload, schema, fallback):
+    async def fake_invoke(prompt, payload, schema, fallback, **_kwargs):
         return {
             "stage": "ALGORITHM",
             "title": "Generalize the approach",
@@ -47,7 +47,7 @@ def test_guided_no_change_is_explicit_and_has_no_code():
 def test_guided_revision_passes_previous_stage_for_comparison(monkeypatch):
     captured = {}
 
-    async def fake_invoke(_prompt, payload, _schema, _fallback):
+    async def fake_invoke(_prompt, payload, _schema, _fallback, **_kwargs):
         captured.update(payload)
         return {
             "stage": "OPTIMIZE",
@@ -98,3 +98,38 @@ def test_manual_work_fallback_is_specific_without_an_ai_provider():
     assert result["title"] == "Remove repeated manual ordering"
     assert len(result["guided_steps"]) == 3
     assert result["future_plan"][0].startswith("OPTIMIZE_DATA_STRUCTURE")
+
+
+def test_private_stage_revision_receives_the_same_bounded_stage(monkeypatch):
+    captured = {}
+
+    async def fake_invoke(_prompt, payload, _schema, _fallback, **_kwargs):
+        captured.update(payload)
+        return {"improved_code": "int main() { return 0; }", "analysis_source": "groq"}
+
+    monkeypatch.setattr(revision, "invoke_agent", fake_invoke)
+    result = asyncio.run(revision.private_stage_revision_node({
+        "problem": {"title": "Practice", "statement": "..."},
+        "submission": {"source_code": "int main() { return 1; }", "language": "cpp"},
+    }, "OPTIMIZE_LOCAL"))["private_revision"]
+
+    assert captured["stage"] == "OPTIMIZE_LOCAL"
+    assert result["revision_source"] == "ai"
+
+
+def test_private_stage_accepts_text_change_metadata(monkeypatch):
+    async def fake_invoke(_prompt, _payload, _schema, _fallback, **_kwargs):
+        return {
+            "improved_code": "int main() { return 0; }",
+            "changes": ["Replace the repeated loop."],
+            "analysis_source": "groq",
+        }
+
+    monkeypatch.setattr(revision, "invoke_agent", fake_invoke)
+    result = asyncio.run(revision.private_stage_revision_node({
+        "problem": {"title": "Practice"},
+        "submission": {"source_code": "int main() {}", "language": "cpp"},
+    }, "OPTIMIZE_LOCAL"))["private_revision"]
+
+    assert result["revision_source"] == "ai"
+    assert result["improved_code"]

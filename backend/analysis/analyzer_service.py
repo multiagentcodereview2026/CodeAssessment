@@ -42,6 +42,7 @@ async def _invoke_complexity_reviewer(payload: dict) -> dict:
             "reasoning": "The optional AI complexity reviewer was unavailable.",
             "evidence": [],
         },
+        capability="complexity_review",
     )
 
 
@@ -171,40 +172,42 @@ async def analyze_submission_complexity(
                 explanation="AST complexity evidence was corroborated by an independent AI review.",
             )
         elif review.status == "AI_FALLBACK":
-            preserve_static_space = _has_authoritative_space_evidence(static_result)
-            evidence.final = ComplexityAnalysis(
-                time_complexity=review.time_complexity,
-                space_complexity=(
-                    static_result.space_complexity
-                    if preserve_static_space and static_result is not None
-                    else review.space_complexity
-                ),
-                confidence=review.confidence,
-                method=(
-                    "ai-fallback+ast-space"
-                    if preserve_static_space
-                    else "ai-fallback"
-                ),
-                status="ANALYZED",
-                signals=[
-                    *(static_result.signals if static_result else []),
-                    "ai-fallback:lower-confidence-ast",
-                    *(
-                        ["ast-space-preserved:authoritative-stdin-allocation"]
-                        if preserve_static_space
-                        else []
+            # The AST owns the formula displayed to the learner.  An AI
+            # disagreement can request review, but it must never replace an
+            # existing AST estimate (especially a rich formula such as
+            # O(m*n)) with a simplified model label.
+            if _complete(static_result):
+                evidence.final = _review_required_result(
+                    static_result, "ai-disagreement",
+                )
+            else:
+                # AI may fill a genuinely absent AST field, never overwrite a
+                # field supplied by the deterministic analysis.
+                evidence.final = ComplexityAnalysis(
+                    time_complexity=(
+                        static_result.time_complexity
+                        if static_result and static_result.time_complexity
+                        else review.time_complexity
                     ),
-                ],
-                dynamic_measurements=runtime_measurements,
-                evidence_quality="ai-fallback",
-                explanation=(
-                    "A code-only AI review supplied a higher-confidence time estimate "
-                    "than the lower-confidence AST analysis."
-                    if preserve_static_space
-                    else "A code-only AI review supplied a higher-confidence estimate "
-                    "than the lower-confidence AST analysis."
-                ),
-            )
+                    space_complexity=(
+                        static_result.space_complexity
+                        if static_result and static_result.space_complexity
+                        else review.space_complexity
+                    ),
+                    confidence=review.confidence,
+                    method="ast+ai-missing-field",
+                    status="ANALYZED",
+                    signals=[
+                        *(static_result.signals if static_result else []),
+                        "ai-filled-missing-ast-field",
+                    ],
+                    dynamic_measurements=runtime_measurements,
+                    evidence_quality="ai-fill-only",
+                    explanation=(
+                        "The deterministic analysis supplied the available complexity "
+                        "facts; the optional AI review filled only a missing field."
+                    ),
+                )
         else:
             evidence.final = _review_required_result(
                 static_result or ComplexityAnalysis(), review.status,

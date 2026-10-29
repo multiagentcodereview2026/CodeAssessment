@@ -1,6 +1,7 @@
 import asyncio
 
 from agents.projection import score_projection_node, verified_revision_projection
+from schemas import SubmissionDetails
 
 
 def test_projection_is_a_transparent_correctness_fix_scenario():
@@ -87,3 +88,22 @@ def test_verified_revision_stage_projection_uses_the_actual_stage_components():
         "space": 100.0,
         "style": 75.0,
     }
+
+
+def test_verified_projection_is_hidden_when_the_stage_does_not_improve_score():
+    result = verified_revision_projection(
+        current_score=100.0,
+        correctness_score=100.0,
+        complexity_details={
+            "time_score": 25.0, "time_score_max": 25.0,
+            "space_score": 25.0, "space_score_max": 25.0,
+        },
+        style_score=100.0,
+    )
+
+    assert result["available"] is False
+    assert result["projected_score"] is None
+
+
+def test_private_projection_data_is_not_in_the_student_schema():
+    assert "private_projection" not in SubmissionDetails.model_fields

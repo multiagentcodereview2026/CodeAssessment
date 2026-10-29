@@ -33,9 +33,10 @@ class ComplexityReview:
     confidence: float
     status: str
     evidence: list[str]
-    # Provider proposal is retained for audit/CLI output. When status is
-    # ``AI_FALLBACK``, the primary time/space fields contain that validated
-    # code-only AI estimate.
+    # Provider proposal is retained for audit/CLI output. ``AI_FALLBACK``
+    # means the proposal disagreed with a lower-confidence AST estimate; the
+    # orchestration layer may fill an absent AST field but never overwrite an
+    # existing AST formula.
     ai_time_complexity: str | None = None
     ai_space_complexity: str | None = None
     ai_confidence: float | None = None
@@ -157,11 +158,9 @@ def resolve_review(
 ) -> ComplexityReview:
     """Resolve a low-confidence AST review using independent AI evidence.
 
-    An AI answer is allowed to replace an AST guess only in this fallback
-    path: it must provide both estimates, source-derived evidence, meet the
-    configured confidence minimum, and be more confident than the AST guess.
-    This function never changes a high-confidence direct AST result because
-    those do not enter AI review in the first place.
+    The AI may corroborate an AST estimate or supply a missing estimate.  It
+    is never the authority for replacing an existing AST formula; the caller
+    retains that deterministic formula and marks a disagreement for review.
     """
     ast = ast_result or {}
     ai = AIComplexityReview.model_validate(ai_result or {})
@@ -206,7 +205,7 @@ def resolve_review(
             ai.space_complexity,
             round(ai_confidence, 3),
             "AI_FALLBACK",
-            evidence + ["AI code-only estimate replaced a lower-confidence AST estimate."],
+            evidence + ["AI code-only estimate disagreed with the AST estimate and requires review."],
             ai.time_complexity,
             ai.space_complexity,
             ai_confidence,
@@ -283,9 +282,8 @@ async def review_with_limits(
         review = await review_complexity(
             source_code, language, ast_result, invoke, runtime_measurements,
         )
-        # A valid fallback is still an externally-derived decision. Cache it
-        # too, otherwise repeat submissions of identical code can receive
-        # different model wording and therefore different persisted estimates.
+        # Cache a valid disagreement too, otherwise repeat submissions of
+        # identical code can receive different model wording/review outcomes.
         if review.status in {"AGREEMENT", "AI_FALLBACK", "NEEDS_REVIEW"}:
             cache.put(key, review)
         return review

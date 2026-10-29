@@ -46,7 +46,7 @@ def test_peer_comparison_calculates_similarity_from_real_peer_rows(monkeypatch):
         lambda *_args, **_kwargs: [{"submission_id": "peer-1", "code": peer_code}],
     )
 
-    async def fake_invoke(_prompt, _payload, _schema, fallback):
+    async def fake_invoke(_prompt, _payload, _schema, fallback, **_kwargs):
         return {**fallback, "analysis_source": "fallback"}
 
     monkeypatch.setattr(similarity, "invoke_agent", fake_invoke)

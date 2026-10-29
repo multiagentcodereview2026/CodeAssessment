@@ -44,7 +44,7 @@ def test_low_confidence_ast_is_ai_corroborated_before_becoming_analyzed(monkeypa
     assert evidence.final.method == "ast+ai-corroborated"
 
 
-def test_higher_confidence_ai_disagreement_becomes_analyzed_fallback(monkeypatch):
+def test_higher_confidence_ai_disagreement_never_replaces_ast_formula(monkeypatch):
     async def disagreeing_provider(payload):
         assert "ast_evidence" not in payload
         return {
@@ -78,14 +78,14 @@ def test_higher_confidence_ai_disagreement_becomes_analyzed_fallback(monkeypatch
         )
     )
 
-    assert evidence.final.status == "ANALYZED"
-    assert evidence.final.method == "ai-fallback"
-    assert evidence.final.time_complexity == "O(n^2)"
-    assert scored["complexity_score"] is not None
-    assert scored["complexity_details"]["analysis_status"] != "REVIEW_REQUIRED"
+    assert evidence.final.status == "REVIEW_REQUIRED"
+    assert evidence.final.method == "ast+ai-review"
+    assert evidence.final.time_complexity == "O(n)"
+    assert scored["complexity_score"] is None
+    assert scored["complexity_details"]["analysis_status"] == "REVIEW_REQUIRED"
 
 
-def test_ai_fallback_cannot_replace_authoritative_stdin_allocation_space(monkeypatch):
+def test_ai_fallback_cannot_replace_any_existing_ast_formula(monkeypatch):
     async def provider(_payload):
         return {
             "time_complexity": "O(n^3)",
@@ -114,9 +114,9 @@ def test_ai_fallback_cannot_replace_authoritative_stdin_allocation_space(monkeyp
     )
 
     assert evidence.final is not None
-    assert evidence.final.time_complexity == "O(n^3)"
+    assert evidence.final.time_complexity == "O(n^2)"
     assert evidence.final.space_complexity == "O(n)"
-    assert evidence.final.method == "ai-fallback+ast-space"
+    assert evidence.final.method == "ast+ai-review"
 
 
 def test_identical_ai_fallback_review_is_cached(monkeypatch):
@@ -146,8 +146,8 @@ def test_identical_ai_fallback_review_is_cached(monkeypatch):
 
     assert calls == 1
     assert first.final is not None and second.final is not None
-    assert first.final.time_complexity == second.final.time_complexity == "O(n^3)"
-    assert first.final.space_complexity == second.final.space_complexity == "O(n)"
+    assert first.final.time_complexity == second.final.time_complexity == "O(n^2)"
+    assert first.final.space_complexity == second.final.space_complexity == "O(1)"
 
 
 def test_missing_ast_estimate_is_saved_as_analysis_failed_and_is_not_scored(monkeypatch):
@@ -249,8 +249,9 @@ def test_runtime_supported_ai_fallback_receives_raw_measurements_only(monkeypatc
     )
 
     assert evidence.final is not None
-    assert evidence.final.method == "ai-fallback"
-    assert evidence.final.time_complexity == "O(n log n)"
+    assert evidence.final.method == "ast+ai-review"
+    assert evidence.final.status == "REVIEW_REQUIRED"
+    assert evidence.final.time_complexity == "O(n^2)"
 
 
 def test_observational_judge_timings_do_not_veto_confident_static_analysis(monkeypatch):

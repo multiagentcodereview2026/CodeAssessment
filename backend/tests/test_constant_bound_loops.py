@@ -36,6 +36,20 @@ def test_variable_inner_loop_still_multiplies():
     assert result.time_complexity in {"O(n*m)", "O(m*n)", "O(n^2)"}
 
 
+def test_sort_once_with_sequential_scans_is_n_log_n_not_nested_work():
+    result = analyze_source(
+        "int main() { int n; cin >> n; vector<int> values(n); "
+        "for (int i = 0; i < n; ++i) cin >> values[i]; "
+        "vector<int> expected = values; sort(expected.begin(), expected.end()); "
+        "int mismatches = 0; "
+        "for (int i = 0; i < n; ++i) if (values[i] != expected[i]) ++mismatches; "
+        "cout << mismatches; }",
+        "cpp",
+    )
+    assert result.time_complexity == "O(n log n)"
+    assert result.space_complexity == "O(n)"
+
+
 def test_cpp_only_literal_bound_is_constant():
     result = analyze_source(
         "int f() { int total=0; for (int i=0; i<2; ++i) total += i; return total; }",

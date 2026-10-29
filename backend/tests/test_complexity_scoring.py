@@ -37,9 +37,12 @@ def test_normalizes_any_single_symbolic_input_variable_to_n():
     assert aggregate["status"] == "SCORED"
     assert aggregate["time_score"] == 25.0
 
-    # Two independently sized inputs cannot be collapsed into one n.
+    # The displayed expression preserves the two dimensions, while the
+    # deterministic scorer maps their product to the quadratic rank.
     multi = time_complexity_assessment("O(n)", "O(M*N)")
-    assert multi["status"] == "REVIEW_REQUIRED"
+    assert multi["student_time_complexity"] == "O(M*N)"
+    assert multi["status"] == "SCORED"
+    assert multi["time_score"] == 16.667
 
 
 def test_theta_is_not_silently_mixed_into_big_o_scoring():
@@ -140,10 +143,31 @@ def test_curated_multivariable_benchmark_uses_private_rank_without_rewriting_rep
     assert assessment["classification"] == "OPTIMAL"
     assert assessment["time_score"] == 25.0
 
-    # The same multi-dimensional syntax from a student remains intentionally
-    # review-only.  We do not guess how independent input dimensions relate.
+    # The student keeps the exact product notation in the report, but the
+    # deterministic structural projection gives both formulas the same rank.
     student_multi = time_complexity_assessment("O(n*k)", "O(M*N)")
-    assert student_multi["status"] == "REVIEW_REQUIRED"
+    assert student_multi["student_time_complexity"] == "O(M*N)"
+    assert student_multi["status"] == "SCORED"
+    assert student_multi["time_score"] == 25.0
+
+
+def test_multivariable_ast_formula_stays_visible_but_scores_by_structural_rank():
+    time = time_complexity_assessment("O(m*n)", "O(m*n)")
+    space = space_complexity_assessment("O(m*n)", "O(m*n)")
+
+    assert time["student_time_complexity"] == "O(m*n)"
+    assert time["status"] == "SCORED"
+    assert time["time_score"] == 25.0
+    assert space["student_space_complexity"] == "O(m*n)"
+    assert space["space_score"] == 25.0
+
+
+def test_minimum_of_two_dimensions_is_linear_benchmark_rank():
+    assessment = time_complexity_assessment("O(min(m,n))", "O(m*n)")
+    assert assessment["student_time_complexity"] == "O(m*n)"
+    assert assessment["status"] == "SCORED"
+    assert assessment["classification"] == "MODERATE"
+    assert assessment["time_score"] == 16.667
 
 
 def test_bounded_parameter_complexities_keep_exact_display_but_score_on_n_rank():

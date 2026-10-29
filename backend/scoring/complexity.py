@@ -30,14 +30,14 @@ COMPLEXITY_LEVELS = list(TIME_COMPLEXITY_LEVELS)
 
 
 def normalize_complexity(complexity: Optional[str]) -> Optional[str]:
-    """Normalize common single-variable Big-O spellings.
+    """Normalize Big-O spelling while retaining the student's dimensions.
 
     Any *one* symbolic input-size variable is canonicalized to ``n``. For
-    example, ``O(L)``, ``O(m^2)``, and ``O(log P)`` use the same single-input
-    growth buckets as ``O(n)``, ``O(n^2)``, and ``O(log n)``. Expressions
-    containing two independent dimensions, such as ``O(V + E)`` and
-    ``O(m*n)``, deliberately remain unsupported because they need a
-    problem-family-specific comparator.
+    example, ``O(L)``, ``O(m^2)``, and ``O(log P)`` can be compared against
+    the one-input rank ladder without rewriting what the student sees.
+    Expressions with independent dimensions, such as ``O(V + E)`` and
+    ``O(m*n)``, are also deliberately retained as-written here. Their private
+    structural rank is calculated separately by :func:`rank_complexity_for_scoring`.
     """
     if not complexity or not isinstance(complexity, str):
         return None
@@ -300,9 +300,15 @@ def _benchmark_rank_projection(
             return max(buckets, key=complexity_rank)
         return None
 
-    # Parentheses only group a term; min/max of input dimensions have linear
-    # magnitude in the total input scale.
-    expression = expression.strip("()")
+    # ``min(m,n)`` and ``max(m,n)`` are complete expressions, not redundant
+    # grouping. Do not use ``strip('()')`` here: it would turn ``min(m,n)``
+    # into the malformed ``min(m,n`` and make an otherwise deterministic
+    # benchmark unscoreable. Parentheses that actually wrap a whole term are
+    # removed only as a matched outer pair.
+    if expression.startswith("(") and expression.endswith(")"):
+        expression = expression[1:-1]
+    # min/max of input dimensions have linear magnitude in the total input
+    # scale.
     if re.fullmatch(r"(?:min|max)\([a-z][a-z0-9_]*,[a-z][a-z0-9_]*\)", expression):
         return "O(n)"
 
@@ -345,6 +351,25 @@ def _benchmark_rank_projection(
     if degree == 3:
         return "O(n^4+)" if logarithmic_factor else "O(n^3)"
     return "O(n^4+)"
+
+
+def rank_complexity_for_scoring(
+    complexity: Optional[str],
+    bounded_parameters: Iterable[str] = (),
+) -> Optional[str]:
+    """Map an exact displayed formula to the nearest fixed scoring rank.
+
+    Student-facing complexity remains the AST expression (for example,
+    ``O(m*n)``).  The rubric, however, has a finite one-dimensional ladder.
+    This deterministic projection maps products to their polynomial degree and
+    sums to their dominating degree: ``O(m*n)`` ranks as ``O(n^2)`` and
+    ``O(V+E)`` ranks as ``O(n)``.  It does not use an AI estimate and never
+    changes the expression returned to the frontend.
+    """
+    return (
+        _score_projection(complexity, bounded_parameters)
+        or _benchmark_rank_projection(complexity, bounded_parameters)
+    )
 
 
 def _symbolic_single_input_rank(compact: str) -> Optional[str]:
@@ -456,11 +481,12 @@ def private_time_complexity_breakdown(
     # Project the original expressions so a bounded scalar (for example
     # ``k <= 100``) is still recognised before display normalization maps a
     # single variable to the generic n bucket.
-    projected_target = (
-        _score_projection(optimal_time, bounded_parameters)
-        or _benchmark_rank_projection(optimal_time, bounded_parameters)
+    projected_target = rank_complexity_for_scoring(
+        optimal_time, bounded_parameters,
     )
-    projected_student = _score_projection(student_time, bounded_parameters)
+    projected_student = rank_complexity_for_scoring(
+        student_time, bounded_parameters,
+    )
     if not projected_target or not projected_student:
         return {
             "status": "REVIEW_REQUIRED",
@@ -468,7 +494,7 @@ def private_time_complexity_breakdown(
             "time_score": None,
             "score_percent": None,
             "student_time_complexity": normalized_student,
-            "reason": "This problem uses variables that require a problem-specific complexity comparison.",
+            "reason": "This complexity expression could not be mapped to the platform's deterministic scoring ladder.",
         }
 
     optimal_rank = complexity_rank(projected_target)

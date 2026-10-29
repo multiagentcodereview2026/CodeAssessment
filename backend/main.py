@@ -38,6 +38,7 @@ from auth import (
 from database import (
     SessionLocal,
     ensure_submission_assignment_column,
+    ensure_submission_assessment_columns,
     ensure_student_profile_columns,
     engine,
     get_db,
@@ -86,8 +87,14 @@ from agents.complexity import analyze_student_complexity, complexity_node, unava
 from agents.correctness import correctness_node
 from agents.style import style_node
 from agents.projection import verified_revision_projection
-from agents.base import llm, extract_clean_json
-from agents.revision import guided_future_plan, guided_revision_fallback, guided_revision_node, revision_node
+from agents.base import ai_capability_enabled, llm, extract_clean_json
+from agents.revision import (
+    guided_future_plan,
+    guided_revision_fallback,
+    guided_revision_node,
+    private_stage_revision_node,
+    revision_node,
+)
 from agents.revision_verification import summarize_revision_verification, unverified_revision
 from workflow.graph import evaluation_graph
 from workflow.state import EvaluationState
@@ -101,6 +108,12 @@ from instructor_repository import (
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("evaluator_backend")
+
+# Provider-throttled projections are retried quietly. Only identifiers and
+# retry counters live here; generated source remains in the private database
+# field and is never exposed by the learner API.
+_projection_retry_counts: dict[str, int] = {}
+_projection_retry_tasks: dict[str, asyncio.Task[Any]] = {}
 
 
 def create_notification(
@@ -579,8 +592,6 @@ async def score_revision_stage(
         "expected_improvement": None,
         "assumptions": [],
     }
-    if (original_submission.score_breakdown or {}).get("rubric", {}).get("version") == "complexity-focused-v2":
-        return {**unavailable, "message": "Revision score projection is awaiting integration with the saved scoring rubric."}
     try:
         execution = await execute_code_sandboxed(
             source_code=source_code,
@@ -593,6 +604,18 @@ async def score_revision_stage(
 
     if execution.get("execution_status") == "system_error":
         return {**unavailable, "message": "The judge was unavailable, so this revision stage has no score projection."}
+
+    verification = summarize_revision_verification(execution)
+    if verification.get("status") != "verified_passed":
+        return {
+            **unavailable,
+            "message": "The private stage draft did not pass every evaluated case, so no score projection is shown.",
+            # Persist only allowlisted aggregate verification metadata.  It
+            # lets support/debug flows distinguish a compile failure from an
+            # incorrect candidate without retaining hidden inputs, outputs,
+            # stderr, or exposing the generated draft to learners.
+            "_private_assessment": {"verification": verification},
+        }
 
     static = analyze_static_complexity(source_code, language)
     dynamic = (
@@ -651,18 +674,214 @@ async def score_revision_stage(
     state.update(complexity)
     style = await style_node(state)
 
-    return verified_revision_projection(
+    saved_breakdown = original_submission.score_breakdown if isinstance(original_submission.score_breakdown, dict) else {}
+    saved_rubric = saved_breakdown.get("rubric") if isinstance(saved_breakdown.get("rubric"), dict) else {}
+    saved_weights = saved_rubric.get("weights") if isinstance(saved_rubric.get("weights"), dict) else None
+    projection = verified_revision_projection(
         current_score=original_submission.overall_score,
         correctness_score=correctness.get("correctness_score"),
         complexity_details=complexity.get("complexity_details"),
         style_score=style.get("style_score"),
+        scoring_weights=saved_weights,
     )
+    # This data is written only to Submission.private_projection. It supports
+    # audit/debugging without ever exposing generated source or judge details.
+    projection["_private_assessment"] = {
+        "verification": verification,
+        "generated_overall_score": projection.get("projected_score"),
+        "correctness_score": correctness.get("correctness_score"),
+        "complexity_score": complexity.get("complexity_score"),
+        "style_score": style.get("style_score"),
+    }
+    return projection
+
+
+def projection_pending(current_score: Any) -> dict[str, Any]:
+    """Public placeholder while a private draft is being judged."""
+    return {
+        "available": False,
+        "verified": False,
+        "pending": True,
+        "projected_score": None,
+        "current_score": current_score,
+        "expected_improvement": None,
+        "assumptions": [],
+        "message": "A private revision is being compiled and evaluated. This page will update when verification finishes.",
+    }
+
+
+async def verify_projection_in_background(submission_id: str, stage: str) -> None:
+    """Generate and judge projection drafts without holding the learner's HTTP request.
+
+    The task has its own database session because FastAPI closes the request
+    session as soon as the guided-learning response is returned.  Only the
+    final allowlisted projection metadata is persisted; private source and
+    hidden-case values never reach the API response.
+    """
+    retry_projection = False
+    db = SessionLocal()
+    try:
+        submission = db.query(models.Submission).filter(
+            models.Submission.submission_id == submission_id,
+        ).first()
+        if not submission:
+            return
+        problem = db.query(models.Problem).filter(
+            models.Problem.id == submission.problem_id,
+        ).first()
+        if not problem:
+            return
+
+        state: dict[str, Any] = {
+            "problem": {
+                "title": problem.title,
+                "statement": problem.description,
+                "constraints": problem.constraints or [],
+            },
+            "submission": {"source_code": submission.code, "language": submission.language},
+            "feedback": submission.feedback,
+            "complexity_details": submission.complexity_details,
+            "style_details": (submission.feedback or {}).get("style_details") if isinstance(submission.feedback, dict) else None,
+        }
+        public_projection = projection_pending(submission.overall_score)
+        private_projection = None
+        test_cases = load_problem_cases(db, problem, public_only=False)
+        attempt_limit = max(1, settings.SCORE_PROJECTION_MAX_DRAFT_ATTEMPTS)
+        for attempt in range(1, attempt_limit + 1):
+            try:
+                private_result = await asyncio.wait_for(
+                    private_stage_revision_node(state, stage, projection_attempt=attempt),
+                    timeout=settings.SCORE_PROJECTION_TIMEOUT_SECONDS,
+                )
+                private_revision = dict(private_result.get("private_revision") or {})
+                private_code = str(private_revision.get("improved_code") or "").strip()
+                if private_revision.get("revision_source") != "ai" or not private_code:
+                    # Optional provider capacity is transient. Preserve the
+                    # pending state and quietly try again later; never replace
+                    # it with an invented score or a learner-facing failure.
+                    retry_projection = True
+                    public_projection = projection_pending(submission.overall_score)
+                    break
+                projection = await score_revision_stage(
+                    original_submission=submission,
+                    problem=problem,
+                    source_code=private_code,
+                    language=submission.language,
+                    test_cases=test_cases,
+                )
+                private_assessment = projection.pop("_private_assessment", None)
+                public_projection = projection
+                private_projection = {
+                    "stage": stage,
+                    "attempt": attempt,
+                    "student_source_fingerprint": normalized_submission_fingerprint(submission.code),
+                    "generated_source_fingerprint": normalized_submission_fingerprint(private_code),
+                    "generated_source": private_code,
+                    "assessment": private_assessment,
+                    "score_projection": projection,
+                    "rubric_version": ((projection.get("score_breakdown") or {}).get("rubric") or {}).get("version"),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+                if projection.get("available") and projection.get("verified"):
+                    _projection_retry_counts.pop(submission_id, None)
+                    break
+            except asyncio.TimeoutError:
+                retry_projection = True
+                public_projection = projection_pending(submission.overall_score)
+                break
+            except Exception as error:
+                logger.warning("Private score projection attempt %s failed for %s: %s", attempt, submission_id, error)
+                retry_projection = True
+                public_projection = projection_pending(submission.overall_score)
+                break
+
+        revision = dict(submission.improved_code or {})
+        # Do not overwrite a later stage if the learner submitted again while
+        # this background verification was in progress.
+        if revision.get("stage") != stage:
+            return
+        revision["score_projection"] = public_projection
+        submission.improved_code = revision
+        submission.projected_score = public_projection
+        submission.private_projection = private_projection
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Background score projection failed for %s", submission_id)
+    finally:
+        db.close()
+    if retry_projection:
+        schedule_projection_retry(submission_id, stage)
+
+
+def schedule_projection_retry(submission_id: str, stage: str) -> None:
+    """Retry a provider-throttled projection without blocking the report UI."""
+    existing = _projection_retry_tasks.get(submission_id)
+    current = asyncio.current_task()
+    if existing is not None and existing is not current and not existing.done():
+        return
+
+    retry_number = _projection_retry_counts.get(submission_id, 0) + 1
+    if retry_number > max(0, settings.SCORE_PROJECTION_BACKGROUND_RETRIES):
+        return
+    _projection_retry_counts[submission_id] = retry_number
+    delay = max(15, settings.SCORE_PROJECTION_RETRY_DELAY_SECONDS) * min(retry_number, 3)
+
+    async def delayed_retry() -> None:
+        try:
+            await asyncio.sleep(delay)
+            await verify_projection_in_background(submission_id, stage)
+        finally:
+            task = asyncio.current_task()
+            if _projection_retry_tasks.get(submission_id) is task:
+                _projection_retry_tasks.pop(submission_id, None)
+
+    _projection_retry_tasks[submission_id] = asyncio.create_task(delayed_retry())
 
 
 def normalized_submission_fingerprint(source_code: str) -> str:
     """Compare attempts without treating whitespace-only edits as progress."""
     normalized = re.sub(r"\s+", "", str(source_code or ""))
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def matching_verified_projection(
+    db: Session,
+    *,
+    student_id: str,
+    problem_id: str,
+    language: str,
+    source_code: str,
+) -> dict[str, Any] | None:
+    """Find an exact private stage draft for an official retry.
+
+    A learner normally receives a fresh assessment. This narrow path exists
+    for an exact-source retry, so its official score cannot drift from a
+    score projection that was already verified by the same judge and rubric.
+    """
+    fingerprint = normalized_submission_fingerprint(source_code)
+    candidates = (
+        db.query(models.Submission)
+        .filter(
+            models.Submission.student_id == student_id,
+            models.Submission.problem_id == problem_id,
+            models.Submission.language == language,
+        )
+        .order_by(models.Submission.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    for candidate in candidates:
+        private = candidate.private_projection if isinstance(candidate.private_projection, dict) else {}
+        public = private.get("score_projection") if isinstance(private.get("score_projection"), dict) else {}
+        if (
+            private.get("generated_source_fingerprint") == fingerprint
+            and public.get("available") is True
+            and public.get("verified") is True
+            and isinstance(public.get("projected_score"), (int, float))
+        ):
+            return public
+    return None
 
 
 def previous_guided_revision_context(db: Session, submission: models.Submission) -> dict[str, Any] | None:
@@ -801,9 +1020,12 @@ def guided_revision_stage(db: Session, submission: models.Submission) -> str:
             if "swap(" in source and loop_headers >= 3 and "priority_queue" not in source:
                 return "OPTIMIZE_MANUAL_WORK"
             return "OPTIMIZE_LOCAL"
-        if space_class not in {"", "OPTIMAL"} or (
-            submission.style_score is not None and submission.style_score < 99.9
-        ):
+        # Space is a scored algorithmic gap, not cosmetic refinement. Keep it
+        # as its own stage so a streaming/constant-state improvement can earn
+        # a genuine verified projection before style advice is considered.
+        if space_class not in {"", "OPTIMAL"}:
+            return "OPTIMIZE_SPACE"
+        if submission.style_score is not None and submission.style_score < 99.9:
             return "REFINEMENT"
         return "NO_CHANGE"
 
@@ -890,12 +1112,50 @@ def seed_instructor_assignments():
     # submissions.  Apply the idempotent schema migration before any request
     # can persist a submission.
     ensure_submission_assignment_column()
+    ensure_submission_assessment_columns()
     ensure_student_profile_columns()
     db = SessionLocal()
     try:
         created = provision_instructor_problems(db)
         if created:
             logger.info("Provisioned %s instructor assignments", created)
+    finally:
+        db.close()
+
+
+@app.on_event("startup")
+async def resume_recent_pending_projections() -> None:
+    """Resume recent silent projection checks after a backend restart."""
+    db = SessionLocal()
+    try:
+        candidates = (
+            db.query(models.Submission)
+            .filter(models.Submission.improved_code.isnot(None))
+            .order_by(models.Submission.created_at.desc())
+            .limit(10)
+            .all()
+        )
+        for submission in candidates:
+            revision = submission.improved_code if isinstance(submission.improved_code, dict) else {}
+            projection = revision.get("score_projection") if isinstance(revision.get("score_projection"), dict) else {}
+            stage = str(revision.get("stage") or "").strip()
+            guided = revision.get("revision_policy") == "GUIDED_STEPS"
+            verification = revision.get("verification") if isinstance(revision.get("verification"), dict) else {}
+            no_change = str(verification.get("status") or "") == "no_change"
+            needs_verified_projection = (
+                guided
+                and bool(stage)
+                and not no_change
+                and not (projection.get("available") is True and projection.get("verified") is True)
+            )
+            if needs_verified_projection:
+                pending = projection_pending(submission.overall_score)
+                revision = dict(revision)
+                revision["score_projection"] = pending
+                submission.improved_code = revision
+                submission.projected_score = pending
+                db.commit()
+                schedule_projection_retry(submission.submission_id, stage)
     finally:
         db.close()
 
@@ -1431,7 +1691,7 @@ async def generate_problem_hints(
         f"Use the constraints and the listed topic ({problem.category or 'the problem statement'}) to choose the smallest data structure or state that preserves the information needed for the next step.",
         "Before coding, write three checkpoints: parse the input, update one well-named state for each step, and test boundary cases such as the smallest allowed input.",
     ])
-    if llm is None:
+    if llm is None or not ai_capability_enabled("hints"):
         return fallback_hints
     prompt = (
         "Return JSON only: {\"hints\":[string,string,string]}. Generate three progressive hints for the supplied programming problem. "
@@ -1749,10 +2009,23 @@ async def submit_and_evaluate_code(
 
     # 3. Execute LangGraph Multi-Agent Engine
     final_state = await evaluation_graph.ainvoke(initial_state)
-    # Projection integration is intentionally pending; do not publish a v2
-    # promised gain until its separate implementation uses the saved rubric.
-    final_state["projected_score"] = {"available": False, "verified": False, "projected_score": None,
-        "expected_improvement": None, "message": "Score projection is awaiting integration with the versioned scoring rubric."}
+    exact_projection = matching_verified_projection(
+        db,
+        student_id=student.student_id,
+        problem_id=problem_id,
+        language=payload.language,
+        source_code=payload.code,
+    )
+    if exact_projection is not None:
+        # This source was already compiled and scored as a private stage draft
+        # under the same rubric. Preserve the verified projection rather than
+        # allowing an optional review service to make the number drift.
+        final_state["overall_score"] = exact_projection["projected_score"]
+        final_state["score_breakdown"] = exact_projection.get("score_breakdown") or final_state.get("score_breakdown")
+        final_state["assessment_flags"] = {
+            **(final_state.get("assessment_flags") or {}),
+            "matched_verified_projection": True,
+        }
     safe_execution_result = redact_hidden_execution(
         final_state.get("execution_result"),
         student_view=True,
@@ -1860,7 +2133,7 @@ async def regenerate_submission_revision(
         if (
             saved.get("revision_policy") == "GUIDED_STEPS"
             and saved.get("stage") == stage
-            and saved.get("guidance_version") == 3
+            and saved.get("guidance_version") == 5
             and str((saved.get("verification") or {}).get("status") or "")
             in {"guided_step", "no_change"}
             and (
@@ -1868,7 +2141,13 @@ async def regenerate_submission_revision(
                 or (
                     not str(saved.get("improved_code") or "").strip()
                     and isinstance(saved.get("future_plan"), list)
+                    # Do not cache an unavailable projection forever. A later
+                    # learner click may succeed after a transient provider or
+                    # judge outage; verified projections remain stable.
+                    and (saved.get("score_projection") or {}).get("available") is True
+                    and (saved.get("score_projection") or {}).get("verified") is True
                 )
+                or (saved.get("score_projection") or {}).get("pending") is True
             )
         ):
             return {"improved_code": saved}
@@ -1925,7 +2204,7 @@ async def regenerate_submission_revision(
         revision = guided_result.get("improved_code") or {}
         revision = dict(revision)
         revision["revision_policy"] = "GUIDED_STEPS"
-        revision["guidance_version"] = 3
+        revision["guidance_version"] = 5
         revision["stage"] = stage
         revision["evidence_links"] = guided_revision_evidence_links(submission)
         if previous_revision:
@@ -1938,14 +2217,29 @@ async def regenerate_submission_revision(
                     f"({previous_revision['stage'] or 'earlier step'})."
                 ),
             }
-        # Guided mode is a coaching response, not an automatic second
-        # submission. Do not compile, judge, or score model-generated text
-        # here: those slow operations made “Get next step” appear stuck and
-        # would misleadingly judge code the learner did not submit. The next
-        # official learner submission is the only event that advances/judges
-        # the stage and produces new score evidence.
+        # Coaching returns immediately.  Projection can take several Docker
+        # runs, so it is persisted as pending and completed separately rather
+        # than holding the learner on a "Preparing guidance" spinner.
+        revision["score_projection"] = (
+            projection_pending(submission.overall_score)
+            if stage != "NO_CHANGE"
+            else {
+                "available": False,
+                "verified": False,
+                "pending": False,
+                "projected_score": None,
+                "current_score": submission.overall_score,
+                "expected_improvement": None,
+                "assumptions": [],
+                "message": "No score projection is needed for a no-change stage.",
+            }
+        )
         submission.improved_code = revision
+        submission.projected_score = revision["score_projection"]
+        submission.private_projection = None
         db.commit()
+        if stage != "NO_CHANGE":
+            asyncio.create_task(verify_projection_in_background(submission.submission_id, stage))
         return {"improved_code": revision}
 
     revision = (await revision_node(state)).get("improved_code") or {}

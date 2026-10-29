@@ -30,7 +30,10 @@ class _BadRequest(Exception):
 
 
 def _invoke(fallback):
-    return asyncio.run(base.invoke_agent("prompt", {"input": "test"}, ExampleOutput, fallback))
+    return asyncio.run(base.invoke_agent(
+        "prompt", {"input": "test"}, ExampleOutput, fallback,
+        capability="hints",
+    ))
 
 
 def test_missing_provider_returns_labeled_copy_of_deterministic_fallback(monkeypatch):
@@ -51,6 +54,20 @@ def test_valid_provider_response_is_labeled_as_groq(monkeypatch):
     result = _invoke({"summary": "Fallback"})
 
     assert result == {"summary": "Provider result", "analysis_source": "groq"}
+
+
+def test_disabled_capability_never_calls_provider(monkeypatch):
+    provider = _FakeProvider('{"summary":"Provider result"}')
+    monkeypatch.setattr(base, "llm", provider)
+    monkeypatch.setattr(base.settings, "GROQ_API_KEY", "configured-for-test")
+    monkeypatch.setattr(base.settings, "AI_ALLOWED_CAPABILITIES", "hints")
+
+    result = asyncio.run(base.invoke_agent(
+        "prompt", {"source_code": "private"}, ExampleOutput,
+        {"summary": "Deterministic"}, capability="similarity",
+    ))
+
+    assert result == {"summary": "Deterministic", "analysis_source": "fallback"}
 
 
 def test_provider_error_uses_fallback_without_logging_error_contents(monkeypatch, caplog):

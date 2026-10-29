@@ -250,6 +250,9 @@ class Submission(Base):
     recommendations = Column(JSON, nullable=True)
     improved_code = Column(JSON, nullable=True)
     projected_score = Column(JSON, nullable=True)
+    # Backend-only executable draft and assessment evidence for a verified
+    # score projection. This column is deliberately absent from all schemas.
+    private_projection = Column(JSON, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 

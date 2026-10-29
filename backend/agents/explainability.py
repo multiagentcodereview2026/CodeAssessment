@@ -24,6 +24,61 @@ def _is_style_only_advice(text: str) -> bool:
     ))
 
 
+def _source_identifiers(source_code: str) -> set[str]:
+    """Return code-derived anchors for validating AI advice."""
+    reserved = {
+        "for", "while", "if", "else", "return", "int", "char", "bool",
+        "string", "vector", "set", "map", "std", "using", "namespace",
+        "main", "true", "false", "auto", "const", "void", "include",
+    }
+    return {
+        word.lower()
+        for word in re.findall(r"\b[A-Za-z_]\w*\b", source_code or "")
+        if word.lower() not in reserved
+    }
+
+
+def _is_specific_ai_step(
+    step: Any,
+    *,
+    source_code: str,
+    complexity: Dict[str, Any],
+    category: str,
+) -> bool:
+    """Require source, evidence, and an actual action for AI guidance."""
+    text = " ".join(str(step or "").lower().split())
+    if not text or len(text) < 28:
+        return False
+    generic_only = (
+        "use a better structure", "optimize the loop", "keep needed state",
+        "improve efficiency", "review the complexity", "make it faster",
+    )
+    if any(phrase in text for phrase in generic_only):
+        return False
+    identifiers = _source_identifiers(source_code)
+    source_anchor = any(re.search(rf"\b{re.escape(identifier)}\b", text) for identifier in identifiers)
+    structural_anchor = any(phrase in text for phrase in (
+        "inner loop", "nested loop", "repeated scan", "repeated pass",
+        "recompute", "rebuild", "full pass", "outer loop",
+    ))
+    observed_time = str(complexity.get("time_complexity") or "").lower()
+    time_anchor = bool(observed_time and observed_time in text)
+    complexity_terms = set(re.findall(r"o\s*\([^)]*\)", text))
+    before_after_complexity = time_anchor and len(complexity_terms) >= 2
+    category_anchor = bool(category and category.lower() in text)
+    concrete_action = any(word in text for word in (
+        "track", "maintain", "replace", "remove", "update", "advance",
+        "extend", "store", "sliding", "greedy", "pointer", "window",
+        "reach", "index", "bound", "queue", "stack", "map",
+    ))
+    return bool(
+        concrete_action
+        and (source_anchor or structural_anchor)
+        and before_after_complexity
+        and (time_anchor or category_anchor)
+    )
+
+
 def _style_finding_text(value: Any) -> str:
     """Extract the readable message from an analyzer style finding."""
     if isinstance(value, dict):
@@ -53,12 +108,12 @@ def _source_complexity_feedback(source_code: str, complexity: Dict[str, Any]) ->
     if len(loop_headers) >= 2:
         sequence = " → ".join(loop_headers[:3])
         evidence = (
-            f"The submitted source contains {len(loop_headers)} loop headers ({sequence}); "
-            f"the saved analysis reports {time} time."
+            f"Your code repeats work through {len(loop_headers)} loops ({sequence}). "
+            f"The saved analysis measures this path as {time} time."
         )
         step = (
-            "Remove the repeated full pass inside the outer iteration; keep the needed "
-            "state in a structure that can provide the next required value without reprocessing the collection."
+            "Find the inner loop that starts the same work again for each outer iteration. "
+            "Keep only the state needed for the next step so the collection is not rebuilt or rescanned from scratch."
         )
         return [evidence], [step]
     if loop_headers:
@@ -219,6 +274,7 @@ async def explainability_node(state: EvaluationState) -> Dict[str, Any]:
         "problem_title": state.get("problem", {}).get("title", ""),
         "problem_statement": state.get("problem", {}).get("statement") or state.get("problem", {}).get("description", ""),
         "problem_constraints": state.get("problem", {}).get("constraints") or [],
+        "algorithmic_tag": state.get("problem", {}).get("category") or "",
         "language": state.get("submission", {}).get("language", ""),
         "correctness_score": state.get("correctness_score"),
         "overall_score": state.get("overall_score"),
@@ -239,7 +295,10 @@ async def explainability_node(state: EvaluationState) -> Dict[str, Any]:
 
     fallback = build_evidence_feedback(state)
 
-    result = await invoke_agent(prompt, payload, ExplainabilityOutput, fallback)
+    result = await invoke_agent(
+        prompt, payload, ExplainabilityOutput, fallback,
+        capability="explainability",
+    )
     used_fallback = result.get("analysis_source") != "groq"
     result = dict(result)
     # A failed execution is the student's first task.  Preserve precise,
@@ -253,11 +312,28 @@ async def explainability_node(state: EvaluationState) -> Dict[str, Any]:
     # Deterministic source/test/style evidence is always retained.  The AI can
     # add educational wording, but it may not replace a concrete observation
     # with generic praise or an ungrounded recommendation.
+    category = str((state.get("problem") or {}).get("category") or "")
+    ai_specific_steps = [
+        step for step in result.get("improvement_steps", [])
+        if _is_specific_ai_step(
+            step,
+            source_code=str(state.get("submission", {}).get("source_code") or ""),
+            complexity=state.get("complexity_details") or {},
+            category=category,
+        )
+    ]
     if has_correctness_issue or fallback["weaknesses"]:
-        ai_steps = [step for step in result.get("improvement_steps", []) if not _is_style_only_advice(str(step))]
-        result["mentor_feedback"] = fallback["mentor_feedback"]
-        result["key_insight"] = fallback["key_insight"]
+        # Deterministic test/source/style evidence is the authority. The AI
+        # may improve tone, but generic or unsupported advice must not alter
+        # the actual improvement path.
+        # A validated AI step is allowed to use its mentor-friendly wording.
+        # If the response was generic, deterministic evidence stays in charge.
+        if not ai_specific_steps:
+            result["mentor_feedback"] = fallback["mentor_feedback"]
+            result["key_insight"] = fallback["key_insight"]
         result["weaknesses"] = _unique([*fallback["weaknesses"], *result.get("weaknesses", [])])
-        result["improvement_steps"] = _unique([*fallback["improvement_steps"], *ai_steps])
+        result["improvement_steps"] = (
+            _unique(ai_specific_steps) if ai_specific_steps else fallback["improvement_steps"]
+        )
     result["feedback_source"] = "fallback" if used_fallback else "ai"
     return {"feedback": result}

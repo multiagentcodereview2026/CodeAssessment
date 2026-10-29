@@ -59,3 +59,15 @@ the optional provider.
 Local verification: backend `pytest -q --tb=short` — **202 passed**; provider/revision/similarity feedback tests — **20 passed**; frontend `npm run lint` and `npm run build` — **passed**; Docker-backed engine suite — **23 passed**. Compose configuration and the isolated four-service startup passed. Frontend/backend health returned 200 and a fresh PostgreSQL volume reached Alembic head `20261016_0006`. A full synthetic PostgreSQL workflow passed: registration/login, enrollment approval, course and assignment edits, 3/3 public cases, evaluated assignment submission, saved history/detail, course/assignment analytics, CSV export, and student/instructor role isolation. The workflow used fallback agents with the Groq key blank; the old configured key was not contacted and needs rotation before any live-provider check. Browser walkthrough and hosted CI remain pending. The backend test suite emits deprecation warnings for Pydantic class-based configs, FastAPI `on_event`, and `datetime.utcnow()`.
 
 During the source/configuration audit, ignored local `.env` files contained credentials that were inadvertently included in tool output. Their values are intentionally not reproduced here. The local JWT signing key and bundled PostgreSQL role password have now been rotated without deleting the existing database volume. The separately configured external database password and Groq key still need rotation in their respective provider/admin systems; update local environment files and deployment secrets afterward. Do not reuse the exposed credentials.
+# Verified score projection
+
+Guided learning remains stage-wise and never displays a solution. When a
+student requests a guided stage, the backend may privately generate a complete
+implementation for that same single stage, run it against the official judge,
+and score correctness, time, space, and style with the ordinary scorer. A
+numeric projection is shown only when that private draft passes every evaluated
+case and improves the saved score; the rubric remains capped at 100. Generated
+source and private judge details are kept in `submissions.private_projection`,
+which is absent from all student response schemas. An exact later submission
+(whitespace-insensitive) uses the verified score breakdown, so its official
+score cannot drift from the projection.

@@ -173,6 +173,7 @@ async def analyze_student_complexity(
         payload,
         ComplexityOutput,
         unavailable_analysis("The complexity analysis model was unavailable, so no complexity was inferred."),
+        capability="complexity_review",
     )
     analysis_source = result.get("analysis_source", "fallback")
     if not result.get("time_complexity") and not result.get("space_complexity"):

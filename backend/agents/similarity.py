@@ -1,7 +1,7 @@
 import re
 from typing import List, Dict, Any, Set
 from pydantic import BaseModel
-from agents.base import load_prompt, invoke_agent
+from agents.base import load_prompt, invoke_agent, sanitize_code_comments
 from workflow.state import EvaluationState
 
 
@@ -130,14 +130,17 @@ async def similarity_node(state: EvaluationState) -> Dict[str, Any]:
     }
 
     payload = {
-        "source_code": source_code,
+        "source_code": sanitize_code_comments(source_code),
         "language": language,
         "computed_similarity_score": similarity_score,
         "computed_risk_level": risk_level,
         "peer_matches_count": len(matching_ids),
     }
 
-    result = await invoke_agent(prompt, payload, SimilarityOutput, fallback)
+    result = await invoke_agent(
+        prompt, payload, SimilarityOutput, fallback,
+        capability="similarity",
+    )
     # Ensure scores stay anchored to deterministic computation
     result["similarity_score"] = similarity_score
     result["originality_score"] = originality_score

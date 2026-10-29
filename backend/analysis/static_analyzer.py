@@ -60,6 +60,22 @@ def _has_braced_loop_nesting(source: str) -> bool:
     ))
 
 
+def _has_lexically_nested_loops(source: str) -> bool:
+    """Recognise actual nesting without multiplying sequential loops.
+
+    Two loop keywords in the same function are not proof of quadratic work:
+    input reading followed by a comparison pass is still sequential.  Support
+    both a loop nested in a braced body and the direct unbraced form
+    ``for (...) for (...)``.
+    """
+    return _has_braced_loop_nesting(source) or bool(re.search(
+        r"\b(?:for|while)\s*\([^)]*\)\s*"
+        r"\b(?:for|while)\s*\(",
+        source,
+        re.DOTALL,
+    ))
+
+
 def _has_indentation_nested_input_loops(source: str) -> bool:
     """Detect Python loops nested by indentation with input-derived bounds.
 
@@ -85,6 +101,69 @@ def _has_indentation_nested_input_loops(source: str) -> bool:
             return True
         active.append((indent, input_dependent))
     return False
+
+
+def _nested_for_bound_product(source: str) -> str | None:
+    """Return the exact product for two lexically nested scalar loop bounds.
+
+    The IR normally retains this information, but compact C/C++ submissions
+    can lose one bound while parsing.  This small deterministic recovery is
+    intentionally limited to ``for`` headers such as ``i < m`` nested inside
+    ``j < n``.  It never infers a product from sequential loops or from a
+    container call such as ``values.size()``.
+    """
+    headers: list[tuple[re.Match[str], str | None]] = []
+    pattern = re.compile(
+        r"\bfor\s*\(\s*[^;]*;\s*(?P<condition>[^;]*);[^)]*\)",
+        re.DOTALL,
+    )
+    for match in pattern.finditer(source):
+        condition = match.group("condition")
+        bound = re.search(
+            r"\b[A-Za-z_]\w*\s*(?:<|<=)\s*([A-Za-z_]\w*)\b(?!\s*\.)",
+            condition,
+        )
+        headers.append((match, bound.group(1) if bound else None))
+
+    for outer_index, (outer, outer_bound) in enumerate(headers):
+        if not outer_bound:
+            continue
+        cursor = outer.end()
+        while cursor < len(source) and source[cursor].isspace():
+            cursor += 1
+        if cursor >= len(source):
+            continue
+
+        if source[cursor] == "{":
+            depth = 0
+            body_end = None
+            for index in range(cursor, len(source)):
+                if source[index] == "{":
+                    depth += 1
+                elif source[index] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        body_end = index
+                        break
+            nested_headers = [
+                (candidate, bound)
+                for candidate, bound in headers[outer_index + 1:]
+                if body_end is not None and candidate.start() < body_end
+            ]
+        else:
+            # An unbraced outer loop has exactly one statement.  Recognise
+            # only the direct ``for (...) for (...)`` form, never a later
+            # sequential loop.
+            nested_headers = [
+                (candidate, bound)
+                for candidate, bound in headers[outer_index + 1:]
+                if candidate.start() == cursor
+            ]
+
+        for _inner, inner_bound in nested_headers:
+            if inner_bound and inner_bound != outer_bound:
+                return f"O({outer_bound}*{inner_bound})"
+    return None
 
 
 # ─── Recursion Detection ────────────────────────────────────────────────────────
@@ -1907,6 +1986,15 @@ def analyze_source(
     # It either proves a result from generic source facts or defers to the IR.
     fast_path = _structural_fast_path(source) if strict_structural else _semantic_fast_path(source, language_name)
     if fast_path is not None:
+        exact_nested_product = _nested_for_bound_product(source)
+        if (
+            exact_nested_product
+            and normalize_complexity(fast_path.time_complexity) == "O(n^2)"
+        ):
+            fast_path.time_complexity = exact_nested_product
+            fast_path.signals.append("structural:distinct-nested-loop-bounds")
+            if normalize_complexity(fast_path.space_complexity) == "O(n^2)":
+                fast_path.space_complexity = exact_nested_product
         if normalize_complexity(fast_path.time_complexity) in {"O(n)", "O(n^2)"} and (
             _has_multi_branch_numeric_recursion(source)
             or _has_state_dependent_loop_recursion(source)
@@ -1928,6 +2016,20 @@ def analyze_source(
             if ir:
                 ast_result = infer_complexity_from_ir(ir, strict_structural=strict_structural)
                 if ast_result and ast_result.time_complexity:
+                    exact_nested_product = _nested_for_bound_product(source)
+                    # Keep the expression a student actually wrote in the
+                    # loop bounds. The scoring layer separately ranks this
+                    # as quadratic; this is only the truthful display fact.
+                    if (
+                        exact_nested_product
+                        and normalize_complexity(ast_result.time_complexity) == "O(n^2)"
+                    ):
+                        ast_result.time_complexity = exact_nested_product
+                        ast_result.signals.append(
+                            "structural:distinct-nested-loop-bounds"
+                        )
+                        if normalize_complexity(ast_result.space_complexity) == "O(n^2)":
+                            ast_result.space_complexity = exact_nested_product
                     if (
                         normalize_complexity(ast_result.space_complexity) == "O(n)"
                         and _uses_only_fixed_capacity_auxiliary_storage(source)
@@ -2230,7 +2332,9 @@ def _semantic_fast_path(source: str, language: str) -> ComplexityAnalysis | None
     if re.search(r"\b(?:main|int\s+main)\s*\(", src) and not has_solve_function:
         has_input_reading = bool(re.search(r"(?:cin\s*>>|scanf|input\s*\(|sys\.stdin|raw_input)", src))
         has_loops = len(re.findall(r"\b(?:for|while)\b", src)) >= 1
-        has_nested_loops = len(re.findall(r"\b(?:for|while)\b", src)) >= 2
+        # Count lexical containment, not loop-keyword count. Sequential
+        # passes surrounding one std::sort are O(n log n), not O(n^2 log n).
+        has_nested_loops = _has_lexically_nested_loops(source)
         input_sized_allocation = bool(re.search(
             r"\b(?:vector|array|list|deque|queue|stack|priority_queue)\s*<[^;{}()]+>\s+\w+\s*"
             r"\(\s*(?:[a-z_]\w*|\w+\.size\s*\(\))",
