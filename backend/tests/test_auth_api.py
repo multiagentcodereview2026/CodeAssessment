@@ -54,6 +54,82 @@ from schemas import AssignmentCreate, AssignmentUpdate, CourseCreate, CourseUpda
 import main as main_module
 
 
+def test_projection_match_requires_exact_source_and_identical_assessment_context(db_session):
+    import hashlib
+    from scoring.rubric import student_rubric_score
+    learner = models.Student(student_id="projection-student", name="Learner")
+    problem = models.Problem(id="projection-problem", title="Projection", description="Test", examples=[], constraints=[], starter_codes={}, test_cases=[])
+    db_session.add_all([learner, problem])
+    db_session.flush()
+    _, breakdown = student_rubric_score(100, {"time_score": 25, "space_score": 25}, 90)
+    source = 'print("a b")'
+    projection = {"available": True, "verified": True, "projected_score": 99, "score_breakdown": breakdown}
+    submission = models.Submission(submission_id="projection-original", student_id=learner.student_id, problem_id=problem.id, language="python", code="print(0)", private_projection={"generated_source_fingerprint": hashlib.sha256(source.encode()).hexdigest(), "context_fingerprint": "test-context", "score_projection": projection})
+    db_session.add(submission)
+    db_session.commit()
+    args = dict(student_id=learner.student_id, problem_id=problem.id, language="python", source_code=source, assignment_id=None, rubric=breakdown["rubric"], context_fingerprint="test-context")
+    assert main_module.matching_verified_projection(db_session, **args) == projection
+    for change in ({"source_code": 'print("ab")'}, {"context_fingerprint": "changed-tests"}, {"assignment_id": 123}, {"rubric": {"version": "other"}}):
+        assert main_module.matching_verified_projection(db_session, **{**args, **change}) is None
+
+
+def test_private_projection_does_not_override_fresh_official_score(db_session, monkeypatch):
+    problem = models.Problem(id="fresh-grade", title="Fresh", description="Test", examples=[], constraints=[], starter_codes={}, test_cases=[{"input": "1", "expected_output": "1"}], is_public_practice=True)
+    learner = models.Student(student_id="fresh-grade-student", name="Learner")
+    db_session.add_all([problem, learner])
+    db_session.commit()
+    async def execute(**kwargs):
+        return {"compile_status": "success", "passed_cases": 1, "total_cases": 1, "results": []}
+    async def graph(state):
+        return {"overall_score": None, "correctness_score": 100, "score_breakdown": {"rubric": {"version": "test"}}, "execution_result": {"compile_status": "success", "passed_cases": 1, "total_cases": 1, "results": []}}
+    monkeypatch.setattr(main_module, "execute_code_sandboxed", execute)
+    monkeypatch.setattr(main_module.evaluation_graph, "ainvoke", graph)
+    monkeypatch.setattr(main_module, "matching_verified_projection", lambda *_args, **_kwargs: {"projected_score": 100})
+    response = asyncio.run(main_module.submit_and_evaluate_code(SubmissionRequest(problem_id=problem.id, code="print(1)", language="python"), db_session, learner))
+    saved = db_session.query(models.Submission).filter_by(submission_id=response.submission_id).one()
+    assert saved.overall_score is None
+    assert saved.assessment_flags["projection_matches_official_score"] is False
+
+
+@pytest.mark.parametrize("outcome", ["disabled", "unavailable", "verified"])
+def test_background_projection_is_bounded_and_keeps_candidate_private(db_session, monkeypatch, outcome):
+    from scoring.rubric import student_rubric_score
+    from schemas import SubmissionDetails
+    learner = models.Student(student_id="background-student", name="Learner")
+    problem = models.Problem(id="background-problem", title="Background", description="Public statement", examples=[], constraints=[], starter_codes={}, test_cases=[])
+    _, breakdown = student_rubric_score(100, {"time_score": 25, "space_score": 25}, 90)
+    submission = models.Submission(submission_id="background-sub", student_id=learner.student_id, problem_id=problem.id, language="python", code="print(0)", overall_score=50, score_breakdown=breakdown,
+        improved_code={"stage": "OPTIMIZE", "revision_policy": "GUIDED_STEPS", "projection_request_id": "request-1", "score_projection": main_module.projection_pending(50)})
+    db_session.add_all([learner, problem, submission])
+    db_session.commit()
+    monkeypatch.setattr(main_module, "SessionLocal", lambda: db_session)
+    monkeypatch.setattr(main_module, "llm", object())
+    monkeypatch.setattr(main_module.settings, "GROQ_API_KEY", "" if outcome == "disabled" else "mock-only")
+    monkeypatch.setattr(main_module.settings, "SCORE_PROJECTION_BACKGROUND_RETRIES", 0)
+    monkeypatch.setattr(main_module, "load_problem_cases", lambda *_args, **_kwargs: [{"input": "SECRET-TEST", "expected_output": "SECRET-OUTPUT", "is_hidden": True}])
+    async def generate(state, *_args, **_kwargs):
+        assert "SECRET" not in str(state)
+        if outcome == "disabled":
+            pytest.fail("Disabled provider was called")
+        return {"private_revision": {"revision_source": "ai" if outcome == "verified" else "unavailable", "improved_code": "print('PRIVATE-CANDIDATE')"}}
+    async def score(**kwargs):
+        assert kwargs["test_cases"][0]["input"] == "SECRET-TEST"
+        return {"available": True, "verified": True, "projected_score": 99, "expected_improvement": 49, "score_breakdown": breakdown, "_private_assessment": {"verification": {"status": "verified_passed"}}}
+    monkeypatch.setattr(main_module, "private_stage_revision_node", generate)
+    monkeypatch.setattr(main_module, "score_revision_stage", score)
+    asyncio.run(main_module.verify_projection_in_background(submission.submission_id, "OPTIMIZE"))
+    saved = db_session.query(models.Submission).filter_by(submission_id="background-sub").one()
+    assert saved.overall_score == 50
+    assert saved.projected_score.get("pending") is not True
+    assert saved.projected_score["available"] is (outcome == "verified")
+    public = SubmissionDetails.model_validate(saved).model_dump_json()
+    assert "PRIVATE-CANDIDATE" not in public and "SECRET-TEST" not in public
+    if outcome == "verified":
+        assert saved.private_projection["generated_source"] == "print('PRIVATE-CANDIDATE')"
+    elif outcome == "unavailable":
+        assert saved.projected_score["attempts"] == 1
+
+
 def test_assignment_deadline_boundary_and_timezone():
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
     for due, closed in [(None, False), (now + timedelta(seconds=1), False), (now, True), (now - timedelta(seconds=1), True), (now.replace(tzinfo=None), True), (now.astimezone(timezone(timedelta(hours=5, minutes=30))), True)]:

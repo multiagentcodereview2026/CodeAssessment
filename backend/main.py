@@ -21,7 +21,7 @@ from sqlalchemy import func, or_, text
 from analysis.analyzer_service import analyze_submission_complexity, analyze_static_complexity
 from analysis.dynamic_profiler import profile_execution_results
 from config.settings import settings
-from scoring.rubric import complexity_dimension_percent, validate_weights
+from scoring.rubric import RUBRIC_VERSION, complexity_dimension_percent, validate_weights
 from similarity_analysis import approach_label, approach_summary, structural_explanation, structural_fingerprint, structural_overlap
 from similarity_clustering import build_approach_groups, build_similarity_clusters, build_submission_groups
 from recommendation_engine import build_recommendations, build_roadmap, normalize_topics
@@ -592,6 +592,14 @@ async def score_revision_stage(
         "expected_improvement": None,
         "assumptions": [],
     }
+    saved_breakdown = original_submission.score_breakdown if isinstance(original_submission.score_breakdown, dict) else {}
+    saved_rubric = saved_breakdown.get("rubric") if isinstance(saved_breakdown.get("rubric"), dict) else {}
+    if saved_rubric.get("version") != RUBRIC_VERSION or not isinstance(saved_rubric.get("weights"), dict):
+        return {**unavailable, "message": "This assessment has no compatible saved rubric. Submit a new assessment before requesting a measured candidate score."}
+    try:
+        saved_weights = validate_weights(saved_rubric["weights"])
+    except (TypeError, ValueError):
+        return {**unavailable, "message": "The saved scoring weights could not be verified, so no candidate score is shown."}
     try:
         execution = await execute_code_sandboxed(
             source_code=source_code,
@@ -674,9 +682,6 @@ async def score_revision_stage(
     state.update(complexity)
     style = await style_node(state)
 
-    saved_breakdown = original_submission.score_breakdown if isinstance(original_submission.score_breakdown, dict) else {}
-    saved_rubric = saved_breakdown.get("rubric") if isinstance(saved_breakdown.get("rubric"), dict) else {}
-    saved_weights = saved_rubric.get("weights") if isinstance(saved_rubric.get("weights"), dict) else None
     projection = verified_revision_projection(
         current_score=original_submission.overall_score,
         correctness_score=correctness.get("correctness_score"),
@@ -710,6 +715,19 @@ def projection_pending(current_score: Any) -> dict[str, Any]:
     }
 
 
+def projection_context_fingerprint(problem, test_cases, rubric) -> str:
+    """Hash private judge context for audit without publishing its values."""
+    context = {"problem_id": problem.id, "tests": test_cases, "rubric": rubric,
+               "target_time": problem.target_time_complexity,
+               "target_space": problem.target_space_complexity,
+               "constraints": problem.constraints or []}
+    return hashlib.sha256(json.dumps(context, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()
+
+
+def projection_unavailable(current_score, message):
+    return {**projection_pending(current_score), "pending": False, "message": message}
+
+
 async def verify_projection_in_background(submission_id: str, stage: str) -> None:
     """Generate and judge projection drafts without holding the learner's HTTP request.
 
@@ -731,6 +749,33 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
         ).first()
         if not problem:
             return
+
+        revision = dict(submission.improved_code or {})
+        request_id = revision.get("projection_request_id")
+        if revision.get("stage") != stage:
+            return
+        if not ai_capability_enabled("score_projection") or llm is None or not settings.GROQ_API_KEY:
+            revision["score_projection"] = projection_unavailable(submission.overall_score, "Expected score could not be checked because the optional AI service is unavailable. Your saved grade and guidance are unchanged.")
+            submission.improved_code = revision
+            submission.projected_score = revision["score_projection"]
+            db.commit()
+            return
+        prior_attempts = int((revision.get("score_projection") or {}).get("attempts", 0))
+        attempt_number = prior_attempts + 1
+        total_limit = 1 + max(0, settings.SCORE_PROJECTION_BACKGROUND_RETRIES)
+        if prior_attempts >= total_limit:
+            terminal = projection_unavailable(submission.overall_score, "Expected score verification reached its retry limit. You can explicitly retry later.")
+            revision["score_projection"] = {**terminal, "attempts": prior_attempts}
+            submission.improved_code = revision
+            submission.projected_score = revision["score_projection"]
+            db.commit()
+            return
+        # Persist the attempt before awaiting a provider so a process restart
+        # cannot reset the budget and repeat expensive calls indefinitely.
+        revision["score_projection"] = {**projection_pending(submission.overall_score), "attempts": attempt_number}
+        submission.improved_code = revision
+        submission.projected_score = revision["score_projection"]
+        db.commit()
 
         state: dict[str, Any] = {
             "problem": {
@@ -775,7 +820,8 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
                     "stage": stage,
                     "attempt": attempt,
                     "student_source_fingerprint": normalized_submission_fingerprint(submission.code),
-                    "generated_source_fingerprint": normalized_submission_fingerprint(private_code),
+                    "generated_source_fingerprint": hashlib.sha256(private_code.encode("utf-8")).hexdigest(),
+                    "context_fingerprint": projection_context_fingerprint(problem, test_cases, (projection.get("score_breakdown") or {}).get("rubric")),
                     "generated_source": private_code,
                     "assessment": private_assessment,
                     "score_projection": projection,
@@ -790,16 +836,24 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
                 public_projection = projection_pending(submission.overall_score)
                 break
             except Exception as error:
-                logger.warning("Private score projection attempt %s failed for %s: %s", attempt, submission_id, error)
+                logger.warning("Private score projection attempt %s failed for %s (%s)", attempt, submission_id, type(error).__name__)
                 retry_projection = True
                 public_projection = projection_pending(submission.overall_score)
                 break
 
+        # Refresh after awaited work so an older request cannot overwrite a
+        # newly requested draft for the same stage.
+        db.refresh(submission)
         revision = dict(submission.improved_code or {})
         # Do not overwrite a later stage if the learner submitted again while
         # this background verification was in progress.
-        if revision.get("stage") != stage:
+        if revision.get("stage") != stage or revision.get("projection_request_id") != request_id:
             return
+        if retry_projection and attempt_number >= total_limit:
+            retry_projection = False
+            public_projection = projection_unavailable(submission.overall_score, "Expected score verification could not finish after the retry limit. You can retry later; no gain has been assumed.")
+            _projection_retry_counts.pop(submission_id, None)
+        public_projection["attempts"] = attempt_number
         revision["score_projection"] = public_projection
         submission.improved_code = revision
         submission.projected_score = public_projection
@@ -807,7 +861,7 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
         db.commit()
     except Exception:
         db.rollback()
-        logger.exception("Background score projection failed for %s", submission_id)
+        logger.warning("Background score projection persistence failed for %s", submission_id)
     finally:
         db.close()
     if retry_projection:
@@ -839,6 +893,20 @@ def schedule_projection_retry(submission_id: str, stage: str) -> None:
     _projection_retry_tasks[submission_id] = asyncio.create_task(delayed_retry())
 
 
+def launch_projection_verification(submission_id: str, stage: str) -> None:
+    """Track and replace explicit requests, releasing completed task handles."""
+    existing = _projection_retry_tasks.get(submission_id)
+    if existing is not None and not existing.done():
+        existing.cancel()
+    task = asyncio.create_task(verify_projection_in_background(submission_id, stage))
+    _projection_retry_tasks[submission_id] = task
+
+    def release(done):
+        if _projection_retry_tasks.get(submission_id) is done:
+            _projection_retry_tasks.pop(submission_id, None)
+    task.add_done_callback(release)
+
+
 def normalized_submission_fingerprint(source_code: str) -> str:
     """Compare attempts without treating whitespace-only edits as progress."""
     normalized = re.sub(r"\s+", "", str(source_code or ""))
@@ -852,20 +920,23 @@ def matching_verified_projection(
     problem_id: str,
     language: str,
     source_code: str,
+    assignment_id: int | None,
+    rubric: dict[str, Any] | None,
+    context_fingerprint: str,
 ) -> dict[str, Any] | None:
     """Find an exact private stage draft for an official retry.
 
-    A learner normally receives a fresh assessment. This narrow path exists
-    for an exact-source retry, so its official score cannot drift from a
-    score projection that was already verified by the same judge and rubric.
+    Matching is audit evidence only. A new official attempt is always scored
+    from fresh evidence, never by importing an old grade into a new context.
     """
-    fingerprint = normalized_submission_fingerprint(source_code)
+    fingerprint = hashlib.sha256(source_code.encode("utf-8")).hexdigest()
     candidates = (
         db.query(models.Submission)
         .filter(
             models.Submission.student_id == student_id,
             models.Submission.problem_id == problem_id,
             models.Submission.language == language,
+            models.Submission.assignment_id == assignment_id,
         )
         .order_by(models.Submission.created_at.desc())
         .limit(20)
@@ -879,6 +950,8 @@ def matching_verified_projection(
             and public.get("available") is True
             and public.get("verified") is True
             and isinstance(public.get("projected_score"), (int, float))
+            and private.get("context_fingerprint") == context_fingerprint
+            and (public.get("score_breakdown") or {}).get("rubric") == rubric
         ):
             return public
     return None
@@ -1144,12 +1217,13 @@ async def resume_recent_pending_projections() -> None:
             no_change = str(verification.get("status") or "") == "no_change"
             needs_verified_projection = (
                 guided
+                and projection.get("pending") is True
                 and bool(stage)
                 and not no_change
                 and not (projection.get("available") is True and projection.get("verified") is True)
             )
             if needs_verified_projection:
-                pending = projection_pending(submission.overall_score)
+                pending = {**projection_pending(submission.overall_score), "attempts": int(projection.get("attempts", 0))}
                 revision = dict(revision)
                 revision["score_projection"] = pending
                 submission.improved_code = revision
@@ -2015,16 +2089,18 @@ async def submit_and_evaluate_code(
         problem_id=problem_id,
         language=payload.language,
         source_code=payload.code,
+        assignment_id=payload.assignment_id,
+        rubric=(final_state.get("score_breakdown") or {}).get("rubric"),
+        context_fingerprint=projection_context_fingerprint(problem, test_cases, (final_state.get("score_breakdown") or {}).get("rubric")),
     )
     if exact_projection is not None:
-        # This source was already compiled and scored as a private stage draft
-        # under the same rubric. Preserve the verified projection rather than
-        # allowing an optional review service to make the number drift.
-        final_state["overall_score"] = exact_projection["projected_score"]
-        final_state["score_breakdown"] = exact_projection.get("score_breakdown") or final_state.get("score_breakdown")
+        # A prior candidate cannot award missing marks or override fresh
+        # failures. Retain the comparison only as an audit observation.
         final_state["assessment_flags"] = {
             **(final_state.get("assessment_flags") or {}),
             "matched_verified_projection": True,
+            "prior_candidate_score": exact_projection["projected_score"],
+            "projection_matches_official_score": exact_projection["projected_score"] == final_state.get("overall_score"),
         }
     safe_execution_result = redact_hidden_execution(
         final_state.get("execution_result"),
@@ -2206,6 +2282,7 @@ async def regenerate_submission_revision(
         revision["revision_policy"] = "GUIDED_STEPS"
         revision["guidance_version"] = 5
         revision["stage"] = stage
+        revision["projection_request_id"] = uuid4().hex
         revision["evidence_links"] = guided_revision_evidence_links(submission)
         if previous_revision:
             revision["comparison"] = {
@@ -2239,7 +2316,8 @@ async def regenerate_submission_revision(
         submission.private_projection = None
         db.commit()
         if stage != "NO_CHANGE":
-            asyncio.create_task(verify_projection_in_background(submission.submission_id, stage))
+            _projection_retry_counts.pop(submission.submission_id, None)
+            launch_projection_verification(submission.submission_id, stage)
         return {"improved_code": revision}
 
     revision = (await revision_node(state)).get("improved_code") or {}

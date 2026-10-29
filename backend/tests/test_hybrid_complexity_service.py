@@ -20,6 +20,7 @@ int main() {
 
 
 def test_low_confidence_ast_is_ai_corroborated_before_becoming_analyzed(monkeypatch):
+    monkeypatch.setattr(settings, "COMPLEXITY_AST_DIRECT_CONFIDENCE", .90)
     async def agreeing_provider(payload):
         assert set(payload) == {"instruction", "language", "source_code"}
         return {
@@ -45,6 +46,7 @@ def test_low_confidence_ast_is_ai_corroborated_before_becoming_analyzed(monkeypa
 
 
 def test_higher_confidence_ai_disagreement_never_replaces_ast_formula(monkeypatch):
+    monkeypatch.setattr(settings, "COMPLEXITY_AST_DIRECT_CONFIDENCE", .90)
     async def disagreeing_provider(payload):
         assert "ast_evidence" not in payload
         return {
@@ -86,6 +88,7 @@ def test_higher_confidence_ai_disagreement_never_replaces_ast_formula(monkeypatc
 
 
 def test_ai_fallback_cannot_replace_any_existing_ast_formula(monkeypatch):
+    monkeypatch.setattr(settings, "COMPLEXITY_AST_DIRECT_CONFIDENCE", .90)
     async def provider(_payload):
         return {
             "time_complexity": "O(n^3)",
@@ -120,6 +123,7 @@ def test_ai_fallback_cannot_replace_any_existing_ast_formula(monkeypatch):
 
 
 def test_identical_ai_fallback_review_is_cached(monkeypatch):
+    monkeypatch.setattr(settings, "COMPLEXITY_AST_DIRECT_CONFIDENCE", .90)
     calls = 0
 
     async def provider(_payload):

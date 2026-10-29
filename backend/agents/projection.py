@@ -1,11 +1,13 @@
 from typing import Any, Dict
+import math
 from scoring.rubric import complexity_dimension_percent, student_rubric_score
 from workflow.state import EvaluationState
 
 
 def _score(value: Any) -> float | None:
     try:
-        return round(max(0.0, min(100.0, float(value))), 1)
+        parsed = float(value)
+        return round(max(0.0, min(100.0, parsed)), 1) if math.isfinite(parsed) else None
     except (TypeError, ValueError):
         return None
 
@@ -42,15 +44,15 @@ def verified_revision_projection(
     )
     time = complexity_dimension_percent(complexity_details, "time")
     space = complexity_dimension_percent(complexity_details, "space")
-    if current is None:
+    if current is None or projected is None:
         return {
             "available": False,
             "verified": False,
             "projected_score": None,
-            "current_score": None,
+            "current_score": current,
             "expected_improvement": None,
             "assumptions": [],
-            "message": "The original score is unavailable, so this revision stage cannot be compared yet.",
+            "message": "The original or candidate assessment is incomplete, so a reliable score projection is unavailable.",
         }
 
     delta = round(projected - current, 1)
@@ -79,12 +81,13 @@ def verified_revision_projection(
         },
         "score_breakdown": breakdown,
         "assumptions": [
-            "This exact guided-stage code was compiled and evaluated by the judge.",
+            "A private candidate for this guided stage was compiled and evaluated by the judge.",
+            "Guidance is not the exact private candidate source; your implementation may receive a different score.",
             "Submit your own revision to receive an official saved score.",
         ],
         "message": (
-            "This is a verified score projection for this one revision stage; "
-            "it is not an official submission score."
+            "This score was measured for a private candidate implementing this stage. "
+            "Your own implementation must be assessed separately; the gain is not guaranteed."
         ),
     }
 

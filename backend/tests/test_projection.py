@@ -2,6 +2,7 @@ import asyncio
 
 from agents.projection import score_projection_node, verified_revision_projection
 from schemas import SubmissionDetails
+import pytest
 
 
 def test_projection_is_a_transparent_correctness_fix_scenario():
@@ -107,3 +108,20 @@ def test_verified_projection_is_hidden_when_the_stage_does_not_improve_score():
 
 def test_private_projection_data_is_not_in_the_student_schema():
     assert "private_projection" not in SubmissionDetails.model_fields
+
+
+@pytest.mark.parametrize("current,complexity", [(75, {}), (None, {"time_score": 25, "space_score": 25}), (float("nan"), {"time_score": 25, "space_score": 25})])
+def test_incomplete_or_nonfinite_assessment_has_no_promised_gain(current, complexity):
+    result = verified_revision_projection(current_score=current, correctness_score=100, complexity_details=complexity, style_score=100)
+    assert result["available"] is False
+    assert result["projected_score"] is None
+    assert result["expected_improvement"] is None
+
+
+def test_candidate_projection_uses_custom_saved_weights():
+    result = verified_revision_projection(current_score=75, correctness_score=100,
+        complexity_details={"time_score": 20, "space_score": 25}, style_score=75,
+        scoring_weights={"correctness": 20, "time": 50, "space": 20, "style": 10})
+    assert result["projected_score"] == 87.5
+    assert result["expected_improvement"] == 12.5
+    assert "not guaranteed" in result["message"]
