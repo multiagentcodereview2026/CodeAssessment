@@ -11,8 +11,10 @@ from pathlib import Path
 def manifest(root: Path, commit: str, scope: str):
     root = root.resolve()
     hashes = {}
-    directories = ["backend/agents", "backend/analysis", "backend/prompts", "backend/scoring", "backend/workflow", "backend/config", "frontend/src", ".github/workflows"]
+    directories = ["backend/agents", "backend/analysis", "backend/prompts", "backend/scoring", "backend/workflow", "backend/config", "backend/migrations", "backend/docker_runner", "backend/execution", "docker-execution-engine/app", "frontend/src", ".github/workflows"]
     candidates = [root / "backend" / name for name in ("main.py", "schemas.py", "models.py", "database.py", "requirements.txt")]
+    candidates.extend((root / "backend").glob("*.py"))
+    candidates.extend(root / name for name in ("docker-compose.yml", "backend/Dockerfile", "frontend/Dockerfile", "frontend/package.json", "frontend/package-lock.json", "frontend/vite.config.ts", "docker-execution-engine/Dockerfile", "docker-execution-engine/requirements.txt"))
     for directory in directories:
         folder = root / directory
         if folder.exists():
