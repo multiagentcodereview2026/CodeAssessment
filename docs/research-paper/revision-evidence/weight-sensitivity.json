@@ -1,0 +1,53 @@
+{
+  "kind": "synthetic_weight_sensitivity",
+  "source": "paper-artifacts-20261030/scoring-rule-ablation.json",
+  "score": "unrounded min(Q,C)",
+  "rows": [
+    {
+      "profile": "default",
+      "weights": {
+        "correctness": 30.0,
+        "time": 35.0,
+        "space": 25.0,
+        "style": 10.0
+      },
+      "n": 28,
+      "mean": 55.879,
+      "median": 66.35,
+      "minimum": 0,
+      "maximum": 100.0,
+      "strictly_ceiling_limited": 16
+    },
+    {
+      "profile": "equal_weight_comparator",
+      "weights": {
+        "correctness": 25,
+        "time": 25,
+        "space": 25,
+        "style": 25
+      },
+      "n": 28,
+      "mean": 56.232,
+      "median": 68.625,
+      "minimum": 0,
+      "maximum": 100.0,
+      "strictly_ceiling_limited": 17
+    },
+    {
+      "profile": "correctness_heavier_comparator",
+      "weights": {
+        "correctness": 40,
+        "time": 30,
+        "space": 20,
+        "style": 10
+      },
+      "n": 28,
+      "mean": 56.921,
+      "median": 70.8,
+      "minimum": 0,
+      "maximum": 100.0,
+      "strictly_ceiling_limited": 16
+    }
+  ],
+  "scope": "Same 28 equally weighted synthetic component vectors per profile. Not student grade distributions, optimal-weight evidence, or a human study."
+}
