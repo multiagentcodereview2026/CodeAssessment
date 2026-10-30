@@ -56,19 +56,10 @@ def verified_revision_projection(
         }
 
     delta = round(projected - current, 1)
-    if delta <= 0:
-        return {
-            "available": False,
-            "verified": True,
-            "projected_score": None,
-            "current_score": current,
-            "expected_improvement": None,
-            "assumptions": [],
-            "message": "The verified stage draft does not improve this score, so no projection is shown.",
-        }
     return {
         "available": True,
         "verified": True,
+        "status": "improved" if delta > 0 else "no_gain",
         "projection_basis": "verified_revision_stage",
         "projected_score": projected,
         "current_score": current,
@@ -86,6 +77,8 @@ def verified_revision_projection(
             "Submit your own revision to receive an official saved score.",
         ],
         "message": (
+            "This tested candidate did not increase the saved score. The guidance may still be useful; submit your own revision for a new assessment. "
+            if delta <= 0 else
             "This score was measured for a private candidate implementing this stage. "
             "Your own implementation must be assessed separately; the gain is not guaranteed."
         ),

@@ -93,6 +93,7 @@ from agents.revision import (
     guided_revision_fallback,
     guided_revision_node,
     private_stage_revision_node,
+    review_stage_alignment,
     revision_node,
 )
 from agents.revision_verification import summarize_revision_verification, unverified_revision
@@ -707,6 +708,7 @@ def projection_pending(current_score: Any) -> dict[str, Any]:
         "available": False,
         "verified": False,
         "pending": True,
+        "started_at": datetime.now(timezone.utc).isoformat(),
         "projected_score": None,
         "current_score": current_score,
         "expected_improvement": None,
@@ -787,6 +789,9 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
             "feedback": submission.feedback,
             "complexity_details": submission.complexity_details,
             "style_details": (submission.feedback or {}).get("style_details") if isinstance(submission.feedback, dict) else None,
+            "guided_revision": {key: revision.get(key) for key in (
+                "stage", "next_goal", "guided_steps", "algorithm_outline", "improvement_explanation",
+            )},
         }
         public_projection = projection_pending(submission.overall_score)
         private_projection = None
@@ -807,6 +812,15 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
                     retry_projection = True
                     public_projection = projection_pending(submission.overall_score)
                     break
+                alignment = await asyncio.wait_for(
+                    review_stage_alignment(state, stage, private_code),
+                    timeout=settings.SCORE_PROJECTION_TIMEOUT_SECONDS,
+                )
+                if alignment.get("status") != "aligned":
+                    public_projection = projection_unavailable(submission.overall_score,
+                        "The candidate could not be confirmed to match this learning step. No projected score is shown; retry verification or submit your own revision.")
+                    public_projection["status"] = "alignment_unavailable"
+                    break
                 projection = await score_revision_stage(
                     original_submission=submission,
                     problem=problem,
@@ -816,6 +830,13 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
                 )
                 private_assessment = projection.pop("_private_assessment", None)
                 public_projection = projection
+                public_projection["alignment_review"] = "ai_reviewed"
+                public_projection["comparison"] = {
+                    key: {
+                        "current": (submission.score_breakdown or {}).get(key),
+                        "candidate": (projection.get("score_breakdown") or {}).get(key),
+                    } for key in ("correctness", "time", "space", "style")
+                }
                 private_projection = {
                     "stage": stage,
                     "attempt": attempt,
@@ -824,6 +845,7 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
                     "context_fingerprint": projection_context_fingerprint(problem, test_cases, (projection.get("score_breakdown") or {}).get("rubric")),
                     "generated_source": private_code,
                     "assessment": private_assessment,
+                    "alignment_review": alignment,
                     "score_projection": projection,
                     "rubric_version": ((projection.get("score_breakdown") or {}).get("rubric") or {}).get("version"),
                     "created_at": datetime.now(timezone.utc).isoformat(),

@@ -69,6 +69,40 @@ class PrivateStageRevisionOutput(BaseModel):
     improvement_explanation: Optional[str] = ""
 
 
+class StageAlignmentOutput(BaseModel):
+    guidance_supported: bool = False
+    candidate_follows_guidance: bool = False
+    stage_scope_preserved: bool = False
+    evidence: List[str] = []
+
+
+async def review_stage_alignment(state: EvaluationState, stage: str, candidate: str) -> Dict[str, Any]:
+    """AI-assisted scope review, separate from generation and judge execution.
+
+    Fail closed on missing evidence or provider failure. This review is a
+    semantic safeguard, not a formal proof of algorithmic equivalence.
+    """
+    guidance = state.get("guided_revision") or {}
+    if not guidance.get("guided_steps") or not candidate.strip():
+        return {"status": "unavailable"}
+    result = await invoke_agent(
+        load_prompt("stage_alignment"),
+        {"stage": stage, "guidance": guidance,
+         "problem": state.get("problem"),
+         "language": (state.get("submission") or {}).get("language"),
+         "original_source": sanitize_code_comments((state.get("submission") or {}).get("source_code", "")),
+         "candidate_source": sanitize_code_comments(candidate)},
+        StageAlignmentOutput, {"guidance_supported": False, "candidate_follows_guidance": False,
+                               "stage_scope_preserved": False, "evidence": []},
+        capability="score_projection",
+    )
+    accepted = result.get("analysis_source") == "groq" and all(
+        result.get(key) is True for key in (
+            "guidance_supported", "candidate_follows_guidance", "stage_scope_preserved"))
+    evidence = [item.strip() for item in result.get("evidence", []) if isinstance(item, str) and item.strip()]
+    return {"status": "aligned" if accepted and evidence else "unavailable", "evidence": evidence}
+
+
 class GuidedRevisionOutput(BaseModel):
     """One bounded coaching stage, never a replacement solution."""
 
@@ -101,6 +135,7 @@ async def private_stage_revision_node(
     problem = state.get("problem") or {}
     payload = {
         "stage": stage,
+        "guidance": state.get("guided_revision") or {},
         "problem": {
             "title": problem.get("title", ""),
             "statement": problem.get("statement") or problem.get("description") or "",

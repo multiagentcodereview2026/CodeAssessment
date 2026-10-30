@@ -11,6 +11,10 @@ removing the measured input-sized allocation when streaming or fixed state is
 safe. Do not use hidden-test information. Return unchanged code
 if the requested stage cannot be implemented safely.
 
+The supplied guidance is the exact learning step shown to the student. Implement
+its material actions only. Do not independently choose a different optimization
+or bundle later stages. Never change source merely to influence the analyzer.
+
 This may be a later independent projection attempt because an earlier draft
 was not eligible for a verified projection. Independently re-check parsing,
 output, boundary cases, and the entire public problem contract before

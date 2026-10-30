@@ -91,7 +91,7 @@ def test_verified_revision_stage_projection_uses_the_actual_stage_components():
     }
 
 
-def test_verified_projection_is_hidden_when_the_stage_does_not_improve_score():
+def test_verified_projection_reports_no_gain_without_claiming_failure():
     result = verified_revision_projection(
         current_score=100.0,
         correctness_score=100.0,
@@ -102,8 +102,11 @@ def test_verified_projection_is_hidden_when_the_stage_does_not_improve_score():
         style_score=100.0,
     )
 
-    assert result["available"] is False
-    assert result["projected_score"] is None
+    assert result["available"] is True
+    assert result["verified"] is True
+    assert result["status"] == "no_gain"
+    assert result["projected_score"] == 100
+    assert result["expected_improvement"] == 0
 
 
 def test_private_projection_data_is_not_in_the_student_schema():

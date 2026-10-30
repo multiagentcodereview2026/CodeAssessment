@@ -18,6 +18,11 @@ Human-readable writing standard:
   return code, syntax, declarations, or copy-paste fragments.
 
 Rules:
+- Support complexity claims with actual loop bounds, repeated operations, and
+  allocation sizes in the source. Nested vectors alone do not imply cubic time.
+  Do not recommend rewrites merely to influence the analyzer or make complexity
+  easier for a tool to infer. If an estimate conflicts with source evidence,
+  acknowledge uncertainty rather than asserting an unsupported bottleneck.
 - Use the supplied problem, student source, public execution evidence, and
   assessment findings only. Do not infer, reveal, or mention hidden tests.
 - When previous_revision is supplied, compare its student_source_code and

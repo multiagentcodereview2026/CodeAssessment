@@ -91,7 +91,7 @@ def test_private_projection_does_not_override_fresh_official_score(db_session, m
     assert saved.assessment_flags["projection_matches_official_score"] is False
 
 
-@pytest.mark.parametrize("outcome", ["disabled", "unavailable", "verified"])
+@pytest.mark.parametrize("outcome", ["disabled", "unavailable", "verified", "misaligned"])
 def test_background_projection_is_bounded_and_keeps_candidate_private(db_session, monkeypatch, outcome):
     from scoring.rubric import student_rubric_score
     from schemas import SubmissionDetails
@@ -111,11 +111,15 @@ def test_background_projection_is_bounded_and_keeps_candidate_private(db_session
         assert "SECRET" not in str(state)
         if outcome == "disabled":
             pytest.fail("Disabled provider was called")
-        return {"private_revision": {"revision_source": "ai" if outcome == "verified" else "unavailable", "improved_code": "print('PRIVATE-CANDIDATE')"}}
+        return {"private_revision": {"revision_source": "ai" if outcome in {"verified", "misaligned"} else "unavailable", "improved_code": "print('PRIVATE-CANDIDATE')"}}
     async def score(**kwargs):
+        assert outcome != "misaligned", "An unrelated candidate must never be scored as the guided step"
         assert kwargs["test_cases"][0]["input"] == "SECRET-TEST"
         return {"available": True, "verified": True, "projected_score": 99, "expected_improvement": 49, "score_breakdown": breakdown, "_private_assessment": {"verification": {"status": "verified_passed"}}}
     monkeypatch.setattr(main_module, "private_stage_revision_node", generate)
+    async def aligned(*args):
+        return {"status": "unavailable" if outcome == "misaligned" else "aligned", "evidence": ["Requested operation replaced."]}
+    monkeypatch.setattr(main_module, "review_stage_alignment", aligned)
     monkeypatch.setattr(main_module, "score_revision_stage", score)
     asyncio.run(main_module.verify_projection_in_background(submission.submission_id, "OPTIMIZE"))
     saved = db_session.query(models.Submission).filter_by(submission_id="background-sub").one()
@@ -126,8 +130,13 @@ def test_background_projection_is_bounded_and_keeps_candidate_private(db_session
     assert "PRIVATE-CANDIDATE" not in public and "SECRET-TEST" not in public
     if outcome == "verified":
         assert saved.private_projection["generated_source"] == "print('PRIVATE-CANDIDATE')"
+        assert saved.private_projection["alignment_review"]["status"] == "aligned"
+        assert saved.projected_score["comparison"]["time"]["current"] == breakdown["time"]
     elif outcome == "unavailable":
         assert saved.projected_score["attempts"] == 1
+    elif outcome == "misaligned":
+        assert saved.projected_score["status"] == "alignment_unavailable"
+        assert saved.private_projection is None
 
 
 def test_assignment_deadline_boundary_and_timezone():
