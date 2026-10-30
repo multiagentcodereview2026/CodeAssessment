@@ -32,6 +32,21 @@ def test_correctness_supports_summary_only_execution_results():
     assert calculate_correctness_score(execution) == 75.0
 
 
+def test_partial_judge_results_do_not_finalize_correctness():
+    assert calculate_correctness_score({"compile_status": "success", "total_cases": 20,
+        "results": [{"status": "accepted"}] * 5}) is None
+    assert calculate_correctness_score({"compile_status": "success", "total_cases": 20,
+        "passed_cases": 5, "failed_cases": 0}) is None
+
+
+def test_case_outage_is_unknown_but_student_timeout_is_a_failure():
+    for status in ("system_error", "unavailable", "pending", ""):
+        assert calculate_correctness_score({"compile_status": "success", "total_cases": 2,
+            "results": [{"status": "accepted"}, {"status": status}]}) is None
+    assert calculate_correctness_score({"compile_status": "success", "total_cases": 2,
+        "results": [{"status": "accepted"}, {"status": "time_limit_exceeded"}]}) == 50
+
+
 def test_correctness_does_not_grade_infrastructure_failure_as_student_work():
     assert calculate_correctness_score({
         "compile_status": "unavailable",

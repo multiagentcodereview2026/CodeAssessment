@@ -892,10 +892,7 @@ async def execute_code_sandboxed(
             ),
             "passed_cases": passed_count,
             "failed_cases": failed_count,
-            "total_cases": data.get(
-                "tests_total",
-                len(formatted_cases)
-            ),
+            "total_cases": len(formatted_cases),
             "results": normalized_results,
             # The engine only supplies this one deliberate learning case; all
             # other hidden results remain redacted before they reach here.

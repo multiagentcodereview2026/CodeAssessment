@@ -33,6 +33,13 @@ def calculate_correctness_score(exec_res: Dict[str, Any]) -> Optional[float]:
     results = exec_res.get("results") or []
 
     if results:
+        required = int(exec_res.get("total_cases", len(results)) or 0)
+        terminal = {"accepted", "wrong_answer", "runtime_error", "time_limit_exceeded",
+                    "memory_limit_exceeded", "output_limit_exceeded"}
+        if required != len(results) or any(
+            str(result.get("status", "")).lower() not in terminal for result in results
+        ):
+            return None
         passed = sum(
             1
             for result in results
@@ -52,6 +59,11 @@ def calculate_correctness_score(exec_res: Dict[str, Any]) -> Optional[float]:
     total = int(exec_res.get("total_cases", passed + failed) or 0)
 
     if total <= 0:
+        return None
+
+    if "failed_cases" in exec_res and passed + failed != total:
+        return None
+    if passed < 0 or failed < 0 or passed > total:
         return None
 
     return (passed / total) * 100
@@ -100,8 +112,11 @@ async def correctness_node(state: EvaluationState) -> Dict[str, Any]:
             for result in results
             if str(result.get("status", "")).lower() == "accepted"
         )
-        total = len(results)
-        failed = total - passed
+        total = int(exec_res.get("total_cases", len(results)) or 0)
+        failed = sum(str(item.get("status", "")).lower() in {
+            "wrong_answer", "runtime_error", "time_limit_exceeded",
+            "memory_limit_exceeded", "output_limit_exceeded"
+        } for item in results)
     else:
         passed = int(exec_res.get("passed_cases", 0) or 0)
         failed = int(exec_res.get("failed_cases", 0) or 0)
@@ -161,6 +176,9 @@ async def correctness_node(state: EvaluationState) -> Dict[str, Any]:
     result["compilation_success"] = (
         exec_res.get("compile_status") == "success"
     )
+    if correctness_score is None:
+        result["summary"] = "Assessment incomplete; final correctness is pending valid results for all required cases."
+        result["reasoning"] = f"{passed} accepted cases are recorded out of {total} required cases; execution evidence is incomplete."
 
     return {
         "correctness_score": correctness_score,
