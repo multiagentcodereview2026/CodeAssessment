@@ -1,7 +1,7 @@
 # CodeVedha Mentor Review Brief
 
-**Review version:** manuscript revised after analysis commit `7ddc4aa`; paper
-commit `d2cbb2b`. Application snapshot: `d4cdb86`. Prepared 30 October 2026 for
+**Review version:** artifact release `paper-artifacts-20261030`, including
+experiment `7ddc4aa` and application snapshot `d4cdb86`. Prepared 30 October 2026 for
 EmergIN 2027; Track V is the proposed fit.
 
 ## Contribution to assess
@@ -44,9 +44,9 @@ validation.
 3. Is the complexity-focused weighting and partial-credit preference appropriate
    for the intended course? Neither lower grade error nor fairness is established
    by the synthetic constraint comparison.
-4. May the team release the fixtures and AI-labelled artifacts, with provenance,
-   and arrange institutional similarity screening? Only the pilot generator is
-   currently public; the JSONL and returned label files are not publicly archived.
+4. Please review the released synthetic fixtures, normalized AI proposals and
+   provenance, and arrange institutional similarity screening. Raw model review
+   prose and real learner data are excluded from the public artifact package.
 5. Please confirm author contributions, funding/conflicts, institutional naming,
    and whether the manuscript is ready for submission after your corrections.
 
@@ -57,7 +57,7 @@ Word file and evidence archive are included for checking equations and results.
 The manuscript includes AI-use disclosure. No database-wide plagiarism clearance
 has been obtained, and conference acceptance is not assured.
 
-**Public pilot generator:**
-https://github.com/multiagentcodereview2026/CodeAssessment/blob/317152b/backend/analysis/build_research_review_pack.py
+**Public evaluation artifacts and reproduction guide:**
+https://github.com/multiagentcodereview2026/CodeAssessment/tree/paper-artifacts-20261030/docs/research-paper/artifacts
 
-The application and research updates remain local until explicitly pushed.
+Named release tags identify the application snapshot and controlled experiment.

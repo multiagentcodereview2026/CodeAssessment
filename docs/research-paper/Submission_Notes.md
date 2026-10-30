@@ -26,6 +26,7 @@ human grading study.
 | Label provenance | AI-assisted unverified proposals; only two original problem groups; no human expert accuracy claim |
 | Guidance alignment | Implemented AI-assisted gate and mocked regression checks; no real-provider success-rate or expert-validated efficacy result |
 | Controlled scoring comparison | Analysis commit 7ddc4aa; four rules with 84 identical component/weight configurations each; 49/43/0/0 unrounded ceiling violations; five targeted experiment tests passed |
+| Version reconciliation | Fresh archived runs: d4cdb86 passed 333; later 21aa1b7 passed 336. The old GitHub version 317152b passed 324. The paper intentionally cites the frozen d4cdb86 result. |
 
 Do not call 95% label agreement “application accuracy.” Do not call the two AI
 outputs human expert reviews. The paper deliberately retains the Python symbolic
@@ -66,18 +67,28 @@ https://conferences.ieeeauthorcenter.ieee.org/author-ethics/guidelines-and-polic
    margins or font size to add unsupported claims. All acceptance and numeric
    score claims should keep their current distinction.
 
-## Public pilot source and dataset access
+## Public artifact release and exact source versions
 
-Verified with an HTTP 200 response on 30 October 2026:
-https://github.com/multiagentcodereview2026/CodeAssessment/blob/317152b61c4aad89eac9962470a0582595751df1/backend/analysis/build_research_review_pack.py
+The immutable release tag is `paper-artifacts-20261030`:
+https://github.com/multiagentcodereview2026/CodeAssessment/tree/paper-artifacts-20261030/docs/research-paper/artifacts
 
-This public generator contains all twenty source fixtures and the two problem
-groups. It is a source-code artifact, not an already published JSONL benchmark
-with expert labels. The actual canonical JSONL file is supplied in the local
-evidence package as CodeVedha_synthetic_pilot_v1.jsonl. Returned model labels
-remain AI-assisted and unverified. The paper's Data Availability section does
-not claim a DOI or a complete public artifact release. Application d4cdb86 and
-experiment 7ddc4aa remain local commits until explicitly pushed.
+It provides pilot.jsonl, normalized proposals-a.jsonl and proposals-b.jsonl,
+provenance, test transcripts, synthetic execution reports and reproduction
+instructions. This is not an expert-labelled benchmark. Raw review prose,
+returned source copies, unsupported metadata assertions and instructor fields
+are excluded. The normalized proposals reproduce the 19/20 comparison while
+retaining explicit AI-assisted unverified provenance.
+
+`paper-implementation-20261030` identifies d4cdb86 and guidance version 6;
+`paper-scoring-experiment-20261030` identifies 7ddc4aa. There is no reason to
+change the paper to guidance version 5 or to replace its frozen 333 count with
+the older public version's 324 count. Full commit IDs are in the reproduction
+guide and transcripts. A 503 means the execution service is unavailable; it
+must be resolved before rerunning live contracts, not recorded as a pass.
+
+The conference requires author email addresses but does not explicitly require
+institutional addresses. The confirmed Gmail addresses are retained. No
+institutional email or mandatory-email rule has been invented.
 
 ## Research work still needed for stronger future claims
 
@@ -95,5 +106,7 @@ arXiv:2105.09938; Chen et al. arXiv:2107.03374; official Docker and Tree-sitter
 documentation. The base paper's reported training corpus and numerical
 feedback results are not reused as results of this platform.
 
-The manuscript and evidence are saved locally. Nothing was submitted to CMT or
-pushed to GitHub as part of paper authoring.
+The release is intended for publication to GitHub with the named tags. No paper
+has been submitted to CMT by this work. Author approval and institutional
+similarity screening remain necessary; publication of artifacts is not
+independent expert validation.

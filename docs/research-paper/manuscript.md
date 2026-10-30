@@ -152,7 +152,7 @@ For future label studies, coverage should be the number of scoreable analyzer an
 
 ### E. Reproducibility and Data Availability
 
-The twenty source fixtures are reproducible from the public, commit-pinned generator [9], including statements, assumptions, source hashes, and AI-assisted provenance. Model label files and the complete experiment package were retained locally, not publicly archived at preparation. Fixture access therefore does not establish full public reproducibility of label agreement. A final artifact release should identify source and label versions and exclude learner records, credentials, and private course cases.
+The tagged artifact release [9] provides twenty canonical source fixtures, normalized AI label proposals, provenance hashes, execution reports, frozen-snapshot test transcripts, and reproduction instructions. The tags paper-implementation-20261030 and paper-scoring-experiment-20261030 identify the cited implementation and comparison commits. Proposal aliases are not authenticated reviewer identities; raw review prose is excluded. Published labels retain AI-assisted unverified provenance. The release contains no learner database, credentials, or real private course cases. It supports reproduction of the reported synthetic results, not independent validation of the proposed labels.
 
 ## VII. Discussion and Limitations
 
@@ -192,4 +192,4 @@ OpenAI Codex was used to draft and revise the abstract and Sections I–VIII, as
 
 [8] Tree-sitter Contributors, “Tree-sitter: An incremental parsing system for programming tools.” Accessed: Oct. 30, 2026. [Online]. Available: https://github.com/tree-sitter/tree-sitter
 
-[9] CodeVedha Project, “Synthetic pilot review-pack generator,” CodeAssessment repository, commit 317152b, 2026. Accessed: Oct. 30, 2026. [Online]. Available: https://github.com/multiagentcodereview2026/CodeAssessment/blob/317152b/backend/analysis/build_research_review_pack.py
+[9] CodeVedha Project, “Paper evaluation artifacts and reproduction guide,” CodeAssessment repository, release paper-artifacts-20261030, 2026. Accessed: Oct. 30, 2026. [Online]. Available: https://github.com/multiagentcodereview2026/CodeAssessment/tree/paper-artifacts-20261030/docs/research-paper/artifacts
