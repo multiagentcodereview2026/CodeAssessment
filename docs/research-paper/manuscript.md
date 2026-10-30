@@ -176,7 +176,7 @@ CodeVedha links execution evidence, resource estimates, style analysis, and opti
 
 ## Acknowledgment
 
-OpenAI Codex was used to draft and revise the abstract and Sections I–VIII, assist with verification scripts and synthetic fixtures, and generate the architecture illustration. The pilot label proposals were supplied as external AI-assisted artifacts, with unverified self-reported model identities. They are reported as AI proposals, not human expert judgments.
+OpenAI Codex assisted with preparing and revising the abstract and Sections I–VIII, verification scripts, synthetic fixtures, and the architecture illustration. The pilot labels were AI-assisted proposals, not human expert judgments. The authors take responsibility for the paper’s content.
 
 ## References
 
