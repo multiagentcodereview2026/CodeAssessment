@@ -6,9 +6,13 @@ Prepared for EmergIN 2027, Track V suggested, on 30 October 2026.
 
 The six-page paper uses the supplied IEEE A4 Word template as its design basis,
 Times New Roman, single spacing and justified body text. It contains a confirmed
-five-author block and emails, a shared KMIT address, Kura Vignesh Reddy as
+six-author block and emails, a shared KMIT address, Kura Vignesh Reddy as
 corresponding author, five editable tables, native Word equations, a new 600 dpi
 architecture figure, twelve references and an AI-use acknowledgment.
+Sri Tulasi Aeloori is first, with CSE (AI & ML); the existing five authors follow
+in their original order. The final upload copy is
+CodeVedha_EmergIN2027_Final_Submission.pdf, with exactly six A4 pages and embedded
+fonts. A verified blank trailing Word-export page was omitted from the PDF.
 Every rendered page was inspected. No screenshot is used as an experimental
 result. The document is a systems paper with a limited pilot, not a validated
 human grading study.
@@ -71,7 +75,7 @@ https://conferences.ieeeauthorcenter.ieee.org/author-ethics/guidelines-and-polic
 
 ## Author checks before upload
 
-1. All five authors should read the paper, confirm the contribution and author
+1. All six authors should read the paper, confirm the contribution and author
    order, emails, full name spellings (including whether to expand initials),
    affiliation and corresponding-author role.
 2. Confirm funding and conflicts. No funding source or ethics approval was
