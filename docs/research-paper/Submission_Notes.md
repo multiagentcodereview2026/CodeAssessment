@@ -6,7 +6,7 @@ Prepared for EmergIN 2027, Track V suggested, on 30 October 2026.
 
 The six-page paper uses the supplied IEEE A4 Word template as its design basis,
 Times New Roman, single spacing and justified body text. It contains a confirmed
-six-author block and emails, a shared KMIT address, Kura Vignesh Reddy as
+six individual author blocks (three across, two rows) and emails, a shared KMIT address, Kura Vignesh Reddy as
 corresponding author, five editable tables, native Word equations, a new 600 dpi
 architecture figure, twelve references and an AI-use acknowledgment.
 Sri Tulasi Aeloori is first, with CSE (AI & ML); the existing five authors follow
