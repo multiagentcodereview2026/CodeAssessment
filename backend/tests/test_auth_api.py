@@ -115,7 +115,7 @@ def test_background_projection_is_bounded_and_keeps_candidate_private(db_session
     async def score(**kwargs):
         assert outcome != "misaligned", "An unrelated candidate must never be scored as the guided step"
         assert kwargs["test_cases"][0]["input"] == "SECRET-TEST"
-        return {"available": True, "verified": True, "projected_score": 99, "expected_improvement": 49, "score_breakdown": breakdown, "_private_assessment": {"verification": {"status": "verified_passed"}}}
+        return {"available": True, "verified": True, "projected_score": 99, "expected_improvement": 49, "score_breakdown": breakdown, "comparison": {"time": {"current": breakdown["time"]}}, "_private_assessment": {"verification": {"status": "verified_passed"}}}
     monkeypatch.setattr(main_module, "private_stage_revision_node", generate)
     async def aligned(*args):
         return {"status": "unavailable" if outcome == "misaligned" else "aligned", "evidence": ["Requested operation replaced."]}

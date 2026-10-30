@@ -690,6 +690,11 @@ async def score_revision_stage(
         style_score=style.get("style_score"),
         scoring_weights=saved_weights,
     )
+    projection["comparison"] = {
+        key: {"current": saved_breakdown.get(key),
+              "candidate": (projection.get("score_breakdown") or {}).get(key)}
+        for key in ("correctness", "time", "space", "style")
+    }
     # This data is written only to Submission.private_projection. It supports
     # audit/debugging without ever exposing generated source or judge details.
     projection["_private_assessment"] = {
@@ -831,12 +836,6 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
                 private_assessment = projection.pop("_private_assessment", None)
                 public_projection = projection
                 public_projection["alignment_review"] = "ai_reviewed"
-                public_projection["comparison"] = {
-                    key: {
-                        "current": (submission.score_breakdown or {}).get(key),
-                        "candidate": (projection.get("score_breakdown") or {}).get(key),
-                    } for key in ("correctness", "time", "space", "style")
-                }
                 private_projection = {
                     "stage": stage,
                     "attempt": attempt,
@@ -2231,7 +2230,7 @@ async def regenerate_submission_revision(
         if (
             saved.get("revision_policy") == "GUIDED_STEPS"
             and saved.get("stage") == stage
-            and saved.get("guidance_version") == 5
+            and saved.get("guidance_version") == 6
             and str((saved.get("verification") or {}).get("status") or "")
             in {"guided_step", "no_change"}
             and (
@@ -2302,7 +2301,7 @@ async def regenerate_submission_revision(
         revision = guided_result.get("improved_code") or {}
         revision = dict(revision)
         revision["revision_policy"] = "GUIDED_STEPS"
-        revision["guidance_version"] = 5
+        revision["guidance_version"] = 6
         revision["stage"] = stage
         revision["projection_request_id"] = uuid4().hex
         revision["evidence_links"] = guided_revision_evidence_links(submission)

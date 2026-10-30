@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, Clock3, Code2, HardDr
 import { useAuth } from '../../context/useAuth';
 import { CircularGauge } from '../common/CircularGauge';
 import { CompilerFeedback } from './CompilerFeedback';
+import { ProjectionStatusCard } from './ProjectionStatusCard';
 
 type R = Record<string, any>;
 type Submission = { submission_id: string; student_id: string; problem_id: string; assignment_id: number | null; language: string; code: string; status: string; overall_score: number | null; correctness_score: number | null; complexity_score: number | null; style_score: number | null; complexity_details: R | null; score_breakdown: R | null; execution_result: R | null; feedback: unknown; recommendations: unknown; improved_code: unknown; projected_score: unknown; created_at: string };
@@ -56,6 +57,10 @@ export const AssessmentResultView: React.FC = () => {
   const [error, setError] = useState('');
   const [revisionLoading, setRevisionLoading] = useState(false);
   const [revisionError, setRevisionError] = useState('');
+  const [projectionSlow, setProjectionSlow] = useState(false);
+  const [projectionPaused, setProjectionPaused] = useState(false);
+  const [projectionConnectionLost, setProjectionConnectionLost] = useState(false);
+  const [projectionPollCycle, setProjectionPollCycle] = useState(0);
   useEffect(() => {
     if (!id) { setError('Choose a saved submission from your history.'); setLoading(false); return; }
     let cancelled = false;
@@ -74,30 +79,52 @@ export const AssessmentResultView: React.FC = () => {
   }, [authFetch, id]);
 
   const pendingSavedProjection = obj(parseSuggestion(submission?.improved_code)?.score_projection).pending === true;
+  const projectionRequestId = str(parseSuggestion(submission?.improved_code)?.projection_request_id);
   useEffect(() => {
+    setProjectionPaused(false);
+    setProjectionSlow(false);
+    setProjectionConnectionLost(false);
     if (!id || !pendingSavedProjection) return;
     let cancelled = false;
     let checks = 0;
+    let failures = 0;
+    let timer: number | undefined;
+    let activeRequest: AbortController | undefined;
+    const started = Date.now();
     const refreshProjection = async () => {
+      let stillPending = true;
+      activeRequest = new AbortController();
+      const timeout = window.setTimeout(() => activeRequest?.abort(), 30000);
       try {
-        const response = await authFetch(`/api/submissions/${encodeURIComponent(id)}`, { cache: 'no-store' });
-        if (response.ok) {
-          const updated: Submission = await response.json();
-          if (!cancelled) setSubmission(updated);
+        const response = await authFetch(`/api/submissions/${encodeURIComponent(id)}`, { cache: 'no-store', signal: activeRequest.signal });
+        if (!response.ok) throw new Error('Could not refresh projection.');
+        const updated: Submission = await response.json();
+        stillPending = obj(parseSuggestion(updated.improved_code)?.score_projection).pending === true;
+        if (!cancelled) {
+          setSubmission(updated);
+          setProjectionConnectionLost(false);
         }
+        failures = 0;
       } catch {
-        // Keep the last saved result; retry on the next bounded poll.
+        failures += 1;
+        if (!cancelled) setProjectionConnectionLost(true);
       } finally {
-        checks += 1;
+        window.clearTimeout(timeout);
       }
+      checks += 1;
+      if (cancelled || !stillPending) return;
+      setProjectionSlow(Date.now() - started >= 30000);
+      if (checks >= 360 || failures >= 3) {
+        setProjectionPaused(true);
+        return;
+      }
+      // Schedule only after the preceding request finishes; slow requests
+      // cannot overlap and an unmounted page never schedules another poll.
+      timer = window.setTimeout(() => { void refreshProjection(); }, 10000);
     };
     void refreshProjection();
-    const timer = window.setInterval(() => {
-      if (checks >= 360) { window.clearInterval(timer); return; }
-      void refreshProjection();
-    }, 10000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [authFetch, id, pendingSavedProjection]);
+    return () => { cancelled = true; window.clearTimeout(timer); activeRequest?.abort(); };
+  }, [authFetch, id, pendingSavedProjection, projectionRequestId, projectionPollCycle]);
 
   const d = useMemo(() => {
     if (!submission) return null;
@@ -230,16 +257,7 @@ export const AssessmentResultView: React.FC = () => {
   const revisionStage = str(revisedSuggestion?.stage);
   const revisionComparison = obj(revisedSuggestion?.comparison);
   const revisionComparisonMessage = str(revisionComparison.message);
-  const revisionProjectedScore = revisionProjection.available === true && revisionProjection.verified === true
-    ? num(revisionProjection.projected_score)
-    : null;
-  const revisionCurrentScore = revisionProjectedScore != null ? num(revisionProjection.current_score) : null;
-  const revisionGain = revisionProjectedScore != null ? num(revisionProjection.expected_improvement) : null;
-  const revisionComponents = obj(revisionProjection.stage_components);
   const noRevisionNeeded = revisionVerificationStatus === 'no_change';
-  // A projection is learner-facing only after verification succeeds. Provider
-  // throttling and failed private drafts remain silent; the guide still works.
-  const revisionProjectionUnavailable = hasGuidedRevision && !revisionProjectionPending && revisionStage !== 'NO_CHANGE' && revisionProjection.available === false && Boolean(str(revisionProjection.message));
   const revisionUnavailable = (!revisedCode && !revisionExplanationOnly && !revisionGuidanceOnly && !revisionProjectionPending) || unrelatedTwoSumSuggestion;
 
   const generateRevision = async () => {
@@ -294,7 +312,7 @@ export const AssessmentResultView: React.FC = () => {
 */}
     <details className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><summary className="cursor-pointer font-semibold text-slate-800">View submitted source code</summary><pre className="mt-4 max-h-[32rem] overflow-auto rounded-xl bg-slate-950 p-4 text-xs leading-relaxed text-slate-100"><code>{submission.code}</code></pre></details>
     {revisionUnavailable&&!revisionExplanationOnly&&<section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5"><h2 className="font-bold text-indigo-950">Need a revised guide?</h2><p className="mt-1 text-sm text-indigo-900">Generate one focused guide for this attempt. A score projection is added only after its private check passes. Your saved score does not change.</p><button type="button" onClick={generateRevision} disabled={revisionLoading} className="mt-3 rounded-lg bg-indigo-700 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-60">{revisionLoading ? 'Preparing revised guide…' : 'Get revised guide + score projection'}</button>{revisionError&&<p role="alert" className="mt-2 text-sm text-rose-700">{revisionError}</p>}</section>}
-    {(revisedCode||revisionExplanationOnly||revisionGuidanceOnly)&&!unrelatedTwoSumSuggestion&&<details className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><summary className="flex cursor-pointer items-center justify-between gap-3 px-5 py-4 font-semibold text-slate-800 marker:text-indigo-600"><span>{noRevisionNeeded ? 'Revision check' : revisionGuidanceOnly || revisionExplanationOnly ? 'Guided learning step' : revisionStage ? 'Verified revision stage' : revisionPassed ? 'Verified reference revision' : 'Suggested revised code'}</span><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${revisionPassed || noRevisionNeeded ? 'bg-emerald-100 text-emerald-800' : revisionVerificationStatus === 'verification_failed' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>{revisionPassed ? 'Verified' : noRevisionNeeded ? 'No change needed' : revisionGuidanceOnly ? 'Guided step' : revisionExplanationOnly ? 'Explanation only' : revisionVerificationStatus === 'verification_failed' ? 'Not verified' : 'Draft'}</span></summary><div className="space-y-5 border-t border-slate-100 p-5"><p className="text-sm text-slate-700">{revisionVerificationMessage}</p>{revisionComparisonMessage&&<p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">{revisionComparisonMessage}</p>}{revisionGuidanceOnly&&!noRevisionNeeded&&<p className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-sm text-indigo-900">This stage gives an approach, not copy-paste code. Write it in your own solution, then submit it to unlock the next stage and updated evidence.</p>}{revisionStage&&revisionStage!=='NO_CHANGE'&&<p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Stage: {revisionStage.replace(/_/g, ' ')}</p>}{revisionProjectionPending&&<p role="status" className="text-xs text-slate-500">Checking expected score. You can continue reviewing the guidance.</p>}{revisionProjectedScore!=null&&<section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-emerald-800">Measured candidate score</p><div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1"><span className="font-mono text-2xl font-extrabold text-emerald-800">{revisionCurrentScore ?? '—'} → {revisionProjectedScore}/100</span>{revisionGain!=null&&<span className={`text-sm font-bold ${revisionGain >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{revisionGain >= 0 ? '+' : ''}{revisionGain} pts</span>}</div><p className="mt-2 text-xs text-emerald-900">Stage evidence: correctness {revisionComponents.correctness ?? '—'}% · time {revisionComponents.time ?? '—'}% · space {revisionComponents.space ?? '—'}% · style {revisionComponents.style ?? '—'}%.</p><p className="mt-2 text-xs text-emerald-900">{str(revisionProjection.message)}</p></section>}{revisionProjectionUnavailable&&<section className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-bold text-amber-950">Verified score projection unavailable</p><p className="mt-1 text-xs text-amber-900">{str(revisionProjection.message) || 'The private stage draft could not be verified yet.'}</p><button type="button" onClick={generateRevision} disabled={revisionLoading} className="mt-3 rounded-md bg-amber-700 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-800 disabled:cursor-wait disabled:opacity-60">{revisionLoading ? 'Verifying projection…' : 'Retry score projection'}</button>{revisionError&&<p role="alert" className="mt-2 text-xs text-rose-700">{revisionError}</p>}</section>}{revisedExplanation&&<div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4"><h3 className="text-sm font-bold text-indigo-950">What to do next</h3><p className="mt-1 text-sm leading-relaxed text-indigo-900">{revisedExplanation}</p></div>}{guidedSteps.length>0&&<div><h3 className="text-sm font-bold text-slate-800">Your next actions</h3><ol className="mt-2 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-700">{guidedSteps.map((step,index)=><li key={index}>{step}</li>)}</ol></div>}{algorithmOutline.length>0&&<div><h3 className="text-sm font-bold text-slate-800">Algorithm outline</h3><ol className="mt-2 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-700">{algorithmOutline.map((step,index)=><li key={index}>{step}</li>)}</ol></div>}{!revisionGuidanceOnly&&revisedChanges.length>0&&<div className="space-y-3"><h3 className="text-sm font-bold text-slate-800">Code improvements</h3>{revisedChanges.map((change:R,index:number)=><article key={index} className="rounded-xl border border-slate-200 p-4"><p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Change {index+1}</p><div className="grid gap-3 md:grid-cols-2">{str(change.line_original)&&<div><p className="mb-1 text-xs font-semibold text-rose-700">Before</p><pre className="whitespace-pre-wrap break-words rounded-lg bg-rose-50 p-3 text-xs text-slate-800"><code>{change.line_original}</code></pre></div>}{str(change.line_improved)&&<div><p className="mb-1 text-xs font-semibold text-emerald-700">After</p><pre className="whitespace-pre-wrap break-words rounded-lg bg-emerald-50 p-3 text-xs text-slate-800"><code>{change.line_improved}</code></pre></div>}</div>{str(change.reason)&&<p className="mt-3 text-sm leading-relaxed text-slate-600">{change.reason}</p>}</article>)}</div>}{revisedCode&&<div><div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-bold text-slate-800">{revisionStage ? 'Guided stage code' : revisionPassed ? 'Verified reference solution' : 'Full suggested solution'}</h3><span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">{submission.language.toUpperCase()}</span></div><pre className="max-h-[36rem] overflow-auto rounded-xl bg-slate-950 p-4 text-sm leading-relaxed text-slate-100"><code>{revisedCode}</code></pre></div>}</div></details>}
+    {(revisedCode||revisionExplanationOnly||revisionGuidanceOnly)&&!unrelatedTwoSumSuggestion&&<details className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><summary className="flex cursor-pointer items-center justify-between gap-3 px-5 py-4 font-semibold text-slate-800 marker:text-indigo-600"><span>{noRevisionNeeded ? 'Revision check' : revisionGuidanceOnly || revisionExplanationOnly ? 'Guided learning step' : revisionStage ? 'Verified revision stage' : revisionPassed ? 'Verified reference revision' : 'Suggested revised code'}</span><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${revisionPassed || noRevisionNeeded ? 'bg-emerald-100 text-emerald-800' : revisionVerificationStatus === 'verification_failed' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>{revisionPassed ? 'Verified' : noRevisionNeeded ? 'No change needed' : revisionGuidanceOnly ? 'Guided step' : revisionExplanationOnly ? 'Explanation only' : revisionVerificationStatus === 'verification_failed' ? 'Not verified' : 'Draft'}</span></summary><div className="space-y-5 border-t border-slate-100 p-5"><p className="text-sm text-slate-700">{revisionVerificationMessage}</p>{revisionComparisonMessage&&<p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">{revisionComparisonMessage}</p>}{revisionGuidanceOnly&&!noRevisionNeeded&&<p className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-sm text-indigo-900">This stage gives an approach, not copy-paste code. Write it in your own solution, then submit it to unlock the next stage and updated evidence.</p>}{revisionStage&&revisionStage!=='NO_CHANGE'&&<p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Stage: {revisionStage.replace(/_/g, ' ')}</p>}{revisionStage!=='NO_CHANGE'&&<ProjectionStatusCard projection={revisionProjection} slow={projectionSlow} paused={projectionPaused} connectionLost={projectionConnectionLost} retrying={revisionLoading} error={revisionError} onCheckAgain={()=>setProjectionPollCycle(value=>value+1)} onRetry={generateRevision} />}{revisedExplanation&&<div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4"><h3 className="text-sm font-bold text-indigo-950">What to do next</h3><p className="mt-1 text-sm leading-relaxed text-indigo-900">{revisedExplanation}</p></div>}{guidedSteps.length>0&&<div><h3 className="text-sm font-bold text-slate-800">Your next actions</h3><ol className="mt-2 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-700">{guidedSteps.map((step,index)=><li key={index}>{step}</li>)}</ol></div>}{algorithmOutline.length>0&&<div><h3 className="text-sm font-bold text-slate-800">Algorithm outline</h3><ol className="mt-2 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-700">{algorithmOutline.map((step,index)=><li key={index}>{step}</li>)}</ol></div>}{!revisionGuidanceOnly&&revisedChanges.length>0&&<div className="space-y-3"><h3 className="text-sm font-bold text-slate-800">Code improvements</h3>{revisedChanges.map((change:R,index:number)=><article key={index} className="rounded-xl border border-slate-200 p-4"><p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Change {index+1}</p><div className="grid gap-3 md:grid-cols-2">{str(change.line_original)&&<div><p className="mb-1 text-xs font-semibold text-rose-700">Before</p><pre className="whitespace-pre-wrap break-words rounded-lg bg-rose-50 p-3 text-xs text-slate-800"><code>{change.line_original}</code></pre></div>}{str(change.line_improved)&&<div><p className="mb-1 text-xs font-semibold text-emerald-700">After</p><pre className="whitespace-pre-wrap break-words rounded-lg bg-emerald-50 p-3 text-xs text-slate-800"><code>{change.line_improved}</code></pre></div>}</div>{str(change.reason)&&<p className="mt-3 text-sm leading-relaxed text-slate-600">{change.reason}</p>}</article>)}</div>}{revisedCode&&<div><div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-bold text-slate-800">{revisionStage ? 'Guided stage code' : revisionPassed ? 'Verified reference solution' : 'Full suggested solution'}</h3><span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">{submission.language.toUpperCase()}</span></div><pre className="max-h-[36rem] overflow-auto rounded-xl bg-slate-950 p-4 text-sm leading-relaxed text-slate-100"><code>{revisedCode}</code></pre></div>}</div></details>}
     {revisionGuidanceOnly&&!noRevisionNeeded&&<p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">This revised guide and any projection are private learning aids. They do not change this submission; submit your own revised code to create a new official result.</p>}
     {revisionEvidenceLinks.length>0&&revisionGuidanceOnly&&<section className="rounded-2xl border border-violet-200 bg-violet-50 p-5"><h2 className="text-sm font-bold text-violet-950">Why this stage</h2><ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-violet-900">{revisionEvidenceLinks.map((item,index)=><li key={index}>{item}</li>)}</ul></section>}
     {futurePlan.length>0&&revisionGuidanceOnly&&<section className="rounded-2xl border border-sky-200 bg-sky-50 p-5"><h2 className="text-sm font-bold text-sky-950">Future stages</h2><p className="mt-1 text-sm text-sky-900">These stay locked until you submit your own change for the current stage.</p><ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-sky-900">{futurePlan.map((step,index)=><li key={index}>{step}</li>)}</ol></section>}
