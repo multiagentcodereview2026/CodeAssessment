@@ -58,7 +58,7 @@ Storage conventions depend on the interface: a supplied function input is exclud
 
 ### A. Components and Weights
 
-For a valid assessment with N evaluated cases and p accepted cases, observed correctness is defined by (1). Compilation failure yields zero correctness; an unavailable judge or missing usable execution evidence leaves correctness unknown. Passing a finite suite is not a proof for all valid inputs. Case counts weight each evaluated case equally, so test diversity and duplicates affect the interpretation of partial credit.
+Let N be the total required test cases, E the cases with valid execution verdicts, and p the accepted cases. Equation (1) applies only when E = N > 0. If E < N or any case has an infrastructure error, correctness is unknown and the final assessment remains incomplete. Thus five passes with fifteen cases unavailable in a twenty-case suite do not yield 100% correctness. Student-caused runtime errors and timeouts are evaluated failures; service outages are not. Confirmed compilation failure yields zero correctness. Passing a finite suite does not prove correctness for all valid inputs. Cases receive equal weight, so diversity and duplicates affect partial credit.
 
 [[EQ1]]
 
