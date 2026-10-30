@@ -8,7 +8,7 @@ The six-page paper uses the supplied IEEE A4 Word template as its design basis,
 Times New Roman, single spacing and justified body text. It contains a confirmed
 five-author block and emails, a shared KMIT address, Kura Vignesh Reddy as
 corresponding author, four editable tables, native Word equations, a new 600 dpi
-architecture figure, eight verified references and an AI-use acknowledgment.
+architecture figure, nine references and an AI-use acknowledgment.
 Every rendered page was inspected. No screenshot is used as an experimental
 result. The document is a systems paper with a limited pilot, not a validated
 human grading study.
@@ -25,6 +25,7 @@ human grading study.
 | Static complexity pilot | Reproduced on the frozen source: time 19/20, space 20/20, joint 19/20, coverage 20/20 |
 | Label provenance | AI-assisted unverified proposals; only two original problem groups; no human expert accuracy claim |
 | Guidance alignment | Implemented AI-assisted gate and mocked regression checks; no real-provider success-rate or expert-validated efficacy result |
+| Controlled scoring comparison | Analysis commit 7ddc4aa; four rules with 84 identical component/weight configurations each; 49/43/0/0 unrounded ceiling violations; five targeted experiment tests passed |
 
 Do not call 95% label agreement “application accuracy.” Do not call the two AI
 outputs human expert reviews. The paper deliberately retains the Python symbolic
@@ -64,6 +65,19 @@ https://conferences.ieeeauthorcenter.ieee.org/author-ethics/guidelines-and-polic
 5. Review the final PDF and Word file together before uploading. Do not modify
    margins or font size to add unsupported claims. All acceptance and numeric
    score claims should keep their current distinction.
+
+## Public pilot source and dataset access
+
+Verified with an HTTP 200 response on 30 October 2026:
+https://github.com/multiagentcodereview2026/CodeAssessment/blob/317152b61c4aad89eac9962470a0582595751df1/backend/analysis/build_research_review_pack.py
+
+This public generator contains all twenty source fixtures and the two problem
+groups. It is a source-code artifact, not an already published JSONL benchmark
+with expert labels. The actual canonical JSONL file is supplied in the local
+evidence package as CodeVedha_synthetic_pilot_v1.jsonl. Returned model labels
+remain AI-assisted and unverified. The paper's Data Availability section does
+not claim a DOI or a complete public artifact release. Application d4cdb86 and
+experiment 7ddc4aa remain local commits until explicitly pushed.
 
 ## Research work still needed for stronger future claims
 
