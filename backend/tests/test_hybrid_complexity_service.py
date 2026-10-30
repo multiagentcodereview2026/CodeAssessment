@@ -1,4 +1,5 @@
 import asyncio
+import pytest
 
 from agents.complexity import complexity_node
 from analysis import analyzer_service
@@ -19,8 +20,13 @@ int main() {
 """
 
 
-def test_low_confidence_ast_is_ai_corroborated_before_becoming_analyzed(monkeypatch):
-    monkeypatch.setattr(settings, "COMPLEXITY_AST_DIRECT_CONFIDENCE", .90)
+@pytest.fixture
+def require_ai_review(monkeypatch):
+    """Exercise corroboration independently of the production direct threshold."""
+    monkeypatch.setattr(settings, "COMPLEXITY_AST_DIRECT_CONFIDENCE", 0.90)
+
+
+def test_low_confidence_ast_is_ai_corroborated_before_becoming_analyzed(monkeypatch, require_ai_review):
     async def agreeing_provider(payload):
         assert set(payload) == {"instruction", "language", "source_code"}
         return {
@@ -45,8 +51,7 @@ def test_low_confidence_ast_is_ai_corroborated_before_becoming_analyzed(monkeypa
     assert evidence.final.method == "ast+ai-corroborated"
 
 
-def test_higher_confidence_ai_disagreement_never_replaces_ast_formula(monkeypatch):
-    monkeypatch.setattr(settings, "COMPLEXITY_AST_DIRECT_CONFIDENCE", .90)
+def test_higher_confidence_ai_disagreement_never_replaces_ast_formula(monkeypatch, require_ai_review):
     async def disagreeing_provider(payload):
         assert "ast_evidence" not in payload
         return {
@@ -87,8 +92,7 @@ def test_higher_confidence_ai_disagreement_never_replaces_ast_formula(monkeypatc
     assert scored["complexity_details"]["analysis_status"] == "REVIEW_REQUIRED"
 
 
-def test_ai_fallback_cannot_replace_any_existing_ast_formula(monkeypatch):
-    monkeypatch.setattr(settings, "COMPLEXITY_AST_DIRECT_CONFIDENCE", .90)
+def test_ai_fallback_cannot_replace_any_existing_ast_formula(monkeypatch, require_ai_review):
     async def provider(_payload):
         return {
             "time_complexity": "O(n^3)",
@@ -122,8 +126,7 @@ def test_ai_fallback_cannot_replace_any_existing_ast_formula(monkeypatch):
     assert evidence.final.method == "ast+ai-review"
 
 
-def test_identical_ai_fallback_review_is_cached(monkeypatch):
-    monkeypatch.setattr(settings, "COMPLEXITY_AST_DIRECT_CONFIDENCE", .90)
+def test_identical_ai_fallback_review_is_cached(monkeypatch, require_ai_review):
     calls = 0
 
     async def provider(_payload):
@@ -152,6 +155,32 @@ def test_identical_ai_fallback_review_is_cached(monkeypatch):
     assert first.final is not None and second.final is not None
     assert first.final.time_complexity == second.final.time_complexity == "O(n^2)"
     assert first.final.space_complexity == second.final.space_complexity == "O(1)"
+
+
+@pytest.mark.parametrize("confidence", [0.85, 0.95])
+def test_ast_at_or_above_direct_threshold_skips_ai(monkeypatch, confidence):
+    calls = []
+
+    async def provider(payload):
+        calls.append(payload)
+        raise AssertionError("Confident AST must not call the optional AI reviewer")
+
+    monkeypatch.setattr(settings, "COMPLEXITY_AST_DIRECT_CONFIDENCE", 0.85)
+    monkeypatch.setattr(settings, "COMPLEXITY_AI_REVIEW_ENABLED", True)
+    monkeypatch.setattr(analyzer_service, "_invoke_complexity_reviewer", provider)
+    static = ComplexityAnalysis(
+        time_complexity="O(n)", space_complexity="O(1)",
+        confidence=confidence, method="ast", status="ANALYZED",
+    )
+    evidence = asyncio.run(analyzer_service.analyze_submission_complexity(
+        SOURCE, "cpp", static_result=static,
+    ))
+    assert calls == []
+    assert evidence.ai_review is None
+    assert evidence.final.status == "ANALYZED"
+    assert evidence.final.method == "ast"
+    assert evidence.final.time_complexity == "O(n)"
+    assert evidence.final.space_complexity == "O(1)"
 
 
 def test_missing_ast_estimate_is_saved_as_analysis_failed_and_is_not_scored(monkeypatch):

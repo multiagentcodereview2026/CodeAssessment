@@ -99,7 +99,7 @@ def test_offline_feedback_names_observed_loop_structure_for_a_time_gap():
         },
     })
 
-    assert any("2 loops (while → for)" in weakness for weakness in feedback["weaknesses"])
+    assert any("2 loop headers (while → for)" in weakness for weakness in feedback["weaknesses"])
     assert any("not rebuilt or rescanned" in step for step in feedback["improvement_steps"])
 
 
