@@ -12,6 +12,7 @@ from .evidence_merger import merge_evidence
 from .confidence_policy import apply_confidence_policy, build_llm_handoff
 from .models import ComplexityAnalysis, ComplexityEvidence
 from .static_analyzer import analyze_source
+from .python_loop_evidence import guard_python_complexity
 
 
 _review_limiter = AIReviewRateLimiter(
@@ -24,7 +25,7 @@ _review_cache = ComplexityReviewCache(settings.COMPLEXITY_AI_CACHE_TTL_SECONDS)
 def analyze_static_complexity(source_code: str, language: str) -> ComplexityAnalysis:
     """Run only the deterministic AST stage; never contacts an AI provider."""
     return apply_confidence_policy(
-        analyze_source(source=source_code, language=language)
+        guard_python_complexity(source_code, language, analyze_source(source=source_code, language=language))
     ) or ComplexityAnalysis(status="REVIEW_REQUIRED", method="ast")
 
 
@@ -100,6 +101,11 @@ async def analyze_submission_complexity(
     static_result = static_result or analyze_static_complexity(
         source_code, language,
     )
+    static_result = guard_python_complexity(source_code, language, static_result)
+    # Source-level unresolved evidence cannot be promoted by confidence,
+    # coincidental runtime agreement, or an optional model's opinion.
+    if "structural-review-blocked" in static_result.signals:
+        return ComplexityEvidence(static=static_result, dynamic=dynamic_result, final=static_result)
 
     evidence = merge_evidence(
         static_result=static_result,
@@ -112,6 +118,7 @@ async def analyze_submission_complexity(
     runtime_measurements = list(dynamic_result.dynamic_measurements or []) if dynamic_result else []
     runtime_agrees = bool(
         static_is_complete
+        and static_result.status == "ANALYZED"
         and dynamic_is_strong
         and static_result.time_complexity == dynamic_result.time_complexity
     )
@@ -120,6 +127,7 @@ async def analyze_submission_complexity(
     # AI when no runtime evidence was requested for the submission.
     if (
         static_is_complete
+        and static_result.status == "ANALYZED"
         and static_result.confidence >= settings.COMPLEXITY_AST_DIRECT_CONFIDENCE
         and dynamic_result is None
     ):

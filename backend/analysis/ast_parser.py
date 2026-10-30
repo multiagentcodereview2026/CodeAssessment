@@ -4,6 +4,7 @@ from .complexity_ir import ComplexityIR, LoopIR, RecursionIR, GraphIR, ControlFl
 from .pattern_library import classify_pattern, detect_semantic_patterns
 from .dependent_bounds import detect_dependent_bounds
 from .library_costs import detect_library_costs
+from .python_loop_evidence import python_loop_evidence
 
 # Tree-sitter imports - handle gracefully if not available
 AST_AVAILABLE = False
@@ -1223,6 +1224,12 @@ class ASTComplexityAnalyzer:
             iterables += re.findall(
                 r'\bfor\s*\([^)]*\b(?:in|of)\s+([a-zA-Z_]\w*)\)', src_lower,
             )
+            if self.language in {'python', 'py'}:
+                # A callable name such as `range` is not an input dimension.
+                # Resolve range(len(a)), enumerate(a), and direct a traversal
+                # through syntax identities, retaining genuinely distinct inputs.
+                facts = python_loop_evidence(self.source)
+                iterables = facts.dimensions
             if len(dict.fromkeys(iterables)) >= 2:
                 bounds_vars = ['m', 'n']
 
@@ -1242,8 +1249,8 @@ class ASTComplexityAnalyzer:
         # The structured rules above provide stronger evidence when present.
         legacy_amortized = any(token in src_lower for token in (
             '.pop()', 'pop_back()', 'popleft(', 'pop(0)',
-            'left++', 'l++', 'start++', 'left += 1', 'left+=1',
-            'l += 1', 'l+=1', 'start += 1', 'start+=1',
+        )) or bool(re.search(
+            r'\b(?:left|l|start)\s*(?:\+\+|\+=\s*1\b)', src_lower,
         ))
         if legacy_amortized and max_depth == 2 and not loop.has_sort:
             loop.depth = 1
