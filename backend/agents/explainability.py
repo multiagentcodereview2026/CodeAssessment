@@ -108,7 +108,7 @@ def _source_complexity_feedback(source_code: str, complexity: Dict[str, Any]) ->
     if len(loop_headers) >= 2:
         sequence = " → ".join(loop_headers[:3])
         evidence = (
-            f"Your code repeats work through {len(loop_headers)} loops ({sequence}). "
+            f"Your source contains {len(loop_headers)} loop headers ({sequence}). "
             f"The saved analysis measures this path as {time} time."
         )
         step = (
