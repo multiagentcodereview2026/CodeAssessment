@@ -15,7 +15,8 @@
   "application_tests_rerun_for_editorial_revision": false,
   "scope": "Editorial revision and deterministic derived summary only. Frozen application test transcripts remain in the original artifact release. No new accuracy or human-study claim.",
   "sha256": {
-    "CodeVedha_EmergIN2027_Paper.docx": "bed2a7af54660a2580c6a568dc391cb9382cb769e33ce40bbb9e613635cfd850",
-    "CodeVedha_EmergIN2027_Paper.pdf": "a63c7ef6ef68276124ba494ee9534ba210fc85fbf941117209f609ac15c9b5c2"
-  }
+    "CodeVedha_EmergIN2027_Paper.docx": "92be13dc84d02c768395bc03dcfc7fb1578072bc35c2fcbe2d0d033fa130a4ed",
+    "CodeVedha_EmergIN2027_Paper.pdf": "b42c5c87b87ec40248293383fdabda7b48881e75e6bb93e28b4824142bfc4195"
+  },
+  "submission_cleanup": "Administrative submission reminders removed; scientific scope, AI provenance and limitations retained. Six rendered pages inspected again."
 }

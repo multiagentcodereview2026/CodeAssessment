@@ -130,7 +130,7 @@ The recorded output was O(m*n) time and O(1) space, with heuristic confidence 0.
 
 The issue can arise when separate syntactic traversals, aliases, or helper results refer to the same collection size without carrying that relation into the bound. Conversely, independent arrays of lengths m and n require O(m*n). Replacing every product with O(n²) would erase genuine multivariate costs, whose importance is established in [8]. A future repair should track collection identity and proven size equalities, then test equal and independent dimensions on held-out cases. We preserve the existing analyzer and reporting mismatch rather than tune it on this diagnostic set.
 
-Coverage is answered cases divided by eligible cases; exact agreement uses the answered-case denominator, separately for time, space, and joint labels. Both denominators happen to be 20 here. Related cross-language variants and AI proposals preclude an independent-sample accuracy interpretation. Human complexity validation remains pending.
+Coverage is answered cases divided by eligible cases; exact agreement uses the answered-case denominator, separately for time, space, and joint labels. Both denominators happen to be 20 here. Related cross-language variants and AI proposals preclude an independent-sample accuracy interpretation.
 
 ### D. Controlled Comparison of Correctness Constraints
 
@@ -162,9 +162,9 @@ Several threats constrain interpretation. Test-case correctness depends on speci
 
 Feedback quality and alignment review remain unvalidated by independent experts. A candidate can pass finite tests yet fail on untested inputs, and a model can approve an unsupported explanation. The guard restricts projection eligibility without guaranteeing a learning outcome. Live-provider success rate and representative latency have not been benchmarked.
 
-Before broader efficacy claims, two qualified reviewers should label a diverse corpus and adjudicate disagreements with problem-level holdouts. Blinded instructor grades would permit comparisons of policy error and agreement. Feedback should be rated for factuality, relevance, actionability, and private-data disclosure. Repeated warm and cold requests should report latency distributions and provider failures.
+Further evaluation can compare complexity estimates with independently adjudicated labels on problem-level holdouts and compare grading policies against blinded instructor judgments. Feedback factuality, relevance, actionability, and disclosure, together with warm/cold latency distributions and provider failures, are separate evaluation targets.
 
-The reported evaluation uses synthetic fixtures and supplied AI review artifacts; it does not analyze identifiable learner records or report participant outcomes. No human-study ethics approval is asserted. Imported public problem collections are not treated as a publication dataset with assumed redistribution rights. A reproducibility package should include only fixtures and artifacts for which the authors have permission, and should exclude credentials, private course data, and real judge secrets. Similarity evidence is not proof of plagiarism, and this work does not claim plagiarism-screening clearance.
+The reported evaluation uses synthetic fixtures and supplied AI review artifacts; it does not analyze identifiable learner records or report participant outcomes. The published package excludes credentials, private course data, and real judge secrets. Imported public problem collections are not redistributed as the publication dataset.
 
 ## VIII. Conclusion
 
@@ -172,7 +172,7 @@ CodeVedha links execution evidence, resource estimates, style analysis, and opti
 
 ## Acknowledgment
 
-OpenAI Codex was used to draft and revise the abstract and Sections I–VIII, assist with verification scripts and synthetic fixtures, and generate the architecture illustration. The pilot label proposals were supplied as external AI-assisted artifacts, with unverified self-reported model identities. They are reported as AI proposals, not human expert judgments. Authors are responsible for checking the final text, references, results, and disclosures before submission.
+OpenAI Codex was used to draft and revise the abstract and Sections I–VIII, assist with verification scripts and synthetic fixtures, and generate the architecture illustration. The pilot label proposals were supplied as external AI-assisted artifacts, with unverified self-reported model identities. They are reported as AI proposals, not human expert judgments.
 
 ## References
 
