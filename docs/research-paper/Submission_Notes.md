@@ -22,7 +22,7 @@ original symbolic-bound failure; it does not present AI proposals as validation.
 A projection decision table and synthetic weight-sensitivity table replace dense
 prose. All six revised pages were rendered and inspected. The exact application
 snapshot and original evidence tag remain unchanged. The revision introduces no
-human-study result and no change to the teammate's complexity implementation.
+human-study result. A later narrow safeguard supplements the existing complexity implementation.
 See revision-evidence/REVISION_NOTES.md for the additional table's reproduction
 command and remaining human validation.
 
@@ -42,9 +42,19 @@ command and remaining human validation.
 | Version reconciliation | Fresh archived runs: d4cdb86 passed 333; later 21aa1b7 passed 336. The old GitHub version 317152b passed 324. The paper intentionally cites the frozen d4cdb86 result. |
 
 Do not call 95% label agreement “application accuracy.” Do not call the two AI
-outputs human expert reviews. The paper deliberately retains the Python symbolic
-bound mismatch. Do not describe the weights as empirically optimal: the proof
+outputs human expert reviews. The paper retains the baseline Python symbolic
+bound mismatch and separately reports its follow-up repair. Do not describe the weights as empirically optimal: the proof
 concerns the ceiling, while weight selection remains a stated design choice.
+
+## Complexity reliability revision
+
+Commit `752c0d0` adds collection-identity checks for supported Python loop forms,
+fixes an identifier substring collision in pointer-update recognition, and blocks
+final complexity marks for selected unresolved structures. The original engine
+remains in place. The revised paper reports 359 passing backend tests (including
+23 new regressions), nine frontend checks, lint, and build. The known pilot set
+matches 20/20 proposals after repair; this is post-hoc diagnostic evidence, not
+held-out accuracy. See reliability-evidence/RELIABILITY_NOTES.md.
 
 ## Conference checks
 
