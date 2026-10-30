@@ -1,0 +1,53 @@
+{
+  "kind": "synthetic_candidate_score_contract",
+  "database": "isolated_in_memory_only",
+  "provider_observation": false,
+  "all_passed": true,
+  "checks": [
+    {
+      "policy": "default",
+      "baseline_score": 85.4,
+      "candidate_score": 97.4,
+      "official_score": 97.4,
+      "candidate_verified": true,
+      "score_matches": true,
+      "gain_matches": true,
+      "saved_rubric": {
+        "version": "complexity-focused-v2",
+        "weights": {
+          "correctness": 30.0,
+          "time": 35.0,
+          "space": 25.0,
+          "style": 10.0
+        },
+        "correctness_ceiling": true,
+        "rounding": "one_decimal_without_crossing_correctness_ceiling"
+      },
+      "candidate_tests_passed": 3,
+      "candidate_tests_total": 3
+    },
+    {
+      "policy": "custom",
+      "baseline_score": 81.9,
+      "candidate_score": 98.7,
+      "official_score": 98.7,
+      "candidate_verified": true,
+      "score_matches": true,
+      "gain_matches": true,
+      "saved_rubric": {
+        "version": "complexity-focused-v2",
+        "weights": {
+          "correctness": 20.0,
+          "time": 50.0,
+          "space": 25.0,
+          "style": 5.0
+        },
+        "correctness_ceiling": true,
+        "rounding": "one_decimal_without_crossing_correctness_ceiling"
+      },
+      "candidate_tests_passed": 3,
+      "candidate_tests_total": 3
+    }
+  ],
+  "warning": "Two original synthetic examples verify this contract, not AI-generation accuracy or student learning outcomes."
+}

@@ -1,0 +1,20 @@
+{
+  "release": "paper-artifacts-20261030",
+  "hash_algorithm": "SHA-256",
+  "human_validated": false,
+  "files": {
+    ".gitattributes": "fa16d166855835205b8f3961cbfed0ee77c2a2638edea3b9eee48a61a830911e",
+    "candidate-score-contract.json": "50b5de37aa5e5c53258abf51af9e0972fa43420541852f1ba2f30cf364356030",
+    "execution-contract.json": "b6ef07980f0871d72b0f35486fed63214cb1f93200c7fcd047366beabf6d9776",
+    "frozen-21aa1b7-tests.txt": "b60d9d12b049dc4accf01532012506abd4952c790a6eae50f7820f4e0c028379",
+    "frozen-d4cdb86-tests.txt": "909b75683b0449f0ff48e30e64db09cb6ca031c27e64faaea81a443fa3661f55",
+    "pilot-comparison.json": "e5526a2c9123ac954ffcbeecc26ea61dd15128157674d639dda41841d2e04341",
+    "pilot.jsonl": "a6a0cfd19b491c46b2000df8831212bca7ef2bc6ee0564fca5f3f93fad5fae1f",
+    "proposals-a.jsonl": "c6cf36d958df33f785bef0e18d77d2961d86f40d7465c318975758a04deaf4fd",
+    "proposals-b.jsonl": "a3ab488ed875118019db5db93491288f1461202b352820eaa049c49bf8b13435",
+    "provenance.json": "4ac6314651f192eda9ca6bc3d6fc0c431338b522eb90cae7f893c82c38d74c16",
+    "REPRODUCING.md": "11c098573946d68516b12e783003e6fb66a80c6870ca7fc26a1abc4474829ea7",
+    "scoring-rule-ablation.json": "d62d8abf3fdaf3d52d882accbd6ebf336119dfb9152fbcde7abfbeb6c536d8af",
+    "source-manifest.json": "88830dfa0b438c4b827e41ea6ac31edbaa78de349e75aa5b375c799ad7ea172b"
+  }
+}

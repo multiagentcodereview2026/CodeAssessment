@@ -1,8 +1,14 @@
-# Paper readiness — 29 October 2026
+# Paper readiness — 30 October 2026
 
 This document separates implementation evidence from research evidence.
 The final manuscript must describe a frozen Git commit and rubric version.
 Do not claim that software regression pass rate is application accuracy.
+
+The paper freezes implementation `d4cdb86` (guidance version 6), not the older
+`317152b` public snapshot (guidance version 5). Its archived-snapshot test run
+passed 333 tests. The scoring experiment is `7ddc4aa`. See
+`research-paper/artifacts/REPRODUCING.md` for release tags, public synthetic
+fixtures, normalized AI proposals, reports and exact reproduction commands.
 
 ## Implemented for the next study
 
@@ -37,8 +43,10 @@ Do not claim that software regression pass rate is application accuracy.
    Do not use a model's self-rating as human ground truth.
 5. Repeated end-to-end latency measurements (median and p95), hardware and
    database region, warm/cold runs, source snapshot hashes and image digests.
-6. Final author affiliations, institutional emails, author order, funding,
-   conflicts, any participant consent/ethics approval and data availability.
+6. Final author approval, funding/conflicts, any participant consent/ethics
+   approval and data availability. Author order, affiliation and working Gmail
+   addresses were supplied. Institutional emails may be used if available;
+   the conference's published instructions do not require them.
 7. Resolve imported problem/test licensing and verify every reference against
    its original publication. Similarity screening is not plagiarism clearance.
 8. Apply the chosen conference's current template, page limit, anonymization
@@ -69,11 +77,11 @@ Use RESEARCH_REVIEW_FORM.md for the independent labeling and feedback review.
 
 ## Software verification
 
-- The previous focused run passed 142 selected tests; a subsequent full CI
-  run passed 288. The post-pull integration now includes the projection suite,
-  background privacy/budget tests and the reproducibility tools: its complete
-  run passed 315 tests, including near-perfect-score rounding boundaries.
-  Do not add counts across runs.
+- The exact paper implementation, `d4cdb86`, passed 333 tests in a fresh isolated
+  archived-snapshot run. Earlier counts refer to different source revisions:
+  `41be983` passed 315 and `317152b` passed 324. Separate transcripts identify
+  the later source snapshot. Do not add counts across runs or replace the
+  frozen paper count with a count from an unrelated HEAD.
 - Frontend production build and lint passed.
 - Eight live execution checks met their expected outcomes: sum programs in
   Python/C/C++/Java/JavaScript, C++ nested-array Merge Intervals, a changed
@@ -88,10 +96,11 @@ Use RESEARCH_REVIEW_FORM.md for the independent labeling and feedback review.
   candidate cases passing in each. These are original fixtures run with the
   AI provider disabled and an isolated in-memory database, not AI success-rate
   measurements. Reproduce with `analysis.verify_candidate_score_contract`.
-- The independent review pack contains 20 original AI-assisted synthetic
-  snippets across five languages and only two problem groups. Reviewer A/B
-  labels remain blank; that pack must fail reviewed-corpus validation until
-  your team completes the reviews. It is a pilot, not a generalization set.
+- The pilot contains 20 original AI-assisted synthetic snippets across five
+  languages and two problem groups. Normalized AI-proposed labels are released
+  with explicit unverified provenance; independent human labels remain pending.
+  These proposals must not pass a human-reviewed corpus gate. The original
+  blank reviewer forms remain available for a genuine independent study.
 
 These are software checks, not evidence of human grading agreement, model
 accuracy or improved learning outcomes. No publication-ready accuracy figure

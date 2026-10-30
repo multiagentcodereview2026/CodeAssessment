@@ -1,0 +1,23 @@
+{
+  "release": "paper-artifacts-20261030",
+  "snippets": 20,
+  "problem_groups": 2,
+  "languages": [
+    "c",
+    "cpp",
+    "java",
+    "javascript",
+    "python"
+  ],
+  "human_validated": false,
+  "ground_truth_source": "ai_assisted_unverified",
+  "application_commit": "d4cdb86aa95d99f544d5e3253bf116eeeac87b24",
+  "experiment_commit": "7ddc4aa08e4ff3a7a0d4c2701c44fe41121042f0",
+  "input_sha256": {
+    "canonical_original": "5ee038f41c9f13d92062182745f81a534a04d1d67e0003f9ce82d7b3a799146a",
+    "original_proposal_a": "d1ec2d5fb2505bed20e1ec1f2cfef9a3e16d4cbf7e5d6e71e4363a81c67d08a8",
+    "original_proposal_b": "4b6b2c093ad94be187619cf4005bc0ef108b3321cc50452f2f779ef91f3c8ed2"
+  },
+  "preprocessing": "Canonical source and problem groups retained. Only label proposals are released, associated by canonical solution ID. Proposal aliases are not authenticated identities. Raw review prose, duplicated returned source, unsupported hash assertions and instructor fields are not published.",
+  "limits": "Synthetic pilot with two problem groups; labels are AI proposals, not independent expert ground truth. No application accuracy, instructor-grade validation, or learning-benefit claim."
+}

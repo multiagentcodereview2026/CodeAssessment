@@ -1,0 +1,96 @@
+{
+  "kind": "synthetic_execution_contract",
+  "all_passed": true,
+  "checks": [
+    {
+      "name": "stdin-sum",
+      "language": "python",
+      "source_sha256": "296df42723e36449af16e33213d0ae121a80fca913c22ed937128b45dff5049e",
+      "ok": true,
+      "compile_status": "success",
+      "execution_status": "completed",
+      "judge_request_wall_ms": 516.48,
+      "passed_cases": 3,
+      "total_cases": 3
+    },
+    {
+      "name": "stdin-sum",
+      "language": "cpp",
+      "source_sha256": "ceef67ec63c36425c4efd65325624669c4189230f4cbb0cedb071464c98e4702",
+      "ok": true,
+      "compile_status": "success",
+      "execution_status": "completed",
+      "judge_request_wall_ms": 1470.53,
+      "passed_cases": 3,
+      "total_cases": 3
+    },
+    {
+      "name": "stdin-sum",
+      "language": "c",
+      "source_sha256": "4b5426671d9699bef01103fa86312a941aca0897645c7ebe1f6a114943c21a50",
+      "ok": true,
+      "compile_status": "success",
+      "execution_status": "completed",
+      "judge_request_wall_ms": 1114.22,
+      "passed_cases": 3,
+      "total_cases": 3
+    },
+    {
+      "name": "stdin-sum",
+      "language": "java",
+      "source_sha256": "7f3739700edd6d12c3136d87efc239f482a5f1904537b9cf461ad8afe3236d54",
+      "ok": true,
+      "compile_status": "success",
+      "execution_status": "completed",
+      "judge_request_wall_ms": 2608.73,
+      "passed_cases": 3,
+      "total_cases": 3
+    },
+    {
+      "name": "stdin-sum",
+      "language": "javascript",
+      "source_sha256": "ede0ffa52f1400ea5c2b142db02b3a9e68cc443b2335f6322832380ffc950b33",
+      "ok": true,
+      "compile_status": "success",
+      "execution_status": "completed",
+      "judge_request_wall_ms": 638.07,
+      "passed_cases": 3,
+      "total_cases": 3
+    },
+    {
+      "name": "nested-array-merge",
+      "language": "cpp",
+      "source_sha256": "d0124a8718a497955529e225fdd15477ef258db282ee5f570a0c735e1d2d3b09",
+      "ok": true,
+      "compile_status": "success",
+      "execution_status": "completed",
+      "judge_request_wall_ms": 1476.63,
+      "passed_cases": 3,
+      "total_cases": 3
+    },
+    {
+      "name": "changed-source-rejected",
+      "language": "cpp",
+      "source_sha256": "d49e1700bde0c4702f8725a43b457413654f7c8c11badc4671c54c049da17d66",
+      "ok": true,
+      "compile_status": "success",
+      "execution_status": "WRONG_ANSWER",
+      "judge_request_wall_ms": 1376.02,
+      "passed_cases": 0,
+      "total_cases": 3
+    },
+    {
+      "name": "correct-source-rerun",
+      "language": "cpp",
+      "source_sha256": "d0124a8718a497955529e225fdd15477ef258db282ee5f570a0c735e1d2d3b09",
+      "ok": true,
+      "compile_status": "success",
+      "execution_status": "completed",
+      "judge_request_wall_ms": 1569.62,
+      "passed_cases": 3,
+      "total_cases": 3
+    }
+  ],
+  "latency_scope": "One request per check, including compilation and containers; not page latency, algorithmic growth, or a representative latency benchmark.",
+  "warning": "This smoke matrix is not a measured application accuracy benchmark."
+}

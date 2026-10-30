@@ -1,0 +1,552 @@
+{
+  "kind": "ai_assisted_pilot_agreement",
+  "human_validated": false,
+  "rows": 20,
+  "original_problem_groups": 2,
+  "review_metadata": [
+    {
+      "review": 1,
+      "reviewer_ids_self_reported": [
+        "proposal-A"
+      ],
+      "source_validation": {
+        "id_link_only_source_not_returned": 20
+      },
+      "changed_problem_group_ids": [],
+      "hash_claim_warnings": []
+    },
+    {
+      "review": 2,
+      "reviewer_ids_self_reported": [
+        "proposal-B"
+      ],
+      "source_validation": {
+        "id_link_only_source_not_returned": 20
+      },
+      "changed_problem_group_ids": [],
+      "hash_claim_warnings": []
+    }
+  ],
+  "model_agreement": {
+    "time_agrees": 20,
+    "space_agrees": 20,
+    "joint_agrees": 20
+  },
+  "cases": [
+    {
+      "solution_id": "python-S01",
+      "problem_id": "pilot-sum",
+      "language": "python",
+      "source_sha256": "bc071a6213892518f11d2b905045256e1c1185dcb32429d007107f4eed4ee692",
+      "review_a_time": "O(n)",
+      "review_b_time": "O(n)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(n)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.95,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "python-S02",
+      "problem_id": "pilot-sum",
+      "language": "python",
+      "source_sha256": "301f0e399571655e6c6553a85efda85615d3c26ea17f1c5adb3f0136a2d7b766",
+      "review_a_time": "O(n^2)",
+      "review_b_time": "O(n^2)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(m*n)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.95,
+        "eligible": true,
+        "time_matches_consensus": false,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": false
+      }
+    },
+    {
+      "solution_id": "python-S03",
+      "problem_id": "pilot-search",
+      "language": "python",
+      "source_sha256": "7bcdd61f47992e4952d96c5260c1e64ed631498b48fc0e350edf9a665a9dbd66",
+      "review_a_time": "O(n)",
+      "review_b_time": "O(n)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(n)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.95,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "python-S04",
+      "problem_id": "pilot-search",
+      "language": "python",
+      "source_sha256": "a475cd2ae52165d48a2e2fd4b58b3b809d8f3dc187e59e72ceb10ecfeebffe36",
+      "review_a_time": "O(log n)",
+      "review_b_time": "O(log n)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(log n)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.86,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "cpp-S01",
+      "problem_id": "pilot-sum",
+      "language": "cpp",
+      "source_sha256": "f9fb2793a3f9373bb655fc7b917a0911977e9b711b526c3950763066dac12c70",
+      "review_a_time": "O(n)",
+      "review_b_time": "O(n)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(n)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.95,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "cpp-S02",
+      "problem_id": "pilot-sum",
+      "language": "cpp",
+      "source_sha256": "421fb559b4a9c075780f7ac2acb3a015b31a850b7aeee4ed9a9523e4b4ca0944",
+      "review_a_time": "O(n^2)",
+      "review_b_time": "O(n^2)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(n^2)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.95,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "cpp-S03",
+      "problem_id": "pilot-search",
+      "language": "cpp",
+      "source_sha256": "1bf797441d32f59235f489c474c33edfa616ed5efafd0829dec42bcfd22a0bec",
+      "review_a_time": "O(n)",
+      "review_b_time": "O(n)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(n)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.95,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "cpp-S04",
+      "problem_id": "pilot-search",
+      "language": "cpp",
+      "source_sha256": "7bfe340193d1d6eaad905d450d3e3debade8a722e93484b7e4282fd54e5fe31e",
+      "review_a_time": "O(log n)",
+      "review_b_time": "O(log n)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(log n)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.86,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "c-S01",
+      "problem_id": "pilot-sum",
+      "language": "c",
+      "source_sha256": "670dde42e85afd7b3c700cd2525d0c28816bbf6df258f7cfe6d1808925f597e2",
+      "review_a_time": "O(n)",
+      "review_b_time": "O(n)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(n)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.95,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "c-S02",
+      "problem_id": "pilot-sum",
+      "language": "c",
+      "source_sha256": "e29f6df531eb99db1533edc4750ad852dd7f033d2eb809ef9f48e086a0c82b23",
+      "review_a_time": "O(n^2)",
+      "review_b_time": "O(n^2)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(n^2)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.95,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "c-S03",
+      "problem_id": "pilot-search",
+      "language": "c",
+      "source_sha256": "15e105d5f5fc787241539ccae3bff3ed5298aecbcfe28c965b0001285b66cb3e",
+      "review_a_time": "O(n)",
+      "review_b_time": "O(n)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(n)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.95,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "c-S04",
+      "problem_id": "pilot-search",
+      "language": "c",
+      "source_sha256": "29de1cd2e3c77a42f1e5629901ed95bd9146635979f89a16ddefab93daa5bf9e",
+      "review_a_time": "O(log n)",
+      "review_b_time": "O(log n)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(log n)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.86,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "java-S01",
+      "problem_id": "pilot-sum",
+      "language": "java",
+      "source_sha256": "79cb2564384d699370383ae1a7caa1d5bdbad9f053c0d7747128c05f9396c8e9",
+      "review_a_time": "O(n)",
+      "review_b_time": "O(n)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(n)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.95,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "java-S02",
+      "problem_id": "pilot-sum",
+      "language": "java",
+      "source_sha256": "3e17a40ea20957c5f788e836b03a9ee325add2f9feeb62b337b0355fad79ed22",
+      "review_a_time": "O(n^2)",
+      "review_b_time": "O(n^2)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(n^2)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.95,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "java-S03",
+      "problem_id": "pilot-search",
+      "language": "java",
+      "source_sha256": "6498ffd1339618d6b5735b1f0d5c9570b621a69b01b5f741eb1c40d19d880ca0",
+      "review_a_time": "O(n)",
+      "review_b_time": "O(n)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(n)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.95,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "java-S04",
+      "problem_id": "pilot-search",
+      "language": "java",
+      "source_sha256": "f6c94c316b6baa8511fd5113ef4c741e571555f35dec3d6da36a4c40ec6a23c7",
+      "review_a_time": "O(log n)",
+      "review_b_time": "O(log n)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(log n)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.86,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "javascript-S01",
+      "problem_id": "pilot-sum",
+      "language": "javascript",
+      "source_sha256": "4984ef250210527c03c7cc7ffe3a39836d6a0798524f1f52b3082d09df0d5989",
+      "review_a_time": "O(n)",
+      "review_b_time": "O(n)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(n)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.95,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "javascript-S02",
+      "problem_id": "pilot-sum",
+      "language": "javascript",
+      "source_sha256": "8e54a61648f97781f1991a0a9703a9fe8ef6214fa02b00f3a57b26b6fa87ed09",
+      "review_a_time": "O(n^2)",
+      "review_b_time": "O(n^2)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(n^2)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.95,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "javascript-S03",
+      "problem_id": "pilot-search",
+      "language": "javascript",
+      "source_sha256": "f4ab006a941bc299cd472197a110199f95b484ffb68b0d73fe9f305cb6f94cb1",
+      "review_a_time": "O(n)",
+      "review_b_time": "O(n)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(n)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.95,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    },
+    {
+      "solution_id": "javascript-S04",
+      "problem_id": "pilot-search",
+      "language": "javascript",
+      "source_sha256": "dd5f4803d89937300efa0b47e0e2f56e0b33c8e8e9a254087ff9a1adc6a98608",
+      "review_a_time": "O(log n)",
+      "review_b_time": "O(log n)",
+      "review_a_space": "O(1)",
+      "review_b_space": "O(1)",
+      "time_agrees": true,
+      "space_agrees": true,
+      "joint_agrees": true,
+      "platform": {
+        "time": "O(log n)",
+        "space": "O(1)",
+        "status": "ANALYZED",
+        "heuristic_confidence": 0.86,
+        "eligible": true,
+        "time_matches_consensus": true,
+        "space_matches_consensus": true,
+        "joint_matches_consensus": true
+      }
+    }
+  ],
+  "limitations": [
+    "Model identifiers are self-reported; identities, prompts and independence were not verified.",
+    "Agreement is not expert-ground-truth accuracy. This synthetic pilot has 2 original problem groups.",
+    "No instructor-grade, feedback-quality or educational-benefit result is supplied by these files."
+  ],
+  "static_platform_comparison": {
+    "scope": "Static analyzer only; optional provider not invoked",
+    "rows": 20,
+    "answered": 20,
+    "joint_matches": 19,
+    "time_matches": 19,
+    "space_matches": 20,
+    "by_language": {
+      "c": {
+        "rows": 4,
+        "answered": 4,
+        "joint_matches": 4,
+        "time_matches": 4,
+        "space_matches": 4
+      },
+      "cpp": {
+        "rows": 4,
+        "answered": 4,
+        "joint_matches": 4,
+        "time_matches": 4,
+        "space_matches": 4
+      },
+      "java": {
+        "rows": 4,
+        "answered": 4,
+        "joint_matches": 4,
+        "time_matches": 4,
+        "space_matches": 4
+      },
+      "javascript": {
+        "rows": 4,
+        "answered": 4,
+        "joint_matches": 4,
+        "time_matches": 4,
+        "space_matches": 4
+      },
+      "python": {
+        "rows": 4,
+        "answered": 4,
+        "joint_matches": 3,
+        "time_matches": 3,
+        "space_matches": 4
+      }
+    }
+  },
+  "input_file_sha256": {
+    "original": "5ee038f41c9f13d92062182745f81a534a04d1d67e0003f9ce82d7b3a799146a",
+    "review_a": "c6cf36d958df33f785bef0e18d77d2961d86f40d7465c318975758a04deaf4fd",
+    "review_b": "a3ab488ed875118019db5db93491288f1461202b352820eaa049c49bf8b13435"
+  }
+}
