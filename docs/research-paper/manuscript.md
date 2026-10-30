@@ -1,4 +1,4 @@
-# CodeVedha An Auditable Programming Assessment Platform with Correctness Bounded Scoring
+# CodeVedha: An Auditable Programming Assessment Platform with Correctness-Bounded Scoring
 
 Abstract: Programming assessments can reward an efficient program even when it returns wrong answers, while AI feedback can promise gains that have never been tested. CodeVedha addresses both problems by separating observed correctness, inferred complexity, and advice. It combines isolated code execution with a versioned rubric whose final mark cannot exceed the percentage of evaluated cases passed. Instructors can change component weights without removing this constraint. An optional projection route executes a private candidate implementing the displayed guidance and scores it under the saved rubric. On 84 synthetic configurations per rule, weighted aggregation exceeded observed correctness in 49 cases and a fixed failure cap did so in 43; multiplication and the proposed ceiling had no unrounded violations. All eight live execution contracts met their expected outcomes, and candidate scores matched fresh assessments under two rubrics. A diagnostic set of 20 synthetic snippets exposed a failure to recognize equal loop dimensions. These findings support implementation consistency, not expert grading accuracy, optimal weights, or improved student learning.
 
@@ -166,9 +166,9 @@ Several threats constrain interpretation. Test-case correctness depends on speci
 
 Feedback quality and alignment review remain unvalidated by independent experts. A candidate can pass finite tests yet fail on untested inputs, and a model can approve an unsupported explanation. The guard restricts projection eligibility without guaranteeing a learning outcome. Live-provider success rate and representative latency have not been benchmarked.
 
-Further evaluation can compare complexity estimates with independently adjudicated labels on problem-level holdouts and compare grading policies against blinded instructor judgments. Feedback factuality, relevance, actionability, and disclosure, together with warm/cold latency distributions and provider failures, are separate evaluation targets.
+Future evaluation should compare complexity estimates with independently adjudicated labels on problem-held-out data, compare grades with blinded instructor judgments, and measure feedback quality, latency, and provider failures.
 
-The reported evaluation uses synthetic fixtures and supplied AI review artifacts; it does not analyze identifiable learner records or report participant outcomes. The published package excludes credentials, private course data, and real judge secrets. Imported public problem collections are not redistributed as the publication dataset.
+The evaluation uses synthetic fixtures and supplied AI artifacts, without identifiable learner data or participant outcomes. The public package excludes credentials, private course data, real judge secrets, and imported problem collections.
 
 ## VIII. Conclusion
 
