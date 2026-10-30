@@ -1,6 +1,6 @@
 # CodeVedha Mentor Review Brief
 
-**Review version:** artifact release `paper-artifacts-20261030`, including
+**Review version:** revised six-page manuscript, using artifact release `paper-artifacts-20261030`, including
 experiment `7ddc4aa` and application snapshot `d4cdb86`. Prepared 30 October 2026 for
 EmergIN 2027; Track V is the proposed fit.
 
@@ -30,9 +30,13 @@ validation.
   49/84 and 43/84 configurations; multiplication and the ceiling did so in 0/84.
   Five targeted experiment tests passed. These vectors are policy stress probes,
   not necessarily attainable submissions or historical application errors.
-- The static complexity pilot has 20 synthetic snippets but only two problem
-  groups. Joint exact agreement is 19/20 with AI-proposed labels. No independent
-  expert accuracy, learning benefit, or optimal-weight result is asserted.
+- The diagnostic complexity case study has 20 synthetic snippets and only two
+  problem groups. It includes the original python-S02 code, its O(m*n) analyzer
+  output, and the missing relation m = n. Agreement with AI proposals is
+  descriptive; independent expert complexity validation remains pending.
+- A new sensitivity table reports the mean, median, and number of ceiling-limited
+  scores on the same 28 vectors under three weight profiles. These are synthetic
+  policy summaries, not observed student grade distributions.
 
 ## Decisions requested from the mentor
 
@@ -52,7 +56,9 @@ validation.
 
 ## Material to read first
 
-Read the latest six-page PDF, especially Sections IV, VI-D and VII. The editable
+Read the latest six-page PDF, especially the correctness-only discussion in I,
+projection decision table in V, diagnostic code in VI-C, sensitivity table in
+VI-D, and limits in VII. The editable
 Word file and evidence archive are included for checking equations and results.
 The manuscript includes AI-use disclosure. No database-wide plagiarism clearance
 has been obtained, and conference acceptance is not assured.

@@ -7,11 +7,24 @@ Prepared for EmergIN 2027, Track V suggested, on 30 October 2026.
 The six-page paper uses the supplied IEEE A4 Word template as its design basis,
 Times New Roman, single spacing and justified body text. It contains a confirmed
 five-author block and emails, a shared KMIT address, Kura Vignesh Reddy as
-corresponding author, four editable tables, native Word equations, a new 600 dpi
-architecture figure, nine references and an AI-use acknowledgment.
+corresponding author, five editable tables, native Word equations, a new 600 dpi
+architecture figure, twelve references and an AI-use acknowledgment.
 Every rendered page was inspected. No screenshot is used as an experimental
 result. The document is a systems paper with a limited pilot, not a validated
 human grading study.
+
+## Revision after mentor-style critique
+
+The introduction now distinguishes correctness-only grading from mandatory
+correctness bounds with configurable quality weights. The related work includes
+three additional verified primary sources. The diagnostic section shows the
+original symbolic-bound failure; it does not present AI proposals as validation.
+A projection decision table and synthetic weight-sensitivity table replace dense
+prose. All six revised pages were rendered and inspected. The exact application
+snapshot and original evidence tag remain unchanged. The revision introduces no
+human-study result and no change to the teammate's complexity implementation.
+See revision-evidence/REVISION_NOTES.md for the additional table's reproduction
+command and remaining human validation.
 
 ## Evidence behind the results
 
@@ -55,10 +68,10 @@ https://conferences.ieeeauthorcenter.ieee.org/author-ethics/guidelines-and-polic
    supplied, so neither was invented. Add a required genuine acknowledgment if
    applicable. The reported evaluation uses synthetic fixtures, not a human
    participant study; any later participant data need an appropriate review.
-3. Confirm the rights to disclose the synthetic fixtures and supplied AI review
-   files before making the companion evidence package public. It contains no
-   real course submissions or imported problem dataset. Keep the live database,
-   .env files, credentials and real private judge cases out of supplementary data.
+3. Review provenance and reuse terms for the published synthetic fixtures and
+   normalized AI proposals. No real course submissions or imported problem
+   dataset are included. Keep the live database, .env files, credentials and
+   real private judge cases out of supplementary data.
 4. Request institution-approved similarity screening if required. A bounded
    exact-token overlap check found no shared windows of 8, 10 or 12 tokens with
    the supplied ten-page base paper when the manuscript bibliography was

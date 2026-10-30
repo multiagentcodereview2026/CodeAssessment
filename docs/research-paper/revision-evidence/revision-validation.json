@@ -1,0 +1,21 @@
+{
+  "kind": "paper_revision_validation",
+  "date": "2026-10-30",
+  "application_commit": "d4cdb86aa95d99f544d5e3253bf116eeeac87b24",
+  "experiment_commit": "7ddc4aa08e4ff3a7a0d4c2701c44fe41121042f0",
+  "pages": 6,
+  "all_pages_visually_inspected": true,
+  "editable_tables": 5,
+  "native_math_objects": 5,
+  "references_cited": 12,
+  "sensitivity_scores_independently_checked_with_decimal": 84,
+  "diagnostic_source_verbatim": true,
+  "human_study_conducted": false,
+  "application_source_changed": false,
+  "application_tests_rerun_for_editorial_revision": false,
+  "scope": "Editorial revision and deterministic derived summary only. Frozen application test transcripts remain in the original artifact release. No new accuracy or human-study claim.",
+  "sha256": {
+    "CodeVedha_EmergIN2027_Paper.docx": "bed2a7af54660a2580c6a568dc391cb9382cb769e33ce40bbb9e613635cfd850",
+    "CodeVedha_EmergIN2027_Paper.pdf": "a63c7ef6ef68276124ba494ee9534ba210fc85fbf941117209f609ac15c9b5c2"
+  }
+}
