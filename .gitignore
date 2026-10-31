@@ -16,3 +16,6 @@ codeassessment_v2.db
 codeassessment-problem-bank-verified-20260927.jsonl
 research-data/
 research-results/
+
+# Temporary spreadsheet owner/lock files.
+~$*
