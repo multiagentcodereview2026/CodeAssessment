@@ -12,7 +12,7 @@ STATE = {
 }
 
 
-@pytest.mark.parametrize("failure", [None, "guidance_supported", "candidate_follows_guidance", "stage_scope_preserved", "provider", "evidence"])
+@pytest.mark.parametrize("failure", [None, "guidance_supported", "candidate_follows_guidance", "stage_scope_preserved", "all_changes_explained", "provider", "evidence"])
 def test_alignment_requires_review_of_all_three_concerns(monkeypatch, failure):
     async def reviewer(prompt, payload, schema, fallback, **kwargs):
         assert payload["guidance"] == STATE["guided_revision"]
@@ -20,7 +20,7 @@ def test_alignment_requires_review_of_all_three_concerns(monkeypatch, failure):
         assert "private tests" in prompt
         assert kwargs["capability"] == "score_projection"
         result = dict(guidance_supported=True, candidate_follows_guidance=True,
-                      stage_scope_preserved=True, evidence=["Input is accumulated into a scalar."],
+                      stage_scope_preserved=True, all_changes_explained=True, evidence=["Input is accumulated into a scalar."],
                       analysis_source="groq")
         if failure == "provider":
             result["analysis_source"] = "fallback"

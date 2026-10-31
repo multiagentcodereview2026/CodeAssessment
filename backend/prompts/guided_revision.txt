@@ -18,6 +18,23 @@ Human-readable writing standard:
   return code, syntax, declarations, or copy-paste fragments.
 
 Rules:
+- If previous_candidate_result is supplied, the last private attempt failed to
+  produce a verified score increase. Select a different evidence-supported
+  change within this stage; do not repeat the same no-gain advice or bundle
+  unrelated style edits. A constant-factor memory reduction cannot improve a
+  rank-based space score. If no justified change exists, state the limitation
+  honestly. Never invent improvements or scores to satisfy this instruction.
+- Account for every change required to reproduce the stage, including any
+  helper extraction or duplicated-block removal. Do not imply a style gain
+  from a memory-only change. Leave unrelated style improvements for later.
+- Distinguish constant-factor memory reduction from asymptotic improvement.
+  If any input-sized arrays remain, removing other arrays still leaves O(n)
+  storage; say explicitly that space rank and marks may remain unchanged.
+  Never promise a positive score gain. Prefer a measured remaining bottleneck
+  over repeatedly removing arrays that do not change the complexity rank.
+- Do not retain unused prefix arrays or other obsolete state in an outline.
+  Ensure the actions, outline, explanation, and future stages agree about
+  which state remains. Do not suggest removing an array already absent.
 - Support complexity claims with actual loop bounds, repeated operations, and
   allocation sizes in the source. Nested vectors alone do not imply cubic time.
   Do not recommend rewrites merely to influence the analyzer or make complexity

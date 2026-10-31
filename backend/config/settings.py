@@ -24,10 +24,11 @@ class Settings(BaseSettings):
     # AI is an optional, narrowly-scoped assistant. Automated assessment
     # stays deterministic unless an administrator explicitly enables an
     # additional capability in the environment.
-    AI_ALLOWED_CAPABILITIES: str = "hints,revision,score_projection,supervisor,correctness,explainability,recommendation,similarity,complexity_review"
+    AI_ALLOWED_CAPABILITIES: str = "explainability,revision,score_projection,complexity_review"
     # A guided learning step must feel interactive. If the optional provider
     # takes longer than this, deterministic evidence-based guidance is used.
     GUIDED_REVISION_TIMEOUT_SECONDS: int = 12
+    SCORE_PROJECTION_ENABLED: bool = True
     # Projection generates a complete private draft and then judges it, so it
     # gets a bounded but separate budget. Guidance must still return if this
     # longer verification path is unavailable.
@@ -42,7 +43,7 @@ class Settings(BaseSettings):
     # A provider throttle is not a failed learner revision. Keep the public
     # projection pending and retry quietly in the background instead of
     # exposing an unavailable/guessed score.
-    SCORE_PROJECTION_BACKGROUND_RETRIES: int = 5
+    SCORE_PROJECTION_BACKGROUND_RETRIES: int = 1
     SCORE_PROJECTION_RETRY_DELAY_SECONDS: int = 120
 
     # Hybrid complexity review: AST may answer directly only when its
@@ -51,7 +52,7 @@ class Settings(BaseSettings):
     # guarded fallback rather than preserving a known weaker estimate.
     # Keep external source-code review opt-in. Enabling this setting authorizes
     # sending submitted source to the configured AI provider.
-    COMPLEXITY_AI_REVIEW_ENABLED: bool = False
+    COMPLEXITY_AI_REVIEW_ENABLED: bool = True
     # Structural AST evidence at 0.85 already includes concrete loop and
     # allocation facts. It should receive deterministic marks even when the
     # optional AI corroborator is unavailable.

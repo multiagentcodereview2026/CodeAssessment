@@ -113,17 +113,18 @@ def _nested_for_bound_product(source: str) -> str | None:
     container call such as ``values.size()``.
     """
     headers: list[tuple[re.Match[str], str | None]] = []
+    counters = set(re.findall(r"\bfor\s*\(\s*(?:[\w:]+\s+)?([A-Za-z_]\w*)\s*=", source))
     pattern = re.compile(
         r"\bfor\s*\(\s*[^;]*;\s*(?P<condition>[^;]*);[^)]*\)",
         re.DOTALL,
     )
     for match in pattern.finditer(source):
         condition = match.group("condition")
-        bound = re.search(
-            r"\b[A-Za-z_]\w*\s*(?:<|<=)\s*([A-Za-z_]\w*)\b(?!\s*\.)",
+        bound = re.fullmatch(
+            r"\s*[A-Za-z_]\w*\s*(?:<|<=)\s*([A-Za-z_]\w*)\s*",
             condition,
         )
-        headers.append((match, bound.group(1) if bound else None))
+        headers.append((match, bound.group(1) if bound and bound.group(1) not in counters else None))
 
     for outer_index, (outer, outer_bound) in enumerate(headers):
         if not outer_bound:
@@ -1925,6 +1926,96 @@ def _structural_fast_path(source: str) -> ComplexityAnalysis | None:
     return None
 
 
+def _compose_helper_scan_cost(analyzer, result):
+    """Compose proven affine for-loops across non-recursive helper calls.
+
+    Function declarations are boundaries, not executable work in the caller.
+    Sequential calls take the maximum degree; enclosing loops add degrees.
+    Unknown/recursive and non-affine loops retain the existing analysis.
+    """
+    source = getattr(analyzer, "source", "")
+    if re.search(r"\bmain\s*\(", source) and re.search(r"\bcin\s*>>|\bscanf\s*\(", source):
+        owns_input = re.search(r"\bvector\s*<[^;{}]+>\s*\w+\s*\(\s*[A-Za-z_]\w*\s*[,)]", source)
+        if owns_input:
+            if result.space_complexity == "O(1)":
+                result.space_complexity = "O(n)"
+            if "structural:stdin-input-sized-allocation" not in result.signals:
+                result.signals.append("structural:stdin-input-sized-allocation")
+    # Content-dependent termination/skip guards require more than lexical
+    # depth. Do not call a repeated full scan amortized merely because a flag
+    # happens to be named 'seen', 'count' or 'window'.
+    if _loop_depth(source) >= 3 and (
+        re.search(r"\bwhile\s*\(\s*(?:true|1)\s*\)", source)
+        or re.search(r"\bif\s*\(\s*\w+\s*\)\s*(?:\{\s*)?continue\s*;", source)
+    ):
+        result.status = "REVIEW_REQUIRED"
+        result.confidence = min(result.confidence, 0.70)
+        result.signals.append("structural:content-dependent-repeated-scans")
+        result.explanation = "Content-dependent repetition or skipped scans need review; loop count alone does not establish a tight complexity."
+    tree = getattr(analyzer, "tree", None)
+    if tree is None:
+        return result
+    functions = {}
+    def collect(node):
+        if node.type in {"function_definition", "method_declaration", "function_declaration"}:
+            name = node.child_by_field_name("name")
+            declarator = node.child_by_field_name("declarator")
+            while name is None and declarator is not None:
+                if declarator.type == "identifier":
+                    name = declarator
+                    break
+                declarator = declarator.child_by_field_name("declarator")
+            body = node.child_by_field_name("body")
+            if name is not None and body is not None:
+                functions[name.text.decode()] = body
+            return
+        for child in node.named_children:
+            collect(child)
+    collect(tree.root_node)
+    memo = {}
+    def function_cost(name, active):
+        if name in active:
+            return None
+        if name not in memo:
+            memo[name] = cost(functions[name], active | {name})
+        return memo[name]
+    def cost(node, active):
+        if node.type in {"function_definition", "method_declaration", "function_declaration"}:
+            return (0, False)
+        if node.type in {"while_statement", "do_statement", "for_in_statement"}:
+            return None
+        if node.type == "call_expression":
+            target = node.child_by_field_name("function")
+            name = target.text.decode() if target is not None else ""
+            if name in functions:
+                value = function_cost(name, active)
+                return None if value is None else (value[0], True)
+        values = [cost(child, active) for child in node.named_children]
+        if any(value is None for value in values):
+            return None
+        degree = max((value[0] for value in values), default=0)
+        helper = any(value[1] for value in values)
+        if node.type == "for_statement":
+            condition = node.child_by_field_name("condition")
+            update = node.child_by_field_name("update")
+            if condition is None or update is None:
+                return None
+            cond, step = condition.text.decode(), update.text.decode()
+            if not re.search(r"(?:\+\+|--|[+-]=\s*\d+\b)", step):
+                return None
+            # Literal bounds do not add an input-size factor.
+            fixed = bool(re.fullmatch(r"\s*\w+\s*(?:<|<=)\s*\d+\s*", cond))
+            degree += 0 if fixed else 1
+        return degree, helper
+    values = [function_cost(name, set()) for name in functions]
+    degrees = [value[0] for value in values if value is not None and value[1]]
+    match = re.fullmatch(r"O\(n(?:\^(\d+))?\)", result.time_complexity)
+    if degrees and match and max(degrees) > int(match.group(1) or 1):
+        result.time_complexity = f"O(n^{max(degrees)})"
+        result.signals.append("structural:helper-call-loop-composition")
+    return result
+
+
 def analyze_source(
     source: str,
     language: str,
@@ -1986,6 +2077,10 @@ def analyze_source(
     # It either proves a result from generic source facts or defers to the IR.
     fast_path = _structural_fast_path(source) if strict_structural else _semantic_fast_path(source, language_name)
     if fast_path is not None:
+        if AST_AVAILABLE and ASTComplexityAnalyzer:
+            helper_analyzer = ASTComplexityAnalyzer(source, language_name, strict_structural=strict_structural)
+            helper_analyzer.analyze()
+            fast_path = _compose_helper_scan_cost(helper_analyzer, fast_path)
         exact_nested_product = _nested_for_bound_product(source)
         if (
             exact_nested_product
@@ -2015,6 +2110,7 @@ def analyze_source(
             ir = ast_analyzer.analyze()
             if ir:
                 ast_result = infer_complexity_from_ir(ir, strict_structural=strict_structural)
+                ast_result = _compose_helper_scan_cost(ast_analyzer, ast_result)
                 if ast_result and ast_result.time_complexity:
                     exact_nested_product = _nested_for_bound_product(source)
                     # Keep the expression a student actually wrote in the
@@ -2362,6 +2458,11 @@ def _semantic_fast_path(source: str, language: str) -> ComplexityAnalysis | None
         ))
 
         if has_input_reading:
+            # This shortcut proves at most a simple pair of scans. More
+            # deeply nested bodies must reach the AST algebra, which retains
+            # every loop level and distinguishes sibling loops from children.
+            if _loop_depth(source) >= 3:
+                return None
             if has_nested_loops:
                 time_complexity = "O(n^2)" if not re.search(r"sort|binary_search", src) else "O(n^2 log n)"
                 space_complexity = "O(n)" if input_owned_storage else "O(1)"

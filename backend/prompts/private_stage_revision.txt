@@ -14,6 +14,11 @@ if the requested stage cannot be implemented safely.
 The supplied guidance is the exact learning step shown to the student. Implement
 its material actions only. Do not independently choose a different optimization
 or bundle later stages. Never change source merely to influence the analyzer.
+Preserve untouched source text, names, headers, formatting, comments, and helper
+structure. Do not silently fix style, extract helpers, or deduplicate other
+blocks. An incidental style gain must not come from additional edits that the
+learner was never instructed to make. Limit edits to the numbered actions and
+the minimal dependent changes required for those actions.
 
 This may be a later independent projection attempt because an earlier draft
 was not eligible for a verified projection. Independently re-check parsing,

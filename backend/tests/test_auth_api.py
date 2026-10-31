@@ -91,8 +91,9 @@ def test_private_projection_does_not_override_fresh_official_score(db_session, m
     assert saved.assessment_flags["projection_matches_official_score"] is False
 
 
-@pytest.mark.parametrize("outcome", ["disabled", "unavailable", "verified", "misaligned"])
+@pytest.mark.parametrize("outcome", ["disabled", "unavailable", "verified", "misaligned", "cached", "exhausted"])
 def test_background_projection_is_bounded_and_keeps_candidate_private(db_session, monkeypatch, outcome):
+    monkeypatch.setattr(main_module.settings, "SCORE_PROJECTION_ENABLED", True)
     from scoring.rubric import student_rubric_score
     from schemas import SubmissionDetails
     learner = models.Student(student_id="background-student", name="Learner")
@@ -102,21 +103,34 @@ def test_background_projection_is_bounded_and_keeps_candidate_private(db_session
         improved_code={"stage": "OPTIMIZE", "revision_policy": "GUIDED_STEPS", "projection_request_id": "request-1", "score_projection": main_module.projection_pending(50)})
     db_session.add_all([learner, problem, submission])
     db_session.commit()
+    monkeypatch.setattr(main_module, "projection_context_fingerprint", lambda *_args: "test-context")
+    if outcome == "cached":
+        submission.private_projection = {"request_id": "request-1", "draft_context": "test-context",
+            "generated_source": "print('PRIVATE-CANDIDATE')", "guide": {"guided_steps": ["Replace output."]}}
+        db_session.commit()
+    if outcome == "exhausted":
+        draft = dict(submission.improved_code)
+        draft["score_projection"] = {**draft["score_projection"], "attempts": 1}
+        submission.improved_code = draft
+        db_session.commit()
     monkeypatch.setattr(main_module, "SessionLocal", lambda: db_session)
     monkeypatch.setattr(main_module, "llm", object())
     monkeypatch.setattr(main_module.settings, "GROQ_API_KEY", "" if outcome == "disabled" else "mock-only")
-    monkeypatch.setattr(main_module.settings, "SCORE_PROJECTION_BACKGROUND_RETRIES", 0)
+    monkeypatch.setattr(main_module.settings, "SCORE_PROJECTION_BACKGROUND_RETRIES", 1 if outcome == "exhausted" else 0)
     monkeypatch.setattr(main_module, "load_problem_cases", lambda *_args, **_kwargs: [{"input": "SECRET-TEST", "expected_output": "SECRET-OUTPUT", "is_hidden": True}])
     async def generate(state, *_args, **_kwargs):
+        assert outcome != "cached", "A cached candidate must not be regenerated"
         assert "SECRET" not in str(state)
         if outcome == "disabled":
             pytest.fail("Disabled provider was called")
-        return {"private_revision": {"revision_source": "ai" if outcome in {"verified", "misaligned"} else "unavailable", "improved_code": "print('PRIVATE-CANDIDATE')"}}
+        return {"analysis_source": "groq" if outcome in {"verified", "misaligned"} else "fallback",
+                "guide": {"guided_steps": ["Replace the current output."]},
+                "candidate_code": "print('PRIVATE-CANDIDATE')"}
     async def score(**kwargs):
         assert outcome != "misaligned", "An unrelated candidate must never be scored as the guided step"
         assert kwargs["test_cases"][0]["input"] == "SECRET-TEST"
         return {"available": True, "verified": True, "projected_score": 99, "expected_improvement": 49, "score_breakdown": breakdown, "comparison": {"time": {"current": breakdown["time"]}}, "_private_assessment": {"verification": {"status": "verified_passed"}}}
-    monkeypatch.setattr(main_module, "private_stage_revision_node", generate)
+    monkeypatch.setattr(main_module, "combined_stage_revision_node", generate)
     async def aligned(*args):
         return {"status": "unavailable" if outcome == "misaligned" else "aligned", "evidence": ["Requested operation replaced."]}
     monkeypatch.setattr(main_module, "review_stage_alignment", aligned)
@@ -125,18 +139,40 @@ def test_background_projection_is_bounded_and_keeps_candidate_private(db_session
     saved = db_session.query(models.Submission).filter_by(submission_id="background-sub").one()
     assert saved.overall_score == 50
     assert saved.projected_score.get("pending") is not True
-    assert saved.projected_score["available"] is (outcome == "verified")
+    assert saved.projected_score["available"] is (outcome in {"verified", "cached"})
     public = SubmissionDetails.model_validate(saved).model_dump_json()
     assert "PRIVATE-CANDIDATE" not in public and "SECRET-TEST" not in public
-    if outcome == "verified":
+    if outcome in {"verified", "cached"}:
         assert saved.private_projection["generated_source"] == "print('PRIVATE-CANDIDATE')"
         assert saved.private_projection["alignment_review"]["status"] == "aligned"
         assert saved.projected_score["comparison"]["time"]["current"] == breakdown["time"]
     elif outcome == "unavailable":
         assert saved.projected_score["attempts"] == 1
+        assert saved.projected_score["retry_allowed"] is False
     elif outcome == "misaligned":
-        assert saved.projected_score["status"] == "alignment_unavailable"
+        assert saved.projected_score["available"] is False
         assert saved.private_projection is None
+    elif outcome == "exhausted":
+        assert saved.projected_score["attempts"] == 2
+        assert saved.projected_score["retry_allowed"] is False
+        assert saved.projected_score["status"] == "attempt_limit"
+
+
+@pytest.mark.parametrize("candidate,verified,pending", [
+    (91, True, False), (90, True, False),
+    (89, True, False), (91, False, False),
+    (None, False, True),
+])
+def test_generated_guidance_is_independent_of_projection(candidate, verified, pending, monkeypatch):
+    monkeypatch.setattr(main_module.settings, "SCORE_PROJECTION_ENABLED", True)
+    draft = {"revision_policy": "GUIDED_STEPS", "stage": "OPTIMIZE_SPACE",
+             "guided_steps": ["PRIVATE DRAFT ACTION"],
+             "score_projection": {"available": candidate is not None, "verified": verified,
+                                  "pending": pending, "current_score": 90, "projected_score": candidate}}
+    public = main_module.public_guided_revision(draft)
+    assert public["guided_steps"] == draft["guided_steps"]
+    draft["guide_pending"] = True
+    assert "guided_steps" not in main_module.public_guided_revision(draft)
 
 
 def test_assignment_deadline_boundary_and_timezone():
@@ -146,6 +182,18 @@ def test_assignment_deadline_boundary_and_timezone():
     assert main_module.assignment_is_closed(SimpleNamespace(status="CLOSED", due_date=None), now)
     # Evaluation may finish later; acceptance uses the recorded arrival time.
     main_module.require_open_assignment(SimpleNamespace(status="ACTIVE", due_date=now), now - timedelta(seconds=1))
+
+
+def test_revision_only_mode_releases_guide_and_does_not_start_projection(monkeypatch):
+    monkeypatch.setattr(main_module.settings, "SCORE_PROJECTION_ENABLED", False)
+    draft = {"revision_policy": "GUIDED_STEPS", "stage": "OPTIMIZE_SPACE",
+             "guided_steps": ["Remove redundant storage."],
+             "score_projection": {"pending": True}}
+    public = main_module.public_guided_revision(draft)
+    assert public["guided_steps"] == draft["guided_steps"]
+    assert public["score_projection"] == {}
+    monkeypatch.setattr(main_module, "SessionLocal", lambda: pytest.fail("Projection accessed database while disabled"))
+    asyncio.run(main_module.verify_projection_in_background("disabled", "OPTIMIZE_SPACE"))
 
 
 @pytest.mark.parametrize("action", ["run", "submit"])

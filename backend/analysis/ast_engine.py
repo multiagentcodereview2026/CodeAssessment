@@ -20,6 +20,8 @@ def infer_complexity_from_ir(
     time_complexity = "O(1)"
     space_complexity = "O(1)"
     loop = ir.loop
+    if re.search(r"\bwhile\s*\(\s*(?:true|1)\s*\)", source_lower):
+        loop.is_sliding_window = False
     recursion = ir.recursion
     graph = ir.graph
     linked_list_merge = not strict_structural and bool(

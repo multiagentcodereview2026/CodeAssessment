@@ -24,6 +24,14 @@ logger = logging.getLogger(__name__)
 # revision, and projection from bursting together after a submission.
 _groq_request_lock = asyncio.Lock()
 _last_groq_request_at = 0.0
+_groq_cooldown_until = 0.0
+
+
+class ProviderCooldownError(Exception):
+    status_code = 429
+
+    def __init__(self, seconds):
+        self.response = type("CooldownResponse", (), {"headers": {"retry-after": str(seconds)}})()
 
 # Initialize Groq LLM
 groq_api_key = settings.GROQ_API_KEY
@@ -71,12 +79,15 @@ def sanitize_code_comments(code: str) -> str:
 
 def ai_capability_enabled(capability: str) -> bool:
     """Whether this named feature may send its allowlisted payload to AI."""
+    # A legacy environment allowlist must not re-enable paid calls for
+    # deterministic grading or recommendation roles.
+    permitted = {"complexity_review", "explainability", "revision", "score_projection"}
     allowed = {
         item.strip().lower()
         for item in str(settings.AI_ALLOWED_CAPABILITIES or "").split(",")
         if item.strip()
     }
-    return str(capability or "").strip().lower() in allowed
+    return str(capability or "").strip().lower() in (allowed & permitted)
 
 def extract_clean_json(text: str) -> str:
     """Extract clean JSON string, stripping thinking tags and markdown."""
@@ -105,8 +116,10 @@ def _retry_after_seconds(exc: Exception) -> float:
 
 async def _request_groq(messages: list[Any]) -> Any:
     """Make one rate-coordinated model request for every AI agent role."""
-    global _last_groq_request_at
+    global _last_groq_request_at, _groq_cooldown_until
     async with _groq_request_lock:
+        if time.monotonic() < _groq_cooldown_until:
+            raise ProviderCooldownError(_groq_cooldown_until - time.monotonic())
         elapsed = time.monotonic() - _last_groq_request_at
         delay = max(0.0, float(settings.GROQ_MIN_REQUEST_INTERVAL_SECONDS) - elapsed)
         if delay:
@@ -115,8 +128,10 @@ async def _request_groq(messages: list[Any]) -> Any:
             response = await llm.ainvoke(messages)
             _last_groq_request_at = time.monotonic()
             return response
-        except Exception:
+        except Exception as error:
             _last_groq_request_at = time.monotonic()
+            if getattr(error, "status_code", None) == 429:
+                _groq_cooldown_until = time.monotonic() + max(120.0, _retry_after_seconds(error))
             raise
 
 async def invoke_agent(
@@ -145,26 +160,12 @@ async def invoke_agent(
         validated = schema.model_validate_json(content)
         return {**validated.model_dump(), "analysis_source": "groq"}
     except Exception as exc:
-        # Score projection runs in the background, so it can safely honour a
-        # single provider cooldown. Visible guidance does not wait here; it
-        # returns its deterministic fallback instead of holding the UI.
-        if (
-            getattr(exc, "status_code", None) == 429
-            and capability == "score_projection"
-            and int(settings.GROQ_RATE_LIMIT_RETRIES) > 0
-        ):
-            try:
-                await asyncio.sleep(max(15.0, _retry_after_seconds(exc)))
-                response = await _request_groq(messages)
-                content = extract_clean_json(response.content)
-                validated = schema.model_validate_json(content)
-                return {**validated.model_dump(), "analysis_source": "groq"}
-            except Exception as retry_error:
-                exc = retry_error
+        # Projection errors are returned to the job coordinator. Never retry
+        # a rejected request or a rate limit inside a provider invocation.
         # Retry only malformed-provider-request failures without the optional
         # response-format parameter. Do not retry rate limits, timeouts, or
         # invalid model output indefinitely.
-        if getattr(exc, "status_code", None) == 400 and plain_llm is not None:
+        if getattr(exc, "status_code", None) == 400 and plain_llm is not None and capability != "score_projection":
             try:
                 response = await plain_llm.ainvoke(messages)
                 content = extract_clean_json(response.content)
@@ -181,4 +182,9 @@ async def invoke_agent(
             "Groq request or response validation failed (%s); using deterministic fallback",
             type(exc).__name__,
         )
-        return {**fallback_dict, "analysis_source": "fallback"}
+        status = getattr(exc, "status_code", None)
+        if capability != "score_projection":
+            return {**fallback_dict, "analysis_source": "fallback"}
+        return {**fallback_dict, "analysis_source": "fallback",
+                "provider_error": "rate_limit" if status == 429 else "bad_request" if status == 400 else "unavailable",
+                "retry_after": max(120.0, _retry_after_seconds(exc)) if status == 429 else 0.0}

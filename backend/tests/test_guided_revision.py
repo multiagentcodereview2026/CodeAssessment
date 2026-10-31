@@ -133,3 +133,47 @@ def test_private_stage_accepts_text_change_metadata(monkeypatch):
 
     assert result["revision_source"] == "ai"
     assert result["improved_code"]
+
+
+def test_combined_generation_uses_one_call_and_separates_private_code(monkeypatch):
+    calls = []
+    async def invoke(*args, **kwargs):
+        calls.append(kwargs["capability"])
+        return {"analysis_source": "groq", "guide": {"guided_steps": ["Reduce repeated work."],
+                "improved_code": "must not escape"}, "candidate_code": "PRIVATE SOURCE"}
+    monkeypatch.setattr(revision, "invoke_agent", invoke)
+    result = asyncio.run(revision.combined_stage_revision_node({"submission": {}}, "OPTIMIZE_LOCAL"))
+    assert calls == ["score_projection"]
+    assert result["guide"]["improved_code"] == ""
+    assert "PRIVATE SOURCE" not in str(result["guide"])
+    assert result["candidate_code"] == "PRIVATE SOURCE"
+
+
+def test_alignment_rejects_unexplained_candidate_changes(monkeypatch):
+    async def review(*args, **kwargs):
+        return {"analysis_source": "groq", "guidance_supported": True,
+                "candidate_follows_guidance": True, "stage_scope_preserved": True,
+                "all_changes_explained": False,
+                "evidence": ["Candidate extracts helpers although the guide only removes arrays."]}
+
+    monkeypatch.setattr(revision, "invoke_agent", review)
+    result = asyncio.run(revision.review_stage_alignment({
+        "guided_revision": {"guided_steps": ["Remove redundant window arrays."]},
+        "submission": {"source_code": "original", "language": "cpp"},
+    }, "OPTIMIZE_SPACE", "candidate"))
+    assert result["status"] == "unavailable"
+
+
+def test_alignment_accepts_only_fully_explained_changes(monkeypatch):
+    async def review(*args, **kwargs):
+        return {"analysis_source": "groq", "guidance_supported": True,
+                "candidate_follows_guidance": True, "stage_scope_preserved": True,
+                "all_changes_explained": True,
+                "evidence": ["Action 1 authorizes replacing the repeated scan with prefix queries."]}
+
+    monkeypatch.setattr(revision, "invoke_agent", review)
+    result = asyncio.run(revision.review_stage_alignment({
+        "guided_revision": {"guided_steps": ["Replace repeated scans with prefix queries."]},
+        "submission": {"source_code": "original", "language": "cpp"},
+    }, "OPTIMIZE_LOCAL", "candidate"))
+    assert result["status"] == "aligned"

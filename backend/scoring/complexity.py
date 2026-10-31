@@ -366,6 +366,8 @@ def rank_complexity_for_scoring(
     ``O(V+E)`` ranks as ``O(n)``.  It does not use an AI estimate and never
     changes the expression returned to the frontend.
     """
+    if re.search(r"\b(?:static_cast|dynamic_cast|reinterpret_cast|const_cast)\b", str(complexity or "")):
+        return None
     return (
         _score_projection(complexity, bounded_parameters)
         or _benchmark_rank_projection(complexity, bounded_parameters)

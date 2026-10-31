@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Any
 import re
 from agents.base import load_prompt, invoke_agent, sanitize_code_comments
@@ -44,6 +44,7 @@ def _is_specific_ai_step(
     source_code: str,
     complexity: Dict[str, Any],
     category: str,
+    style_details: Dict[str, Any] | None = None,
 ) -> bool:
     """Require source, evidence, and an actual action for AI guidance."""
     text = " ".join(str(step or "").lower().split())
@@ -70,13 +71,41 @@ def _is_specific_ai_step(
         "track", "maintain", "replace", "remove", "update", "advance",
         "extend", "store", "sliding", "greedy", "pointer", "window",
         "reach", "index", "bound", "queue", "stack", "map",
+        "extract", "flatten", "split", "rename", "combine",
     ))
+    if style_details and concrete_action and source_anchor:
+        issues = " ".join(
+            _style_finding_text(item).lower()
+            for key in ("naming_issues", "readability_issues", "modularity_issues", "maintainability_issues")
+            for item in (style_details.get(key) or [])
+            if not isinstance(item, dict) or float(item.get("penalty") or 0) > 0
+        )
+        if any(token in issues and token in text for token in ("duplicat", "nest", "naming", "readability")):
+            return not bool(re.search(r"o\s*\(", text))
     return bool(
         concrete_action
         and (source_anchor or structural_anchor)
         and before_after_complexity
         and (time_anchor or category_anchor)
     )
+
+
+def _unsupported_memory_claim(text: str) -> bool:
+    """Reject a known invalid allocation claim across all AI feedback fields."""
+    normalized = " ".join(text.lower().split())
+    return bool(re.search(
+        r"(?:prefix[ -]sum|prefix array).{0,220}(?:achieve|use|require|give|to|for).{0,65}o\s*\(\s*1\s*\)\s*(?:extra |auxiliary |total )?space",
+        normalized,
+    ))
+
+
+def _style_action(finding: str) -> str:
+    lower = finding.lower()
+    if "nest" in lower:
+        return "Flatten the nested conditions in the main processing loop by handling boundary checks first; preserve the existing output and window-update order."
+    if "duplicat" in lower or "repeated statements" in lower:
+        return "Extract the repeated calculation into one helper with parameters for the changing values; keep the algorithm and input/output behavior unchanged."
+    return f"Address this recorded style finding without changing the algorithm: {finding}"
 
 
 def _style_finding_text(value: Any) -> str:
@@ -190,7 +219,7 @@ def build_evidence_feedback(state: EvaluationState) -> Dict[str, Any]:
         if time_complexity:
             estimates.append(f"time {time_complexity}")
         if space_complexity:
-            estimates.append(f"extra space {space_complexity}")
+            estimates.append(f"space {space_complexity}")
         strengths.append("The analysis estimates " + " and ".join(estimates) + ".")
     complexity_issue = str(complexity.get("optimization_suggestion") or "").strip()
     structural_weaknesses, structural_steps = _source_complexity_feedback(source_code, complexity)
@@ -209,13 +238,17 @@ def build_evidence_feedback(state: EvaluationState) -> Dict[str, Any]:
     for key in ("naming_issues", "readability_issues", "modularity_issues", "maintainability_issues"):
         values = style.get(key) or []
         if isinstance(values, list):
-            style_findings.extend(_style_finding_text(value) for value in values if value)
+            style_findings.extend(_style_finding_text(value) for value in values if value
+                                  and (not isinstance(value, dict) or float(value.get("penalty") or 0) > 0))
     # Comments are optional documentation, not a grading priority. Keep the
     # feedback focused on concrete structure/readability evidence instead.
     style_findings = [finding for finding in style_findings if "comment" not in finding.lower()]
+    if compile_failed or failed or revealed_case:
+        style_findings = []
     for finding in _unique(style_findings, 1):
         weaknesses.append(finding)
-        steps.append(finding)
+        if not (compile_failed or failed or revealed_case):
+            steps.append(_style_action(finding))
 
     if not steps:
         steps.append(f"No specific failure was found in the saved evidence for {title}; keep this version and check the stated constraints before your next submission.")
@@ -247,6 +280,7 @@ class Deduction(BaseModel):
     suggestion: str
 
 class ExplainabilityOutput(BaseModel):
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     strengths: List[str]
     weaknesses: List[str]
     deductions: List[Deduction]
@@ -299,8 +333,19 @@ async def explainability_node(state: EvaluationState) -> Dict[str, Any]:
         prompt, payload, ExplainabilityOutput, fallback,
         capability="explainability",
     )
+    # Confidence is a model-reported filter, not proof of accuracy. The
+    # source/evidence checks below remain required for accepted advice.
+    if result.get("analysis_source") == "groq" and result.get("confidence", 0.0) < 0.85:
+        result = {**fallback, "analysis_source": "fallback"}
     used_fallback = result.get("analysis_source") != "groq"
     result = dict(result)
+    advice_fields = [*result.get("strengths", []), *result.get("weaknesses", []),
+                     *result.get("improvement_steps", []), result.get("mentor_feedback", ""),
+                     result.get("key_insight", "")]
+    advice_fields.extend(str(item) for item in result.get("deductions", []))
+    if any(_unsupported_memory_claim(str(item)) for item in advice_fields):
+        result = {**fallback, "analysis_source": "fallback"}
+        used_fallback = True
     # A failed execution is the student's first task.  Preserve precise,
     # deterministic evidence ahead of optional style advice even if an AI
     # provider returns a generic response.
@@ -320,8 +365,11 @@ async def explainability_node(state: EvaluationState) -> Dict[str, Any]:
             source_code=str(state.get("submission", {}).get("source_code") or ""),
             complexity=state.get("complexity_details") or {},
             category=category,
+            style_details=state.get("style_details") or {},
         )
     ]
+    if has_correctness_issue:
+        ai_specific_steps = []
     if has_correctness_issue or fallback["weaknesses"]:
         # Deterministic test/source/style evidence is the authority. The AI
         # may improve tone, but generic or unsupported advice must not alter

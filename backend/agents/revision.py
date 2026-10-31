@@ -73,6 +73,7 @@ class StageAlignmentOutput(BaseModel):
     guidance_supported: bool = False
     candidate_follows_guidance: bool = False
     stage_scope_preserved: bool = False
+    all_changes_explained: bool = False
     evidence: List[str] = []
 
 
@@ -93,14 +94,15 @@ async def review_stage_alignment(state: EvaluationState, stage: str, candidate: 
          "original_source": sanitize_code_comments((state.get("submission") or {}).get("source_code", "")),
          "candidate_source": sanitize_code_comments(candidate)},
         StageAlignmentOutput, {"guidance_supported": False, "candidate_follows_guidance": False,
-                               "stage_scope_preserved": False, "evidence": []},
+                               "stage_scope_preserved": False, "all_changes_explained": False, "evidence": []},
         capability="score_projection",
     )
     accepted = result.get("analysis_source") == "groq" and all(
         result.get(key) is True for key in (
-            "guidance_supported", "candidate_follows_guidance", "stage_scope_preserved"))
+            "guidance_supported", "candidate_follows_guidance", "stage_scope_preserved", "all_changes_explained"))
     evidence = [item.strip() for item in result.get("evidence", []) if isinstance(item, str) and item.strip()]
-    return {"status": "aligned" if accepted and evidence else "unavailable", "evidence": evidence}
+    return {"status": "aligned" if accepted and evidence else "unavailable", "evidence": evidence,
+            "provider_error": result.get("provider_error"), "retry_after": result.get("retry_after")}
 
 
 class GuidedRevisionOutput(BaseModel):
@@ -116,6 +118,34 @@ class GuidedRevisionOutput(BaseModel):
     future_plan: List[str] = []
     change_summary: Optional[str] = ""
     improvement_explanation: Optional[str] = ""
+
+
+class CombinedStageOutput(BaseModel):
+    guide: GuidedRevisionOutput
+    candidate_code: str
+
+
+async def combined_stage_revision_node(state, stage):
+    """Generate paired coaching and private source in one provider request."""
+    result = await invoke_agent(
+        load_prompt("guided_revision") + "\n" + load_prompt("combined_stage_revision"),
+        {"stage": stage, "problem": state.get("problem"),
+         "source_code": sanitize_code_comments((state.get("submission") or {}).get("source_code", "")),
+         "language": (state.get("submission") or {}).get("language"),
+         "complexity_details": state.get("complexity_details"),
+         "style_details": state.get("style_details"),
+         "feedback": state.get("feedback"),
+         "previous_candidate_result": state.get("previous_candidate_result")},
+        CombinedStageOutput, {}, capability="score_projection",
+    )
+    guide = dict(result.get("guide") or {})
+    guide.update(stage=stage, improved_code="", changes=[], starter_fragment="",
+                 revision_source="ai" if result.get("analysis_source") == "groq" else "fallback",
+                 verification={"status": "guided_step", "verified": False,
+                               "message": "Apply this focused stage in your own code, then submit it for assessment."})
+    return {"guide": guide, "candidate_code": result.get("candidate_code", ""),
+            "analysis_source": result.get("analysis_source"),
+            "provider_error": result.get("provider_error"), "retry_after": result.get("retry_after")}
 
 
 async def private_stage_revision_node(
@@ -150,6 +180,8 @@ async def private_stage_revision_node(
         # previous attempt; this only asks it to independently re-check the
         # complete public contract.
         "projection_attempt": max(1, int(projection_attempt)),
+        "guided_steps": (state.get("requested_guidance") or {}).get("guided_steps", []),
+        "algorithm_outline": (state.get("requested_guidance") or {}).get("algorithm_outline", []),
     }
     result = await invoke_agent(
         prompt, payload, PrivateStageRevisionOutput, unavailable_revision(state),
@@ -326,6 +358,7 @@ async def guided_revision_node(state: EvaluationState, stage: str) -> Dict[str, 
         "complexity_details": state.get("complexity_details"),
         "style_details": state.get("style_details"),
         "previous_revision": state.get("previous_revision"),
+        "previous_candidate_result": state.get("previous_candidate_result"),
     }
     result = await invoke_agent(
         prompt,

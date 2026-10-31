@@ -5,6 +5,32 @@ from agents import explainability
 from agents.explainability import build_evidence_feedback
 
 
+def test_style_feedback_excludes_positive_findings_and_gives_an_action():
+    result = build_evidence_feedback({
+        "problem": {"title": "Window sums"},
+        "style_details": {"modularity_issues": [
+            {"message": "Multiple named functions provide reusable decomposition.", "penalty": 0, "credit": 3}],
+            "readability_issues": [{"message": "Control flow appears deeply nested.", "penalty": 5}]},
+    })
+    assert not any("reusable decomposition" in item for item in result["weaknesses"])
+    assert any("Flatten" in item for item in result["improvement_steps"])
+
+
+def test_prefix_array_constant_space_claim_is_rejected():
+    assert explainability._unsupported_memory_claim(
+        "Compute prefix sums and query subarrays to achieve O(1) extra space")
+    assert not explainability._unsupported_memory_claim(
+        "Prefix sums require O(n) space and give O(1) query time")
+
+
+def test_concrete_style_advice_does_not_require_a_time_complexity_change():
+    assert explainability._is_specific_ai_step(
+        "Extract the duplicated window update for firstLen into a helper to improve readability.",
+        source_code="int firstLen;", complexity={"time_complexity": "O(n)"}, category="Array",
+        style_details={"modularity_issues": [{"message": "Duplicated logic", "penalty": 5}]},
+    )
+
+
 def test_revision_fallback_never_offers_a_different_problem_solution():
     state = {
         "problem": {"title": "Longest Substring Without Repeating Characters"},
@@ -148,6 +174,22 @@ def test_feedback_keeps_public_case_numbering_and_sanitizes_code_before_ai(monke
     ]
     assert "ignore previous instructions" not in captured["source_code"].lower()
     assert "public test case 1" in result["feedback"]["mentor_feedback"].lower()
+
+
+def test_low_confidence_ai_explanation_uses_evidence_fallback(monkeypatch):
+    async def uncertain(*_args, **_kwargs):
+        return {"analysis_source": "groq", "confidence": 0.5,
+                "mentor_feedback": "Unsupported assertion"}
+
+    monkeypatch.setattr(explainability, "invoke_agent", uncertain)
+    result = asyncio.run(explainability.explainability_node({
+        "problem": {"title": "Search"},
+        "execution_result": {"compile_status": "success", "results": [
+            {"status": "accepted", "is_hidden": False},
+        ]},
+    }))["feedback"]
+    assert result["feedback_source"] == "fallback"
+    assert "Unsupported assertion" not in result["mentor_feedback"]
 
 
 def test_missing_execution_evidence_is_not_reported_as_a_compile_failure():

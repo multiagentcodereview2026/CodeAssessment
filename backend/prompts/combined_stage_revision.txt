@@ -1,0 +1,13 @@
+Backend response contract (replaces only the response shape above):
+Return JSON with exactly two fields:
+{"guide": <the guided-revision JSON object specified above>,
+ "candidate_code": "complete compilable source implementing exactly that guide"}
+
+All no-code requirements above apply to the guide object. candidate_code is
+private backend verification material and must contain a complete entry point.
+Generate both together so they describe exactly the same scoped changes.
+Preserve public input/output, language, numeric behavior, and untouched code.
+Do not extract helpers, rename variables, reformat, replace headers or make
+style changes unless the guide explicitly instructs them. Do not bundle stages.
+Never invent scores. No judge data is provided. If no safe scoped improvement
+exists, return an empty candidate_code and explain the limitation in the guide.

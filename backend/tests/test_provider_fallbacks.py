@@ -1,4 +1,5 @@
 import asyncio
+import pytest
 
 from pydantic import BaseModel
 
@@ -7,6 +8,22 @@ from agents import base
 
 class ExampleOutput(BaseModel):
     summary: str
+
+
+@pytest.mark.parametrize("role", ["correctness", "style", "similarity", "recommendation", "supervisor", "hints"])
+def test_reduced_ai_policy_blocks_legacy_enabled_roles(monkeypatch, role):
+    class ForbiddenProvider:
+        async def ainvoke(self, _messages):
+            pytest.fail("Deterministic roles must never contact AI")
+
+    monkeypatch.setattr(base.settings, "AI_ALLOWED_CAPABILITIES", role)
+    monkeypatch.setattr(base.settings, "GROQ_API_KEY", "test-only")
+    monkeypatch.setattr(base, "llm", ForbiddenProvider())
+    result = asyncio.run(base.invoke_agent(
+        "prompt", {}, ExampleOutput, {"summary": "Deterministic evidence"},
+        capability=role,
+    ))
+    assert result == {"summary": "Deterministic evidence", "analysis_source": "fallback"}
 
 
 class _Response:
@@ -29,10 +46,43 @@ class _BadRequest(Exception):
     status_code = 400
 
 
+def test_projection_bad_request_is_not_retried(monkeypatch):
+    calls = []
+    async def rejected(messages):
+        calls.append(messages)
+        raise _BadRequest()
+    monkeypatch.setattr(base, "_request_groq", rejected)
+    monkeypatch.setattr(base.settings, "GROQ_API_KEY", "test-only")
+    result = asyncio.run(base.invoke_agent("JSON", {}, ExampleOutput, {}, capability="score_projection"))
+    assert len(calls) == 1
+    assert result["provider_error"] == "bad_request"
+
+
+def test_rate_limit_cooldown_prevents_second_provider_call(monkeypatch):
+    class RateLimit(Exception):
+        status_code = 429
+    calls = []
+    class Provider:
+        async def ainvoke(self, messages):
+            calls.append(messages)
+            raise RateLimit()
+    monkeypatch.setattr(base, "llm", Provider())
+    monkeypatch.setattr(base, "_groq_cooldown_until", 0)
+    monkeypatch.setattr(base.settings, "GROQ_MIN_REQUEST_INTERVAL_SECONDS", 0)
+    monkeypatch.setattr(base.settings, "GROQ_API_KEY", "test-only")
+    async def check():
+        first = await base.invoke_agent("JSON", {}, ExampleOutput, {}, capability="score_projection")
+        second = await base.invoke_agent("JSON", {}, ExampleOutput, {}, capability="score_projection")
+        assert first["provider_error"] == second["provider_error"] == "rate_limit"
+        assert second["retry_after"] > 0
+    asyncio.run(check())
+    assert len(calls) == 1
+
+
 def _invoke(fallback):
     return asyncio.run(base.invoke_agent(
         "prompt", {"input": "test"}, ExampleOutput, fallback,
-        capability="hints",
+        capability="explainability",
     ))
 
 
