@@ -52,6 +52,8 @@ def test_projection_bad_request_is_not_retried(monkeypatch):
         calls.append(messages)
         raise _BadRequest()
     monkeypatch.setattr(base, "_request_groq", rejected)
+    monkeypatch.setattr(base, "llm", object())
+    monkeypatch.setattr(base.settings, "AI_ALLOWED_CAPABILITIES", "score_projection")
     monkeypatch.setattr(base.settings, "GROQ_API_KEY", "test-only")
     result = asyncio.run(base.invoke_agent("JSON", {}, ExampleOutput, {}, capability="score_projection"))
     assert len(calls) == 1

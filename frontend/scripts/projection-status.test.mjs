@@ -15,13 +15,28 @@ const render = (projection, overrides = {}) => renderToStaticMarkup(React.create
 
 test('pending shows activity without a fabricated number or countdown', () => {
   const html = render({ pending: true });
-  assert.match(html, /Calculating projected score/);
+  assert.match(html, /Preparing revision verification/);
   assert.match(html, /animate-spin/);
   assert.match(html, /aria-busy="true"/);
   assert.doesNotMatch(html, /\/100|Retry score projection/);
 });
-test('slow processing keeps guidance usable and promises no time estimate', () => {
-  assert.match(render({ pending: true }, { slow: true }), /Still checking your projected score/);
+test('slow processing describes the wait without promising a completion time', () => {
+  const html = render({ pending: true }, { slow: true });
+  assert.match(html, /This is taking longer/);
+  assert.doesNotMatch(html, /\d+ (?:seconds|minutes)|Retry score projection/);
+});
+
+test('quota wait is distinguished from running candidate tests', () => {
+  const html = render({ pending: true, phase: 'waiting_quota', message: 'Waiting for AI quota.' });
+  assert.match(html, /Waiting for AI quota/);
+  assert.doesNotMatch(html, /Running candidate tests|\/100|Retry score projection/);
+});
+
+test('attempt limit removes retry controls', () => {
+  const html = render({ available: false, verified: false, retry_allowed: false,
+    status: 'attempt_limit', message: 'Verification stopped after two unsuccessful attempts.' });
+  assert.match(html, /Verification stopped after two unsuccessful attempts/);
+  assert.doesNotMatch(html, /<button|animate-spin/);
 });
 test('paused polling offers checking status instead of creating another candidate', () => {
   const html = render({ pending: true }, { paused: true });
