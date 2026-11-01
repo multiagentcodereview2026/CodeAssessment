@@ -38,12 +38,30 @@ provider cooldown or a temporary judge outage. HTTP 400 ends the attempt;
 HTTP 429 sets an account-wide cooldown and delays the bounded retry.
 At most two verification attempts run per submission. After the second failure,
 verification stops and no retry action is offered for that submission. Pending clicks
-reuse the existing job. Generated guidance is published immediately and remains
-available if projection fails or stops. The private source is never published;
-its optional measured projection requires independent alignment and execution.
+reuse the existing job ID. Job progress and attempt history are persisted with
+the submission; an authenticated job-status endpoint exposes only safe status
+and released guidance. A worker lease prevents duplicate active processing.
+The original source, tests, targets, rubric, baseline marks and analyzer version
+are frozen for the job; a context change invalidates it. No DB connection is
+held while waiting on provider or execution requests.
 
-Remove any capability from `AI_ALLOWED_CAPABILITIES` to switch that feature to
-its deterministic fallback without affecting the rest of the application.
+One to three structured steps identify an existing AST symbol, a concrete
+change, expected complexity and a risk to preserve. Candidate parsing,
+entry-point checks and import/call restrictions run before alignment and Docker.
+These checks supplement the sandbox and do not prove code safety or equivalence.
+Candidate text is not silently formatted or modified to improve style marks.
+
+The guide stays private until the candidate passes every required case, its
+claimed complexity is supported, no scored component regresses and the total
+gain is at least SCORE_PROJECTION_MIN_GAIN (default 1 point). A passed job
+releases guide and measured score together. Failed alignment evidence and gate
+reasons remain private for diagnosis. A no-gain first attempt can generate a
+different focused stage on attempt two; there is never a third attempt. No
+hidden case inputs, outputs or private runtime diagnostics enter retries.
+
+Remove a capability from `AI_ALLOWED_CAPABILITIES` to prevent its AI calls.
+Verified guidance then remains unavailable if a required check cannot run;
+official grading and saved scores remain independent of this optional service.
 
 ## Non-negotiable backend controls
 

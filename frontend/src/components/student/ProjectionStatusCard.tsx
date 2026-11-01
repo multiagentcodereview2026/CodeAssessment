@@ -19,6 +19,15 @@ type Props = {
 };
 
 export const ProjectionStatusCard: React.FC<Props> = ({ projection, slow, paused, connectionLost, retrying, error, onCheckAgain, onRetry }) => {
+  const [now, setNow] = React.useState(() => Date.now());
+  const retryAt = Date.parse(text(projection.next_retry_at));
+  const quotaWait = projection.phase === 'waiting_quota' && projection.pending === true && Number.isFinite(retryAt);
+  React.useEffect(() => {
+    if (!quotaWait) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [quotaWait, retryAt]);
+  const remaining = quotaWait ? Math.max(0, Math.ceil((retryAt - now) / 1000)) : 0;
   const pending = projection.pending === true;
   const measured = projection.available === true && projection.verified === true && number(projection.projected_score) != null;
   const noGain = projection.verified === true && (projection.status === 'no_gain' || number(projection.expected_improvement) === 0 || projection.available === false);
@@ -37,7 +46,8 @@ export const ProjectionStatusCard: React.FC<Props> = ({ projection, slow, paused
       {pending ? paused ? 'Automatic checking paused' : phaseTitle : noGain ? 'Verified — no score increase' : measured ? 'Measured candidate score' : 'Score projection unavailable'}
     </div>
     {pending ? <>
-      <p className="mt-2 text-sm">{paused ? 'The result has not been confirmed on this page. Check again for the latest saved status.' : connectionLost ? 'The connection was interrupted. We’re checking again; your saved assessment is safe.' : message || 'Your guide appears when generated. A measured projection is shown separately after verification.'}</p>
+      <p className="mt-2 text-sm">{paused ? 'The result has not been confirmed on this page. Check again for the latest saved status.' : connectionLost ? 'The connection was interrupted. We’re checking again; your saved assessment is safe.' : message || 'Your guide and measured candidate score appear together after the improvement checks pass.'}</p>
+      {quotaWait && <p className="mt-2 text-xs">{remaining > 0 ? `Next check in ${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}.` : 'Waiting for the queued check to start.'} Your existing draft is kept.</p>}
       {slow && !paused && <p className="mt-2 text-xs">This is taking longer. The result will appear here automatically when verification finishes.</p>}
       {paused && <button type="button" onClick={onCheckAgain} className="mt-3 rounded-md bg-indigo-700 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-800">Check again</button>}
     </> : <>
@@ -66,7 +76,7 @@ export const ProjectionStatusCard: React.FC<Props> = ({ projection, slow, paused
           <button type="button" onClick={onRetry} disabled={retrying} className="mt-2 rounded-md border border-current px-3 py-2 text-xs font-semibold disabled:opacity-60">{retrying ? 'Requesting verification…' : 'Recheck with current guidance'}</button>
         </>}
       </details>}
-      {!measured && !noGain && projection.retry_allowed !== false && <button type="button" onClick={onRetry} disabled={retrying} className="mt-3 rounded-md bg-amber-700 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-800 disabled:cursor-wait disabled:opacity-60">{retrying ? 'Requesting verification…' : 'Retry score projection'}</button>}
+      {!measured && !noGain && projection.retry_allowed !== false && <button type="button" onClick={onRetry} disabled={retrying} className="mt-3 rounded-md bg-amber-700 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-800 disabled:cursor-wait disabled:opacity-60">{retrying ? 'Requesting verification…' : projection.policy_update_available === true ? 'Recheck with corrected rule' : projection.resume_saved_draft === true ? 'Verify saved draft again' : 'Retry score projection'}</button>}
     </>}
     {error && <p role="alert" className="mt-2 text-xs text-rose-700">{error}</p>}
   </section>;

@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
 
 class Settings(BaseSettings):
@@ -29,6 +30,8 @@ class Settings(BaseSettings):
     # takes longer than this, deterministic evidence-based guidance is used.
     GUIDED_REVISION_TIMEOUT_SECONDS: int = 12
     SCORE_PROJECTION_ENABLED: bool = True
+    SCORE_PROJECTION_MIN_GAIN: float = Field(default=1.0, ge=0.1, le=100, allow_inf_nan=False)
+    SCORE_PROJECTION_STYLE_TOLERANCE: float = Field(default=1.0, ge=0, le=1, allow_inf_nan=False)
     # Projection generates a complete private draft and then judges it, so it
     # gets a bounded but separate budget. Guidance must still return if this
     # longer verification path is unavailable.
@@ -45,6 +48,10 @@ class Settings(BaseSettings):
     # exposing an unavailable/guessed score.
     SCORE_PROJECTION_BACKGROUND_RETRIES: int = 1
     SCORE_PROJECTION_RETRY_DELAY_SECONDS: int = 120
+    REVISION_DAILY_JOB_LIMIT: int = Field(default=3, ge=1, le=10)
+    REVISION_JOB_CONCURRENCY: int = Field(default=1, ge=1, le=2)
+    REVISION_JOB_TTL_SECONDS: int = Field(default=3600, ge=300, le=86400)
+    SCORE_PROJECTION_JUDGE_TIMEOUT_SECONDS: int = Field(default=180, ge=30, le=300)
 
     # Hybrid complexity review: AST may answer directly only when its
     # structural evidence is strong. Lower-confidence AST output is checked

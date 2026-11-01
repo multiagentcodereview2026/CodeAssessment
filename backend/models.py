@@ -3,6 +3,31 @@ from sqlalchemy import Column, Integer, String, Text, DateTime, Float, JSON, Boo
 from sqlalchemy.orm import relationship
 from database import Base
 
+class RevisionJob(Base):
+    __tablename__ = "revision_jobs"
+
+    id = Column(String(40), primary_key=True)
+    submission_id = Column(String(100), nullable=False, index=True)
+    student_id = Column(String(100), nullable=False, index=True)
+    problem_id = Column(String(100), nullable=False)
+    status = Column(String(30), nullable=False, default="queued", index=True)
+    phase = Column(String(30))
+    candidate_attempts = Column(Integer, nullable=False, default=0)
+    generation_requests = Column(Integer, nullable=False, default=0)
+    infrastructure_retries = Column(Integer, nullable=False, default=0)
+    failure_type = Column(String(60))
+    verified = Column(Boolean, nullable=False, default=False)
+    current_score = Column(Float)
+    projected_score = Column(Float)
+    cache_key = Column(JSON)
+    revision_snapshot = Column(JSON)
+    private_snapshot = Column(JSON)
+    retry_available_at = Column(DateTime, index=True)
+    lease_until = Column(DateTime)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 class User(Base):
     __tablename__ = "users"
 

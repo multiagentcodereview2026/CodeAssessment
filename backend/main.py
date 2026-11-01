@@ -12,6 +12,7 @@ from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from uuid import uuid4
+from types import SimpleNamespace
 from typing import Any, List, Optional
 from fastapi import FastAPI, Depends, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +28,7 @@ from similarity_clustering import build_approach_groups, build_similarity_cluste
 from recommendation_engine import build_recommendations, build_roadmap, normalize_topics
 
 import models
+from revision_jobs import day_start, failure_policy, safe_unverified_guide, utcnow, remember_supported_guide, retained_revision_guide
 from auth import (
     create_access_token,
     get_current_user,
@@ -83,10 +85,12 @@ from schemas import (
     utc_isoformat,
 )
 from docker_runner.executor import execute_code_sandboxed
-from agents.complexity import analyze_student_complexity, complexity_node, unavailable_analysis
+from agents.complexity import analyze_student_complexity, complexity_node, unavailable_analysis, score_complexity_analysis
 from agents.correctness import correctness_node
 from agents.style import style_node
 from agents.projection import verified_revision_projection
+from agents.revision_contract import CONTRACT_VERSION, RELEASE_POLICY_VERSION, analyzer_fingerprint, validate_candidate, validate_guidance_text, validate_revision_guidance, release_decision
+from agents.revision_patches import PATCH_FORMAT
 from analysis.style_ast_analyzer import analyze_style
 from agents.base import ai_capability_enabled, llm, extract_clean_json
 from agents.revision import (
@@ -117,6 +121,8 @@ logger = logging.getLogger("evaluator_backend")
 # field and is never exposed by the learner API.
 _projection_retry_counts: dict[str, int] = {}
 _projection_retry_tasks: dict[str, asyncio.Task[Any]] = {}
+_projection_slots = asyncio.Semaphore(settings.REVISION_JOB_CONCURRENCY)
+_projection_dispatcher_task = None
 
 
 def create_notification(
@@ -532,22 +538,57 @@ def redact_hidden_execution(execution_result, *, student_view=False):
 
 
 def public_guided_revision(revision):
-    """Publish generated coaching independently from candidate verification."""
+    """A failed projection must not hide a valid standalone revision guide."""
     if not isinstance(revision, dict) or revision.get("revision_policy") != "GUIDED_STEPS":
         return None
-    if not settings.SCORE_PROJECTION_ENABLED:
-        return {**revision, "score_projection": {}}
-    projection = revision.get("score_projection") or {}
-    if not revision.get("guide_pending"):
-        return {**revision, "improved_code": "", "changes": [], "starter_fragment": ""}
+    projection = dict(revision.get("score_projection") or {})
+    if (projection.get("failure_type") == "component_regression" and not projection.get("pending")
+            and int((projection.get("release_policy") or {}).get("version") or 0) < RELEASE_POLICY_VERSION
+            and settings.SCORE_PROJECTION_STYLE_TOLERANCE > 0):
+        projection.update(retry_allowed=True, policy_update_available=True,
+            message="This check used the previous zero-tolerance rule. A corrected release rule is available; start a new verification to measure the candidate again.")
+    if not settings.SCORE_PROJECTION_ENABLED and projection.get("job_status") != "passed":
+        projection = {"available": False, "verified": False, "pending": False, "job_status": "unavailable",
+                      "message": "Measured guidance is currently disabled. Your saved assessment is unchanged."}
+    unverified = (settings.SCORE_PROJECTION_ENABLED and projection.get("pending") is not True and projection.get("job_status") not in {"passed", "cancelled"}
+                  and safe_unverified_guide(revision))
+    if (projection.get("job_status") == "passed" or unverified) and revision.get("guidance_version") == CONTRACT_VERSION:
+        keys = {"revision_policy", "guidance_version", "projection_request_id", "verification", "score_projection",
+                "stage", "title", "next_goal", "steps", "guided_steps", "algorithm_outline", "future_plan",
+                "change_summary", "improvement_explanation", "evidence_links", "comparison"}
+        public = {key: value for key, value in revision.items() if key in keys}
+        if unverified:
+            public["verification"] = {"status": "guided_step", "verified": False,
+                "message": "Not verified: revision guidance is available, but its score projection could not be verified. Apply the steps in your own code and submit it for assessment."}
+            public["score_projection"] = {**projection, "available": False, "verified": False,
+                "projected_score": None, "expected_improvement": None}
+        return public
     return {
         "revision_policy": "GUIDED_STEPS",
         "verification": {"status": "projection_check", "verified": False},
-        "score_projection": projection if projection.get("pending") or not projection.get("verified") else {
-            "available": False, "verified": False, "pending": False,
-            "message": "No verified improvement is ready. Request a new check to try another focused revision.",
-        },
+        "projection_request_id": revision.get("projection_request_id"),
+        "score_projection": projection if projection.get("job_status") in {
+            "queued", "running", "passed", "failed", "unavailable", "cancelled", "no_improvement"
+        } else {"available": False, "verified": False, "pending": False,
+                "message": "This guide predates the measured release contract. Request updated verification."},
     }
+
+
+def revision_job_response(revision):
+    projection = (revision or {}).get("score_projection") or {}
+    return {"job_id": (revision or {}).get("projection_request_id"),
+            "status": projection.get("job_status", "unavailable"),
+            "improved_code": public_guided_revision(revision)}
+
+
+def revision_prompt_feedback(submission):
+    """Saved prose can quote a revealed private failure; never forward it to AI."""
+    execution = submission.execution_result or {}
+    total, passed = int(execution.get("total_cases") or 0), int(execution.get("passed_cases") or 0)
+    if execution.get("revealed_feedback_case") or (execution.get("last_failed_case") or {}).get("is_hidden") or not total or passed != total:
+        return {"mentor_feedback": "Use the submitted source and saved score evidence to address correctness before other refinements. Private case details are withheld.",
+                "correctness_passed": passed, "correctness_total": total}
+    return submission.feedback
 
 
 def student_submission_details(submission):
@@ -628,11 +669,12 @@ async def score_revision_stage(
     baseline = analyze_static_complexity(original_submission.code, language)
     saved_complexity = original_submission.complexity_details or {}
     if (
-        "structural:helper-call-loop-composition" in (baseline.signals or [])
-        and baseline.time_complexity != saved_complexity.get("time_complexity")
+        baseline.status == "ANALYZED" and baseline.confidence >= settings.COMPLEXITY_AST_DIRECT_CONFIDENCE
+        and any(getattr(baseline, dim + "_complexity") != saved_complexity.get(dim + "_complexity")
+                for dim in ("time", "space"))
     ):
         return {**unavailable, "status": "baseline_outdated", "message": (
-            "The saved time analysis predates a helper-function analysis correction. "
+            "The saved analysis differs from current source evidence. "
             "Submit your current code again to establish an accurate baseline before comparing this learning step."
         )}
     saved_rubric = saved_breakdown.get("rubric") if isinstance(saved_breakdown.get("rubric"), dict) else {}
@@ -642,6 +684,14 @@ async def score_revision_stage(
         saved_weights = validate_weights(saved_rubric["weights"])
     except (TypeError, ValueError):
         return {**unavailable, "message": "The saved scoring weights could not be verified, so no candidate score is shown."}
+    if baseline.status == "ANALYZED" and baseline.confidence >= settings.COMPLEXITY_AST_DIRECT_CONFIDENCE:
+        current_baseline = score_complexity_analysis(asdict(baseline), {
+            "time": problem.target_time_complexity, "space": problem.target_space_complexity,
+            "constraints": [*(problem.constraints or []), problem.description or ""],
+        })["complexity_details"]
+        if any(abs(float((saved_breakdown.get(dim) or {}).get("score", -1)) - float(complexity_dimension_percent(current_baseline, dim) or 0)) > 0.01
+               for dim in ("time", "space")):
+            return {**unavailable, "status": "baseline_outdated", "message": "The saved baseline uses different complexity scoring evidence. Submit a new assessment before requesting a projection."}
     try:
         execution = await execute_code_sandboxed(
             source_code=source_code,
@@ -654,6 +704,9 @@ async def score_revision_stage(
 
     if execution.get("execution_status") == "system_error":
         return {**unavailable, "status": "judge_unavailable", "message": "The judge was unavailable, so this revision stage has no score projection."}
+    if execution.get("compile_status") == "success" and int(execution.get("total_cases") or 0) != len(test_cases):
+        return {**unavailable, "status": "judge_unavailable",
+                "message": "Not every required candidate case was evaluated. No guide or projected gain is released."}
 
     verification = summarize_revision_verification(execution)
     if verification.get("status") != "verified_passed":
@@ -738,6 +791,10 @@ async def score_revision_stage(
               "candidate": (projection.get("score_breakdown") or {}).get(key)}
         for key in ("correctness", "time", "space", "style")
     }
+    projection["measured_complexity"] = {
+        "time": (complexity.get("complexity_details") or {}).get("time_complexity"),
+        "space": (complexity.get("complexity_details") or {}).get("space_complexity"),
+    }
     # This data is written only to Submission.private_projection. It supports
     # audit/debugging without ever exposing generated source or judge details.
     projection["_private_assessment"] = {
@@ -762,6 +819,7 @@ def projection_pending(current_score: Any) -> dict[str, Any]:
         "expected_improvement": None,
         "assumptions": [],
         "message": "A private revision is being compiled and evaluated. This page will update when verification finishes.",
+        "job_status": "queued",
     }
 
 
@@ -774,11 +832,27 @@ def projection_context_fingerprint(problem, test_cases, rubric) -> str:
     return hashlib.sha256(json.dumps(context, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()
 
 
+def revision_job_context(submission, problem, test_cases):
+    return {
+        "source": hashlib.sha256(submission.code.encode()).hexdigest(),
+        "language": submission.language, "baseline_score": submission.overall_score,
+        "baseline_components": submission.score_breakdown,
+        "analyzer": analyzer_fingerprint(), "contract": CONTRACT_VERSION,
+        "space_definition": "total", "minimum_gain": settings.SCORE_PROJECTION_MIN_GAIN,
+        "assessment": projection_context_fingerprint(problem, test_cases, (submission.score_breakdown or {}).get("rubric")),
+    }
+
+
 def projection_unavailable(current_score, message):
-    return {**projection_pending(current_score), "pending": False, "message": message}
+    return {**projection_pending(current_score), "pending": False, "message": message, "job_status": "unavailable"}
 
 
 async def verify_projection_in_background(submission_id: str, stage: str) -> None:
+    async with _projection_slots:
+        await _verify_projection_job(submission_id, stage)
+
+
+async def _verify_projection_job(submission_id: str, stage: str) -> None:
     """Generate and judge projection drafts without holding the learner's HTTP request.
 
     The task has its own database session because FastAPI closes the request
@@ -789,11 +863,14 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
     if not settings.SCORE_PROJECTION_ENABLED:
         return
     retry_projection = False
+    request_id = None
     db = SessionLocal()
     try:
+        if db.bind.dialect.name == "postgresql":
+            db.execute(text("SELECT pg_advisory_xact_lock(7311042)"))
         submission = db.query(models.Submission).filter(
             models.Submission.submission_id == submission_id,
-        ).first()
+        ).with_for_update().first()
         if not submission:
             return
         problem = db.query(models.Problem).filter(
@@ -804,7 +881,51 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
 
         revision = dict(submission.improved_code or {})
         request_id = revision.get("projection_request_id")
+        if revision.get("guidance_version") != CONTRACT_VERSION:
+            stopped = {**projection_unavailable(submission.overall_score, "Request updated guidance for the current verification policy."),
+                       "retry_allowed": True, "status": "expired"}
+            revision["score_projection"] = stopped
+            submission.improved_code, submission.projected_score = revision, stopped
+            db.commit()
+            return
+        active_jobs = db.query(models.RevisionJob).filter(
+            models.RevisionJob.id != request_id,
+            models.RevisionJob.status.in_(["queued", "running"]), models.RevisionJob.lease_until > utcnow()).count()
+        if active_jobs >= settings.REVISION_JOB_CONCURRENCY:
+            return
         if revision.get("stage") != stage:
+            return
+        if (revision.get("score_projection") or {}).get("job_status") == "cancelled":
+            return
+        saved_projection = revision.get("score_projection") or {}
+        next_retry = saved_projection.get("next_retry_at")
+        if next_retry and datetime.fromisoformat(next_retry) > datetime.now(timezone.utc):
+            return
+        lease_until = revision.get("worker_lease_until")
+        if lease_until and datetime.fromisoformat(lease_until) > datetime.now(timezone.utc):
+            return
+        test_cases = load_problem_cases(db, problem, public_only=False)
+        context = revision_job_context(submission, problem, test_cases)
+        cached_metadata = dict(submission.private_projection or {})
+        frozen_context = cached_metadata.get("job_context") or context
+        history = list(cached_metadata.get("attempt_history") or [])
+        if frozen_context != context:
+            stopped = projection_unavailable(submission.overall_score, "Assessment context changed. Submit a new assessment before requesting guidance.")
+            stopped.update(retry_allowed=False, status="context_changed")
+            revision["score_projection"] = stopped
+            submission.improved_code = revision
+            submission.projected_score = stopped
+            db.commit()
+            return
+        recorded_analyzer = (submission.assessment_flags or {}).get("analyzer_version")
+        recorded_judge = (submission.assessment_flags or {}).get("judge_context")
+        if not recorded_analyzer or not recorded_judge or recorded_analyzer != context["analyzer"] or recorded_judge != context["assessment"]:
+            stopped = projection_unavailable(submission.overall_score, "The saved baseline lacks compatible analyzer and judge-version evidence. Submit a new assessment before requesting measured guidance.")
+            stopped.update(retry_allowed=False, status="baseline_outdated")
+            revision["score_projection"] = stopped
+            submission.improved_code = revision
+            submission.projected_score = stopped
+            db.commit()
             return
         if not ai_capability_enabled("score_projection") or llm is None or not settings.GROQ_API_KEY:
             revision["score_projection"] = projection_unavailable(submission.overall_score, "Expected score could not be checked because the optional AI service is unavailable. Your saved grade and guidance are unchanged.")
@@ -813,8 +934,19 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
             db.commit()
             return
         prior_attempts = int((revision.get("score_projection") or {}).get("attempts", 0))
-        attempt_number = prior_attempts + 1
-        total_limit = min(2, 1 + max(0, settings.SCORE_PROJECTION_BACKGROUND_RETRIES))
+        attempt_number = prior_attempts
+        total_limit = 2
+        generation_requests = int(saved_projection.get("generation_requests") or 0)
+        infrastructure_retries = int(saved_projection.get("infrastructure_retries") or 0)
+        failure_kind = "unavailable"
+        job_created = (db.get(models.RevisionJob, request_id).created_at if db.get(models.RevisionJob, request_id) else utcnow())
+        if (utcnow() - job_created).total_seconds() > settings.REVISION_JOB_TTL_SECONDS:
+            terminal = {**projection_unavailable(submission.overall_score, "This check expired. Request a new guide when ready."),
+                        "retry_allowed": True, "status": "expired"}
+            revision["score_projection"] = terminal
+            submission.improved_code, submission.projected_score = revision, terminal
+            db.commit()
+            return
         if prior_attempts >= total_limit:
             terminal = projection_unavailable(submission.overall_score, "Expected score verification reached its retry limit. You can explicitly retry later.")
             revision["score_projection"] = {**terminal, "attempts": prior_attempts,
@@ -824,9 +956,9 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
             submission.projected_score = revision["score_projection"]
             db.commit()
             return
-        # Persist the attempt before awaiting a provider so a process restart
-        # cannot reset the budget and repeat expensive calls indefinitely.
-        revision["score_projection"] = {**projection_pending(submission.overall_score), "attempts": attempt_number}
+        revision["score_projection"] = {**projection_pending(submission.overall_score), "attempts": attempt_number,
+            "generation_requests": generation_requests, "infrastructure_retries": infrastructure_retries}
+        revision["worker_lease_until"] = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
         submission.improved_code = revision
         submission.projected_score = revision["score_projection"]
         db.commit()
@@ -838,7 +970,7 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
                 "constraints": problem.constraints or [],
             },
             "submission": {"source_code": submission.code, "language": submission.language},
-            "feedback": submission.feedback,
+            "feedback": revision_prompt_feedback(submission),
             "complexity_details": submission.complexity_details,
             "style_details": analyze_style(submission.code, submission.language),
             "guided_revision": {key: revision.get(key) for key in (
@@ -849,97 +981,211 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
         state["requested_guidance"] = submission.improved_code if isinstance(submission.improved_code, dict) else {}
         state["previous_candidate_result"] = revision.get("last_candidate_result")
         checked_guide = dict(revision)
+        last_valid_guide = remember_supported_guide(checked_guide, cached_metadata.get("last_valid_guide"))
+        last_evaluated_candidate = cached_metadata.get("last_evaluated_candidate")
+        state["last_valid_guide"] = last_valid_guide
+        # Never carry validation marks across newly generated guides.
+        original_snapshot = SimpleNamespace(code=submission.code, overall_score=submission.overall_score,
+            complexity_details=copy.deepcopy(submission.complexity_details), score_breakdown=copy.deepcopy(submission.score_breakdown))
+        current_score, source_code, source_language = submission.overall_score, submission.code, submission.language
+        problem = SimpleNamespace(**{name: copy.deepcopy(getattr(problem, name)) for name in (
+            "id", "title", "description", "constraints", "category", "difficulty", "target_time_complexity", "target_space_complexity")})
+        failure_kind = "unavailable"
         cached = submission.private_projection or {}
         private_projection = cached if cached.get("request_id") == request_id else None
+        active_phase = "generating"
         def progress(phase, message):
-            db.refresh(submission)
+            nonlocal submission, active_phase
+            active_phase = phase
+            submission = db.query(models.Submission).filter_by(submission_id=submission_id).one()
             current = dict(submission.improved_code or {})
             if current.get("projection_request_id") != request_id:
+                raise asyncio.CancelledError()
+            if (current.get("score_projection") or {}).get("job_status") == "cancelled":
                 raise asyncio.CancelledError()
             if not checked_guide.get("guide_pending"):
                 current.update({key: value for key, value in checked_guide.items()
                                 if key not in {"score_projection", "projection_request_id"}})
-            status = {**projection_pending(submission.overall_score), "phase": phase,
-                      "message": message, "attempts": attempt_number}
+            status = {**projection_pending(current_score), "phase": phase,
+                      "message": message, "attempts": attempt_number, "job_status": "running",
+                      "generation_requests": generation_requests, "infrastructure_retries": infrastructure_retries}
             current["score_projection"] = status
             submission.improved_code = current
             submission.projected_score = status
-            submission.private_projection = private_projection
+            submission.private_projection = {**(private_projection or {}), "job_context": frozen_context, "attempt_history": history,
+                                             "last_valid_guide": last_valid_guide, "last_evaluated_candidate": last_evaluated_candidate}
             db.commit()
-        test_cases = load_problem_cases(db, problem, public_only=False)
+            db.close()
         draft_context = projection_context_fingerprint(problem, test_cases, (submission.score_breakdown or {}).get("rubric"))
         if private_projection and private_projection.get("draft_context") != draft_context:
             private_projection = None
+        if private_projection and private_projection.get("candidate_format") != PATCH_FORMAT:
+            # Never reuse a full-file regeneration under the exact-edit policy.
+            private_projection = None
+        db.commit()
+        db.close()
         attempt_limit = 1
         for attempt in range(1, attempt_limit + 1):
             try:
                 if not private_projection or not private_projection.get("generated_source"):
+                    generation_requests += 1
                     progress("generating", "Generating the focused guide and its matching private candidate together.")
                     combined = await asyncio.wait_for(combined_stage_revision_node(state, stage),
                                                       timeout=settings.SCORE_PROJECTION_TIMEOUT_SECONDS)
+                    history.append({"phase": "generating", "metrics": combined.get("request_metrics")})
                     if combined.get("analysis_source") != "groq":
                         error = combined.get("provider_error")
-                        retry_projection = error == "rate_limit"
-                        public_projection = (projection_pending(submission.overall_score) if retry_projection else
-                            projection_unavailable(submission.overall_score, "AI generation failed. No repeated requests were made; retry after the provider issue is resolved."))
-                        if retry_projection:
+                        failure_kind = error or "provider_unavailable"
+                        history.append({"attempt": attempt_number, "phase": "generating",
+                                        "failure": error or "provider_unavailable", "retry_after": combined.get("retry_after")})
+                        policy = failure_policy(failure_kind, attempt_number, infrastructure_retries, combined.get("quota_scope"))
+                        retry_projection = policy in {"cooldown", "retry_infrastructure", "retry_candidate"}
+                        if error == "invalid_response":
+                            attempt_number += 1
+                        elif policy == "retry_infrastructure":
+                            infrastructure_retries += 1
+                        if error == "invalid_response":
+                            failure_kind = "precheck_failed"
+                            history.append({"attempt": attempt_number, "failure": "response_schema_invalid"})
+                            checked_guide["last_candidate_result"] = {"reason": "The combined JSON response did not match the required schema. Correct the structured response."}
+                        public_projection = (projection_pending(current_score) if retry_projection else
+                            projection_unavailable(current_score, "AI generation failed. No repeated requests were made; retry after the provider issue is resolved."))
+                        if error == "rate_limit" and policy == "cooldown":
                             public_projection.update(phase="waiting_quota", retry_after=combined.get("retry_after") or 120,
                                 message="Waiting for AI quota. A retry is scheduled after the provider cooldown.")
+                        elif error == "rate_limit":
+                            public_projection.update(message="AI guide unavailable right now. Try later.", retry_allowed=True)
                         break
                     private_code = str(combined.get("candidate_code") or "").strip()
                     checked_guide.update(combined["guide"])
+                    checked_guide.pop("locally_validated", None)
+                    checked_guide.pop("alignment_confirmed", None)
+                    checked_guide.pop("guidance_supported", None)
+                    checked_guide["guide_validated"] = not validate_revision_guidance(source_code, source_language, checked_guide, stage)
                     checked_guide["guide_pending"] = False
+                    if combined.get("patch_validation_errors"):
+                        attempt_number += 1
+                        failure_kind = "precheck_failed"
+                        errors = combined["patch_validation_errors"]
+                        history.append({"attempt": attempt_number, "failure": failure_kind, "reasons": errors})
+                        checked_guide["last_candidate_result"] = {"reason": "Exact source edits could not be applied. Use unique original-source anchors and only existing targets.", "errors": errors}
+                        private_projection = None
+                        retry_projection = True
+                        public_projection = projection_pending(current_score)
+                        break
                     if not private_code:
-                        public_projection = projection_unavailable(submission.overall_score, "No safe focused candidate was generated. No score gain is assumed.")
+                        failure_kind = "no_improvement"
+                        public_projection = {**projection_unavailable(current_score, "No supported focused improvement was found. No guide or score gain is released."), "retry_allowed": False}
                         break
                     private_projection = {"request_id": request_id, "draft_context": draft_context, "generated_source": private_code,
-                                          "guide": combined["guide"]}
+                                          "guide": combined["guide"], "candidate_format": PATCH_FORMAT,
+                                          "patches": combined.get("patches") or []}
                     progress("alignment", "Checking that the private candidate implements exactly the guide.")
                 else:
+                    history.append({"phase": "cache_reuse"})
                     private_code = private_projection["generated_source"]
                     checked_guide.update(private_projection.get("guide") or {})
                     checked_guide["guide_pending"] = False
                 state["guided_revision"] = checked_guide
+                checked_guide["guide_validated"] = not validate_revision_guidance(source_code, source_language, checked_guide, stage)
+                validation_errors = validate_candidate(source_code, private_code, source_language, checked_guide.get("steps") or [])
+                validation_errors.extend(validate_guidance_text(checked_guide))
+                expected_area = {"FOUNDATION": "correctness", "ALGORITHM": "correctness", "STRUCTURE": "correctness",
+                                 "OPTIMIZE_MANUAL_WORK": "time", "OPTIMIZE_LOCAL": "time", "OPTIMIZE_DATA_STRUCTURE": "time",
+                                 "OPTIMIZE_SPACE": "space"}.get(stage)
+                areas = {step.get("area") for step in checked_guide.get("steps") or []}
+                if len(areas) != 1 or (expected_area and areas != {expected_area}):
+                    validation_errors.append("stage_area_mismatch")
+                if validation_errors:
+                    attempt_number += 1
+                    failure_kind = "precheck_failed"
+                    history.append({"attempt": attempt_number, "failure": failure_kind, "reasons": validation_errors})
+                    checked_guide["last_candidate_result"] = {"reason": "Candidate pre-check failed.", "errors": validation_errors}
+                    private_projection = None
+                    retry_projection = True
+                    public_projection = projection_pending(current_score)
+                    break
+                checked_guide["locally_validated"] = True
                 alignment = private_projection.get("alignment_review")
                 if not alignment:
                     progress("alignment", "Checking that the private candidate implements exactly the guide.")
                     alignment = await asyncio.wait_for(review_stage_alignment(state, stage, private_code),
                                                        timeout=settings.SCORE_PROJECTION_TIMEOUT_SECONDS)
                 if alignment.get("provider_error"):
-                    retry_projection = alignment["provider_error"] == "rate_limit"
-                    public_projection = projection_pending(submission.overall_score) if retry_projection else projection_unavailable(submission.overall_score, "Alignment checking could not finish. The private draft is cached for a later retry.")
-                    if retry_projection:
+                    failure_kind = alignment["provider_error"]
+                    history.append({"attempt": attempt_number, "phase": "alignment",
+                                    "failure": alignment["provider_error"], "retry_after": alignment.get("retry_after")})
+                    policy = failure_policy(failure_kind, attempt_number, infrastructure_retries, alignment.get("quota_scope"))
+                    retry_projection = policy in {"cooldown", "retry_infrastructure"}
+                    if policy == "retry_infrastructure":
+                        infrastructure_retries += 1
+                    public_projection = projection_pending(current_score) if retry_projection else projection_unavailable(current_score, "Alignment checking could not finish. The private draft is cached for a later retry.")
+                    if alignment["provider_error"] == "rate_limit" and policy == "cooldown":
                         public_projection.update(phase="waiting_quota", retry_after=alignment.get("retry_after") or 120,
                                                  message="Waiting for AI quota. The existing draft will be reused after cooldown.")
                     break
+                if "guidance_supported" in (alignment.get("checks") or {}):
+                    checked_guide["guidance_supported"] = alignment["checks"]["guidance_supported"] is True
+                elif alignment.get("status") == "aligned":
+                    checked_guide["guidance_supported"] = True
+                last_valid_guide = remember_supported_guide(checked_guide, last_valid_guide)
                 if alignment.get("status") != "aligned":
+                    attempt_number += 1
+                    checked_guide.pop("alignment_confirmed", None)
+                    failure_kind = "alignment_failed"
+                    history.append({"attempt": attempt_number, "failure": failure_kind, "review": alignment})
                     private_projection = None
                     retry_projection = True
                     checked_guide["last_candidate_result"] = {
                         "reason": "The candidate did not follow every displayed action. Regenerate a concrete, internally consistent stage.",
+                        "alignment_review": alignment,
                     }
-                    public_projection = projection_pending(submission.overall_score)
+                    public_projection = projection_pending(current_score)
                     break
                 private_projection["alignment_review"] = alignment
+                checked_guide["alignment_confirmed"] = True
+                private_projection["guide"] = {key: value for key, value in checked_guide.items() if key != "score_projection"}
+                if not private_projection.get("candidate_reserved"):
+                    attempt_number += 1
+                    private_projection["candidate_reserved"] = True
                 progress("judging", "Running the private candidate against the configured tests, then calculating its rubric score.")
-                projection = await score_revision_stage(
-                    original_submission=submission,
+                projection = await asyncio.wait_for(score_revision_stage(
+                    original_submission=original_snapshot,
                     problem=problem,
                     source_code=private_code,
-                    language=submission.language,
+                    language=source_language,
                     test_cases=test_cases,
                     on_scoring=lambda: progress("scoring", "Tests passed. Calculating complexity, style and the weighted candidate score."),
-                )
+                ), timeout=settings.SCORE_PROJECTION_JUDGE_TIMEOUT_SECONDS)
                 private_assessment = projection.pop("_private_assessment", None)
+                if projection.get("status") == "judge_unavailable":
+                    attempt_number -= 1
+                    private_projection.pop("candidate_reserved", None)
+                    failure_kind = "judge_unavailable"
+                    retry_projection = failure_policy(failure_kind, attempt_number, infrastructure_retries) == "retry_infrastructure"
+                    if retry_projection:
+                        infrastructure_retries += 1
+                    public_projection = projection_pending(current_score) if retry_projection else projection_unavailable(current_score,
+                        "The sandbox could not finish verification. Your draft is saved; verify again later.")
+                    history.append({"phase": "judging", "failure": failure_kind})
+                    break
+                if projection.get("status") == "baseline_outdated":
+                    attempt_number -= 1
+                    private_projection.pop("candidate_reserved", None)
+                    failure_kind = "baseline_outdated"
+                    public_projection = {**projection, "retry_allowed": False}
+                    break
                 public_projection = projection
                 public_projection["alignment_review"] = "ai_reviewed"
                 private_projection = {
                     "request_id": request_id,
+                    "candidate_format": PATCH_FORMAT,
+                    "patches": private_projection.get("patches") or [],
                     "guide": {key: value for key, value in checked_guide.items() if key != "score_projection"},
                     "draft_context": draft_context,
                     "stage": stage,
                     "attempt": attempt,
-                    "student_source_fingerprint": normalized_submission_fingerprint(submission.code),
+                    "student_source_fingerprint": normalized_submission_fingerprint(source_code),
                     "generated_source_fingerprint": hashlib.sha256(private_code.encode("utf-8")).hexdigest(),
                     "context_fingerprint": projection_context_fingerprint(problem, test_cases, (projection.get("score_breakdown") or {}).get("rubric")),
                     "generated_source": private_code,
@@ -949,10 +1195,24 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
                     "rubric_version": ((projection.get("score_breakdown") or {}).get("rubric") or {}).get("version"),
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
-                if (projection.get("available") and projection.get("verified")
-                        and float(projection.get("projected_score") or 0) > float(submission.overall_score or 0)):
+                last_evaluated_candidate = copy.deepcopy(private_projection)
+                decision = release_decision(current_score, original_snapshot.score_breakdown or {}, projection,
+                                            checked_guide.get("steps") or [], settings.SCORE_PROJECTION_MIN_GAIN,
+                                            settings.SCORE_PROJECTION_STYLE_TOLERANCE)
+                history.append({"attempt": attempt_number, "failure": None if decision == "passed" else decision,
+                                "candidate_score": projection.get("projected_score"), "components": projection.get("stage_components"),
+                                "alignment": alignment, "verification": private_assessment})
+                if decision == "passed":
+                    projection.update(job_status="passed", pending=False, retry_allowed=False, release_passed=True)
+                    style_before = (original_snapshot.score_breakdown.get("style") or {}).get("score")
+                    style_after = ((projection.get("score_breakdown") or {}).get("style") or {}).get("score")
+                    if style_before is not None and style_after is not None and style_after < style_before:
+                        projection["style_variance"] = {"before": style_before, "after": style_after,
+                            "allowed_percentage_points": settings.SCORE_PROJECTION_STYLE_TOLERANCE}
+                        projection["message"] = (projection.get("message") or "This candidate was executed and assessed.") + " Its small style decrease is within the permitted tolerance; the measured score includes that decrease."
                     _projection_retry_counts.pop(submission_id, None)
                     break
+                failure_kind = decision
                 if projection.get("status") != "baseline_outdated":
                     if projection.get("status") != "judge_unavailable":
                         private_projection = None
@@ -961,48 +1221,109 @@ async def verify_projection_in_background(submission_id: str, stage: str) -> Non
                         "projected_score": projection.get("projected_score"),
                         "stage_components": projection.get("stage_components"),
                         "reason": "This stage did not produce a verified score increase. Choose another focused improvement supported by the source and rubric.",
+                        "gate_failure": decision,
                     }
-                    public_projection = projection_pending(submission.overall_score)
+                    public_projection = projection_pending(current_score)
             except asyncio.TimeoutError:
-                retry_projection = True
-                public_projection = projection_pending(submission.overall_score)
+                if private_projection and private_projection.pop("candidate_reserved", False):
+                    attempt_number -= 1
+                failure_kind = "judge_unavailable" if active_phase in {"judging", "scoring"} else "provider_timeout"
+                retry_projection = failure_policy(failure_kind, attempt_number, infrastructure_retries) == "retry_infrastructure"
+                if retry_projection:
+                    infrastructure_retries += 1
+                public_projection = projection_pending(current_score) if retry_projection else projection_unavailable(current_score, "Verification timed out. The saved draft can be checked later.")
                 break
             except Exception as error:
+                if private_projection and private_projection.pop("candidate_reserved", False):
+                    attempt_number -= 1
                 logger.warning("Private score projection attempt %s failed for %s (%s)", attempt, submission_id, type(error).__name__)
-                retry_projection = True
-                public_projection = projection_pending(submission.overall_score)
+                failure_kind = "judge_unavailable" if active_phase in {"judging", "scoring"} else "provider_unavailable"
+                retry_projection = failure_policy(failure_kind, attempt_number, infrastructure_retries) == "retry_infrastructure"
+                if retry_projection:
+                    infrastructure_retries += 1
+                public_projection = projection_pending(current_score) if retry_projection else projection_unavailable(current_score, "Verification is temporarily unavailable. The saved draft can be checked later.")
                 break
 
         # Refresh after awaited work so an older request cannot overwrite a
         # newly requested draft for the same stage.
-        db.refresh(submission)
+        submission = db.query(models.Submission).filter_by(submission_id=submission_id).one()
         revision = dict(submission.improved_code or {})
         # Do not overwrite a later stage if the learner submitted again while
         # this background verification was in progress.
         if revision.get("stage") != stage or revision.get("projection_request_id") != request_id:
             return
+        if (revision.get("score_projection") or {}).get("job_status") == "cancelled":
+            return
+        fresh_problem = db.query(models.Problem).filter_by(id=problem.id).one()
+        if revision_job_context(submission, fresh_problem, load_problem_cases(db, fresh_problem, public_only=False)) != frozen_context:
+            retry_projection = False
+            public_projection = {**projection_unavailable(current_score, "Assessment context changed during verification. Submit a new assessment."), "retry_allowed": False, "status": "context_changed"}
+        if public_projection.get("job_status") != "passed":
+            checked_guide = retained_revision_guide(checked_guide, last_valid_guide)
         revision.update({key: value for key, value in checked_guide.items()
                          if key not in {"score_projection", "projection_request_id"}})
         if retry_projection and attempt_number >= total_limit:
             retry_projection = False
+            reason = {"precheck_failed": "The candidate edits failed local validation.",
+                "alignment_failed": "The private candidate did not match the guided step.",
+                "component_regression": "A component decreased beyond the permitted tolerance.",
+                "no_improvement": "The tested candidate did not meet the minimum overall score gain.",
+                "complexity_claim_unconfirmed": "The measured complexity did not support the claimed improvement."}.get(failure_kind,
+                    "The candidate could not be verified.")
             public_projection = {**projection_unavailable(submission.overall_score,
-                "Verification stopped after two unsuccessful attempts. Submit your own revision for a new assessment."),
+                "Verification stopped after two attempts. " + reason + " Your valid revision guidance remains available."),
                 "retry_allowed": False, "status": "attempt_limit"}
             _projection_retry_counts.pop(submission_id, None)
-        if attempt_number >= total_limit and not (
-            public_projection.get("available") and public_projection.get("verified")
-            and float(public_projection.get("projected_score") or 0) > float(submission.overall_score or 0)
-        ):
+        if public_projection.get("job_status") != "passed" and safe_unverified_guide(checked_guide):
+            # Candidate verification can fail independently of valid coaching.
+            revision.update(guide_validated=True)
+        if public_projection.get("job_status") != "passed":
+            # Never release candidate numbers or instructions after a failed gate.
+            public_projection.update(available=False, verified=False, projected_score=None, expected_improvement=None)
+            if not public_projection.get("pending"):
+                public_projection["job_status"] = "no_improvement" if failure_kind == "no_improvement" else "failed" if failure_kind in {"precheck_failed", "alignment_failed", "component_regression", "complexity_claim_unconfirmed"} else "unavailable"
+        if attempt_number >= total_limit and public_projection.get("job_status") != "passed":
             public_projection.update(retry_allowed=False, status="attempt_limit", pending=False)
         public_projection["attempts"] = attempt_number
+        public_projection.update(generation_requests=generation_requests, infrastructure_retries=infrastructure_retries,
+                                 failure_type=failure_kind if public_projection.get("job_status") != "passed" else None)
+        public_projection["release_policy"] = {"version": RELEASE_POLICY_VERSION,
+            "minimum_gain": settings.SCORE_PROJECTION_MIN_GAIN,
+            "style_tolerance_percentage_points": settings.SCORE_PROJECTION_STYLE_TOLERANCE,
+            "strict_components": ["correctness", "time", "space"]}
+        if public_projection.get("job_status") == "unavailable" and failure_kind in {"baseline_outdated", "context_changed"}:
+            public_projection.update(status=failure_kind, retry_allowed=False)
+        if public_projection.get("pending"):
+            public_projection["job_status"] = "running"
+            import random
+            wait = (float(public_projection.get("retry_after") or 60) + random.uniform(0, 15)
+                    if public_projection.get("phase") == "waiting_quota" else settings.SCORE_PROJECTION_RETRY_DELAY_SECONDS)
+            public_projection["next_retry_at"] = (datetime.now(timezone.utc) + timedelta(seconds=wait)).isoformat()
+        elif failure_kind == "judge_unavailable":
+            public_projection.update(retry_allowed=True, resume_saved_draft=True)
         revision["score_projection"] = public_projection
+        revision.pop("worker_lease_until", None)
         submission.improved_code = revision
         submission.projected_score = public_projection
-        submission.private_projection = private_projection
+        submission.private_projection = {**(private_projection or {}), "job_context": frozen_context, "attempt_history": history,
+                                         "last_valid_guide": last_valid_guide, "last_evaluated_candidate": last_evaluated_candidate}
         db.commit()
-    except Exception:
+    except Exception as error:
         db.rollback()
-        logger.warning("Background score projection persistence failed for %s", submission_id)
+        logger.warning("Background score projection failed for %s (%s)", submission_id, type(error).__name__)
+        try:
+            failed_submission = db.query(models.Submission).filter_by(submission_id=submission_id).first()
+            failed_revision = dict(failed_submission.improved_code or {}) if failed_submission else {}
+            if failed_submission and failed_revision.get("projection_request_id") == request_id:
+                stopped = projection_unavailable(failed_submission.overall_score, "Verification could not finish. No guide or projected gain has been released.")
+                stopped.update(retry_allowed=False)
+                failed_revision["score_projection"] = stopped
+                failed_revision.pop("worker_lease_until", None)
+                failed_submission.improved_code = failed_revision
+                failed_submission.projected_score = stopped
+                db.commit()
+        except Exception:
+            db.rollback()
     finally:
         db.close()
     if retry_projection:
@@ -1019,10 +1340,10 @@ def schedule_projection_retry(submission_id: str, stage: str, cooldown: float = 
         return
 
     retry_number = _projection_retry_counts.get(submission_id, 0) + 1
-    if retry_number > max(0, settings.SCORE_PROJECTION_BACKGROUND_RETRIES):
-        return
     _projection_retry_counts[submission_id] = retry_number
-    delay = max(float(cooldown or 0), max(15, settings.SCORE_PROJECTION_RETRY_DELAY_SECONDS) * min(retry_number, 3))
+    # The durable row owns the deadline and budgets. In-memory scheduling is
+    # only a wake-up hint, never an independent retry allowance.
+    delay = max(float(cooldown or 0), 15)
 
     async def delayed_retry() -> None:
         try:
@@ -1040,7 +1361,7 @@ def launch_projection_verification(submission_id: str, stage: str) -> None:
     """Track and replace explicit requests, releasing completed task handles."""
     existing = _projection_retry_tasks.get(submission_id)
     if existing is not None and not existing.done():
-        existing.cancel()
+        return
     task = asyncio.create_task(verify_projection_in_background(submission_id, stage))
     _projection_retry_tasks[submission_id] = task
 
@@ -1344,43 +1665,61 @@ def seed_instructor_assignments():
 
 @app.on_event("startup")
 async def resume_recent_pending_projections() -> None:
-    """Resume recent silent projection checks after a backend restart."""
+    """Start a durable dispatcher; database leases fence competing workers."""
+    global _projection_dispatcher_task
     if not settings.SCORE_PROJECTION_ENABLED:
         return
-    db = SessionLocal()
-    try:
-        candidates = (
-            db.query(models.Submission)
-            .filter(models.Submission.improved_code.isnot(None))
-            .order_by(models.Submission.created_at.desc())
-            .limit(10)
-            .all()
-        )
-        for submission in candidates:
-            revision = submission.improved_code if isinstance(submission.improved_code, dict) else {}
-            projection = revision.get("score_projection") if isinstance(revision.get("score_projection"), dict) else {}
-            stage = str(revision.get("stage") or "").strip()
-            guided = revision.get("revision_policy") == "GUIDED_STEPS"
-            verification = revision.get("verification") if isinstance(revision.get("verification"), dict) else {}
-            no_change = str(verification.get("status") or "") == "no_change"
-            needs_verified_projection = (
-                guided
-                and revision.get("guidance_version") == 10
-                and projection.get("pending") is True
-                and bool(stage)
-                and not no_change
-                and not (projection.get("available") is True and projection.get("verified") is True)
-            )
-            if needs_verified_projection:
-                pending = {**projection_pending(submission.overall_score), "attempts": int(projection.get("attempts", 0))}
-                revision = dict(revision)
-                revision["score_projection"] = pending
-                submission.improved_code = revision
-                submission.projected_score = pending
-                db.commit()
-                schedule_projection_retry(submission.submission_id, stage, projection.get("retry_after", 0))
-    finally:
-        db.close()
+    if _projection_dispatcher_task is None or _projection_dispatcher_task.done():
+        _projection_dispatcher_task = asyncio.create_task(dispatch_revision_jobs())
+
+
+async def dispatch_revision_jobs():
+    while True:
+        db = SessionLocal()
+        try:
+            now = utcnow()
+            if db.bind.dialect.name == "postgresql":
+                db.execute(text("SELECT pg_advisory_xact_lock(7311042)"))
+            active = db.query(models.RevisionJob).filter(models.RevisionJob.status.in_(["queued", "running"]),
+                models.RevisionJob.lease_until > now).count()
+            capacity = max(0, settings.REVISION_JOB_CONCURRENCY - active)
+            jobs = db.query(models.RevisionJob).filter(
+                models.RevisionJob.status.in_(["queued", "running"]),
+                or_(models.RevisionJob.retry_available_at.is_(None), models.RevisionJob.retry_available_at <= now),
+                or_(models.RevisionJob.lease_until.is_(None), models.RevisionJob.lease_until <= now),
+            ).order_by(models.RevisionJob.created_at).with_for_update(skip_locked=True).limit(capacity).all()
+            ready = []
+            for job in jobs:
+                existing = _projection_retry_tasks.get(job.submission_id)
+                if existing is not None and not existing.done():
+                    continue
+                job.lease_until = now + timedelta(seconds=30)
+                ready.append((job.submission_id, (job.revision_snapshot or {}).get("stage")))
+            db.commit()
+            for submission_id, stage in ready:
+                if stage:
+                    launch_projection_verification(submission_id, stage)
+        except Exception as error:
+            db.rollback()
+            logger.warning("Revision queue dispatch unavailable (%s)", type(error).__name__)
+        finally:
+            db.close()
+        await asyncio.sleep(5)
+
+
+@app.on_event("shutdown")
+async def stop_revision_dispatcher():
+    global _projection_dispatcher_task
+    if _projection_dispatcher_task:
+        _projection_dispatcher_task.cancel()
+        await asyncio.gather(_projection_dispatcher_task, return_exceptions=True)
+        _projection_dispatcher_task = None
+    tasks = list(_projection_retry_tasks.values())
+    for task in tasks:
+        task.cancel()
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+    _projection_retry_tasks.clear()
 
 def _auth_response(user: models.User, access_token: Optional[str] = None) -> AuthUser:
     student = user.student_profile
@@ -2232,6 +2571,9 @@ async def submit_and_evaluate_code(
 
     # 3. Execute LangGraph Multi-Agent Engine
     final_state = await evaluation_graph.ainvoke(initial_state)
+    final_state["assessment_flags"] = {**(final_state.get("assessment_flags") or {}),
+                                       "analyzer_version": analyzer_fingerprint(), "space_definition": "total",
+                                       "judge_context": projection_context_fingerprint(problem, test_cases, (final_state.get("score_breakdown") or {}).get("rubric"))}
     exact_projection = matching_verified_projection(
         db,
         student_id=student.student_id,
@@ -2329,6 +2671,44 @@ def get_submission(
     return student_submission_details(submission)
 
 
+@app.get("/api/submissions/{submission_id}/revision/jobs/{job_id}")
+def get_revision_job(submission_id: str, job_id: str, db: Session = Depends(get_db),
+                     student: models.Student = Depends(get_current_student)):
+    submission = db.query(models.Submission).filter(
+        models.Submission.submission_id == submission_id,
+        models.Submission.student_id == student.student_id,
+    ).first()
+    job = db.get(models.RevisionJob, job_id) if submission else None
+    revision = job.revision_snapshot if job and job.submission_id == submission_id and job.student_id == student.student_id else (submission.improved_code if submission else None)
+    if not isinstance(revision, dict) or revision.get("projection_request_id") != job_id:
+        raise HTTPException(status_code=404, detail="Revision job not found")
+    return revision_job_response(revision)
+
+
+@app.post("/api/submissions/{submission_id}/revision/jobs/{job_id}/cancel")
+async def cancel_revision_job(submission_id: str, job_id: str, db: Session = Depends(get_db),
+                        student: models.Student = Depends(get_current_student)):
+    submission = db.query(models.Submission).filter(
+        models.Submission.submission_id == submission_id,
+        models.Submission.student_id == student.student_id,
+    ).with_for_update().first()
+    revision = dict(submission.improved_code or {}) if submission else {}
+    if revision.get("projection_request_id") != job_id:
+        raise HTTPException(status_code=404, detail="Revision job not found")
+    if (revision.get("score_projection") or {}).get("pending"):
+        projection = projection_unavailable(submission.overall_score, "Verification cancelled. Your saved assessment is unchanged.")
+        projection.update(job_status="cancelled", retry_allowed=False)
+        revision["score_projection"] = projection
+        revision.pop("worker_lease_until", None)
+        submission.improved_code = revision
+        submission.projected_score = projection
+        db.commit()
+        task = _projection_retry_tasks.pop(submission_id, None)
+        if task is not None and not task.done():
+            task.cancel()
+    return revision_job_response(revision)
+
+
 @app.post("/api/submissions/{submission_id}/revision")
 async def regenerate_submission_revision(
     submission_id: str,
@@ -2336,6 +2716,8 @@ async def regenerate_submission_revision(
     student: models.Student = Depends(get_current_student),
 ):
     """Generate and persist a missing task-specific rewrite for a saved attempt."""
+    # Serialize guide requests across attempts of this learner's problem.
+    db.query(models.Student).filter(models.Student.student_id == student.student_id).with_for_update().first()
     submission = db.query(models.Submission).filter(
         models.Submission.submission_id == submission_id,
         models.Submission.student_id == student.student_id,
@@ -2356,24 +2738,35 @@ async def regenerate_submission_revision(
     # is generated and judged privately by the projection workflow.
     policy = "GUIDED_STEPS"
 
+    if not settings.SCORE_PROJECTION_ENABLED:
+        saved = dict(submission.improved_code or {})
+        if (saved.get("score_projection") or {}).get("job_status") != "passed":
+            saved.update(revision_policy="GUIDED_STEPS", guidance_version=CONTRACT_VERSION,
+                         projection_request_id=saved.get("projection_request_id") or uuid4().hex,
+                         score_projection=projection_unavailable(submission.overall_score, "Measured guidance is currently disabled."))
+            submission.improved_code = saved
+            submission.projected_score = saved["score_projection"]
+            db.commit()
+        return revision_job_response(saved)
+
     if policy == "GUIDED_STEPS":
         stage = guided_revision_stage(db, submission)
         saved = submission.improved_code if isinstance(submission.improved_code, dict) else {}
         saved_projection = saved.get("score_projection") or {}
-        if saved_projection.get("retry_allowed") is False or (
-            int(saved_projection.get("attempts") or 0) >= 2
-            and not (saved_projection.get("available") and saved_projection.get("verified"))
-        ):
-            saved["score_projection"] = {**saved_projection, "pending": False, "retry_allowed": False,
-                "message": "Verification stopped after two unsuccessful attempts. Submit your own revision for a new assessment."}
-            submission.improved_code = saved
-            submission.projected_score = saved["score_projection"]
+        cached_context = (submission.private_projection or {}).get("job_context")
+        if saved.get("guidance_version") == CONTRACT_VERSION and cached_context and cached_context != revision_job_context(submission, problem, load_problem_cases(db, problem, public_only=False)):
+            stopped = {**projection_unavailable(submission.overall_score, "Assessment context changed. Submit a new assessment before requesting measured guidance."),
+                       "retry_allowed": False, "status": "context_changed"}
+            saved = {**saved, "score_projection": stopped}
+            submission.improved_code, submission.projected_score = saved, stopped
             db.commit()
-            return {"improved_code": public_guided_revision(saved)}
+            return revision_job_response(saved)
+        if saved_projection.get("status") in {"baseline_outdated", "context_changed"}:
+            return revision_job_response(saved)
         if (
             saved.get("revision_policy") == "GUIDED_STEPS"
             and saved.get("stage") == stage
-            and saved.get("guidance_version") == 10
+            and saved.get("guidance_version") == CONTRACT_VERSION
             and str((saved.get("verification") or {}).get("status") or "")
             in {"guided_step", "no_change"}
             and (
@@ -2392,7 +2785,7 @@ async def regenerate_submission_revision(
                 or (saved.get("score_projection") or {}).get("pending") is True
             )
         ):
-            return {"improved_code": public_guided_revision(saved)}
+            return revision_job_response(saved)
 
     previous_revision = previous_guided_revision_context(db, submission) if policy == "GUIDED_STEPS" else None
     # Ignore legacy stages that were generated under the earlier retry-count
@@ -2410,17 +2803,17 @@ async def regenerate_submission_revision(
         },
         "submission": {"source_code": submission.code, "language": submission.language},
         "execution_result": redact_hidden_execution(submission.execution_result or {}, student_view=True),
-        "feedback": submission.feedback,
+        "feedback": revision_prompt_feedback(submission),
         "complexity_details": submission.complexity_details,
         "style_details": analyze_style(submission.code, submission.language),
         "previous_revision": previous_revision,
     }
     if policy == "GUIDED_STEPS":
         try:
-            if settings.SCORE_PROJECTION_ENABLED and stage != "NO_CHANGE":
+            if settings.SCORE_PROJECTION_ENABLED:
                 draft = guided_revision_fallback(stage, state)
-                draft["guide_pending"] = True
-                draft["verification"] = {"status": "guided_step", "verified": False}
+                draft["guide_pending"] = stage != "NO_CHANGE"
+                draft["verification"] = {"status": "no_change" if stage == "NO_CHANGE" else "guided_step", "verified": False}
                 guided_result = {"improved_code": draft}
             else:
                 guided_result = await asyncio.wait_for(
@@ -2452,10 +2845,21 @@ async def regenerate_submission_revision(
         revision = guided_result.get("improved_code") or {}
         revision = dict(revision)
         revision["revision_policy"] = "GUIDED_STEPS"
-        revision["guidance_version"] = 10
+        revision["guidance_version"] = CONTRACT_VERSION
         revision["stage"] = stage
         reuse_draft = bool(settings.SCORE_PROJECTION_ENABLED and submission.private_projection
-                           and saved.get("stage") == stage and saved.get("projection_request_id"))
+                           and saved.get("stage") == stage and saved.get("projection_request_id")
+                           and saved.get("guidance_version") == CONTRACT_VERSION
+                           and saved_projection.get("job_status") != "cancelled"
+                           and int((saved.get("score_projection") or {}).get("attempts") or 0) < 2
+                           and (saved.get("score_projection") or {}).get("status") != "expired")
+        if not reuse_draft and stage != "NO_CHANGE":
+            count = db.query(models.RevisionJob).filter(
+                models.RevisionJob.student_id == student.student_id, models.RevisionJob.problem_id == submission.problem_id,
+                models.RevisionJob.revision_snapshot["guidance_version"].as_integer() == CONTRACT_VERSION,
+                models.RevisionJob.created_at >= day_start()).count()
+            if count >= settings.REVISION_DAILY_JOB_LIMIT:
+                raise HTTPException(status_code=429, detail="The daily guide limit for this problem has been reached. Try tomorrow.")
         revision["projection_request_id"] = saved["projection_request_id"] if reuse_draft else uuid4().hex
         revision["evidence_links"] = guided_revision_evidence_links(submission)
         if previous_revision:
@@ -2472,7 +2876,9 @@ async def regenerate_submission_revision(
         # runs, so it is persisted as pending and completed separately rather
         # than holding the learner on a "Preparing guidance" spinner.
         revision["score_projection"] = (
-            {**projection_pending(submission.overall_score), "attempts": int((saved.get("score_projection") or {}).get("attempts") or 0)}
+            {**projection_pending(submission.overall_score), "attempts": int((saved.get("score_projection") or {}).get("attempts") or 0) if reuse_draft else 0,
+             "generation_requests": int(saved_projection.get("generation_requests") or 0) if reuse_draft else 0,
+             "infrastructure_retries": 0}
             if stage != "NO_CHANGE" and settings.SCORE_PROJECTION_ENABLED
             else {
                 "available": False,
@@ -2483,17 +2889,21 @@ async def regenerate_submission_revision(
                 "expected_improvement": None,
                 "assumptions": [],
                 "message": "No score projection is needed for a no-change stage.",
+                "job_status": "no_improvement", "retry_allowed": False,
             }
         )
         submission.improved_code = revision
         submission.projected_score = revision["score_projection"]
         if not reuse_draft:
-            submission.private_projection = None
+            old_private = submission.private_projection or {}
+            submission.private_projection = {"job_context": revision_job_context(submission, problem, load_problem_cases(db, problem, public_only=False)), "attempt_history": [],
+                "last_valid_guide": remember_supported_guide(saved, old_private.get("last_valid_guide")),
+                "last_evaluated_candidate": old_private.get("last_evaluated_candidate")}
         db.commit()
         if stage != "NO_CHANGE" and settings.SCORE_PROJECTION_ENABLED:
             _projection_retry_counts.pop(submission.submission_id, None)
             launch_projection_verification(submission.submission_id, stage)
-        return {"improved_code": public_guided_revision(revision)}
+        return revision_job_response(revision)
 
     revision = (await revision_node(state)).get("improved_code") or {}
     if revision.get("revision_source") != "ai" or not revision.get("improved_code"):

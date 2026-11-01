@@ -17,10 +17,14 @@ Check all four independently:
    candidate in BOTH directions. Every material change in the candidate must
    be explicitly requested by a numbered guided action or be strictly necessary
    to implement it. Reject extra helper extraction, renamed identifiers,
-   deduplication, header replacements, formatting rewrites, comment changes,
+   deduplication, nonessential header replacements, comment changes,
    or algorithm improvements not requested in that guide. Merely keeping the
    algorithm family unchanged is insufficient. Cite the guided action that
    authorizes each material change; missing authorization means false.
+   Whitespace-only formatting is not a material change. A standard-library
+   include/import strictly required by a guided operation is implicitly authorized
+   (for example <algorithm> for std::sort). Neither exception permits renaming,
+   fast-I/O setup, input guards, wholesale header replacement, or a new algorithm.
 
 Check benefit claims too: removing some linear arrays while other linear
 arrays remain reduces allocation but keeps O(n) space. Reject guidance claiming

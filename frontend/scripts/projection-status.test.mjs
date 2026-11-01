@@ -32,6 +32,26 @@ test('quota wait is distinguished from running candidate tests', () => {
   assert.doesNotMatch(html, /Running candidate tests|\/100|Retry score projection/);
 });
 
+test('only a recorded quota deadline produces a countdown', () => {
+  const html = render({ pending: true, phase: 'waiting_quota', next_retry_at: new Date(Date.now() + 60000).toISOString() });
+  assert.match(html, /Next check in 1:00/);
+  const unavailable = render({ pending: false, message: 'AI guide unavailable right now. Try later.' });
+  assert.doesNotMatch(unavailable, /Next check in|\d+:\d\d/);
+});
+
+test('sandbox recovery offers verification of the saved draft', () => {
+  const html = render({ pending: false, resume_saved_draft: true, retry_allowed: true, message: 'The sandbox could not finish.' });
+  assert.match(html, /Verify saved draft again/);
+  assert.doesNotMatch(html, /\/100/);
+});
+
+test('a corrected release rule offers an explicit recheck without a fabricated score', () => {
+  const html = render({ pending: false, retry_allowed: true, policy_update_available: true,
+    message: 'A corrected release rule is available.' });
+  assert.match(html, /Recheck with corrected rule/);
+  assert.doesNotMatch(html, /\/100/);
+});
+
 test('attempt limit removes retry controls', () => {
   const html = render({ available: false, verified: false, retry_allowed: false,
     status: 'attempt_limit', message: 'Verification stopped after two unsuccessful attempts.' });

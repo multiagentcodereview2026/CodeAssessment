@@ -137,16 +137,22 @@ def test_private_stage_accepts_text_change_metadata(monkeypatch):
 
 def test_combined_generation_uses_one_call_and_separates_private_code(monkeypatch):
     calls = []
+    source = '# preserved\nprint(0)\n'
     async def invoke(*args, **kwargs):
         calls.append(kwargs["capability"])
-        return {"analysis_source": "groq", "guide": {"guided_steps": ["Reduce repeated work."],
-                "improved_code": "must not escape"}, "candidate_code": "PRIVATE SOURCE"}
+        payload = args[1]
+        assert {item['name'] for item in payload['source_context']['symbols']} == {'print'}
+        assert payload['source_code'] == source
+        return {"analysis_source": "groq", "source_hash": payload['source_context']['source_hash'],
+                "guide": {"steps": [{"id": "step_1", "target": {"symbol": "print"}, "change": "Replace the output value with the computed result."}], "improved_code": "must not escape"},
+                "patches": [{"step_id": "step_1", "old": "print(0)", "new": "print(1)"}]}
     monkeypatch.setattr(revision, "invoke_agent", invoke)
-    result = asyncio.run(revision.combined_stage_revision_node({"submission": {}}, "OPTIMIZE_LOCAL"))
+    result = asyncio.run(revision.combined_stage_revision_node({"submission": {"source_code": source, "language": "python"}}, "OPTIMIZE_LOCAL"))
     assert calls == ["score_projection"]
     assert result["guide"]["improved_code"] == ""
-    assert "PRIVATE SOURCE" not in str(result["guide"])
-    assert result["candidate_code"] == "PRIVATE SOURCE"
+    assert "print(1)" not in str(result["guide"])
+    assert result["candidate_code"] == "# preserved\nprint(1)\n"
+    assert result["patch_validation_errors"] == []
 
 
 def test_alignment_rejects_unexplained_candidate_changes(monkeypatch):

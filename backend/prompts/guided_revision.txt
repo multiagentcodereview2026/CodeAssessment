@@ -18,9 +18,12 @@ Human-readable writing standard:
   return code, syntax, declarations, or copy-paste fragments.
 
 Rules:
-- If previous_candidate_result is supplied, the last private attempt failed to
-  produce a verified score increase. Select a different evidence-supported
-  change within this stage; do not repeat the same no-gain advice or bundle
+- If previous_candidate_result reports syntax, patch-anchor, schema, target,
+  or alignment errors, repair those candidate edits. Keep saved_supported_guide
+  when supplied; a rejected candidate is not evidence that its guide is wrong.
+- If a measured previous_candidate_result reports no gain or a component
+  regression, select another evidence-supported change within this stage;
+  do not repeat the same measured no-gain advice or bundle
   unrelated style edits. A constant-factor memory reduction cannot improve a
   rank-based space score. If no justified change exists, state the limitation
   honestly. Never invent improvements or scores to satisfy this instruction.

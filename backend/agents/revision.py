@@ -1,7 +1,8 @@
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, ConfigDict, Field
+from typing import List, Dict, Any, Optional, Literal
 from agents.base import load_prompt, invoke_agent, sanitize_code_comments
 from agents.revision_verification import unverified_revision
+from agents.revision_patches import PATCH_FORMAT, SourcePatch, source_context, apply_source_patches
 from workflow.state import EvaluationState
 
 
@@ -102,7 +103,9 @@ async def review_stage_alignment(state: EvaluationState, stage: str, candidate: 
             "guidance_supported", "candidate_follows_guidance", "stage_scope_preserved", "all_changes_explained"))
     evidence = [item.strip() for item in result.get("evidence", []) if isinstance(item, str) and item.strip()]
     return {"status": "aligned" if accepted and evidence else "unavailable", "evidence": evidence,
-            "provider_error": result.get("provider_error"), "retry_after": result.get("retry_after")}
+            "checks": {key: result.get(key) is True for key in ("guidance_supported", "candidate_follows_guidance", "stage_scope_preserved", "all_changes_explained")},
+            "provider_error": result.get("provider_error"), "retry_after": result.get("retry_after"),
+            "quota_scope": result.get("quota_scope"), "request_metrics": result.get("request_metrics")}
 
 
 class GuidedRevisionOutput(BaseModel):
@@ -120,32 +123,75 @@ class GuidedRevisionOutput(BaseModel):
     improvement_explanation: Optional[str] = ""
 
 
+class StepTarget(BaseModel):
+    symbol: str = Field(min_length=1, max_length=100)
+    operation: str = Field(min_length=5, max_length=300)
+
+
+class ExpectedComplexity(BaseModel):
+    time_before: Optional[str] = None
+    time_after: Optional[str] = None
+    space_before: Optional[str] = None
+    space_after: Optional[str] = None
+    space_definition: Literal["total"] = "total"
+
+
+class RevisionStep(BaseModel):
+    id: str = Field(min_length=1, max_length=40)
+    area: Literal["correctness", "time", "space", "style"]
+    target: StepTarget
+    change: str = Field(min_length=20, max_length=600)
+    expected_complexity: ExpectedComplexity
+    risk: str = Field(min_length=5, max_length=400)
+    risk_level: Literal["low", "medium", "high"] = "high"
+
+
+class MeasuredGuideOutput(GuidedRevisionOutput):
+    steps: List[RevisionStep] = Field(max_length=3)
+
+
 class CombinedStageOutput(BaseModel):
-    guide: GuidedRevisionOutput
-    candidate_code: str
+    model_config = ConfigDict(extra="forbid")
+    guide: MeasuredGuideOutput
+    source_hash: str = Field(min_length=64, max_length=64)
+    patches: List[SourcePatch] = Field(max_length=6)
 
 
 async def combined_stage_revision_node(state, stage):
-    """Generate paired coaching and private source in one provider request."""
+    """Generate coaching and bounded edits; assemble executable source locally."""
+    source = (state.get("submission") or {}).get("source_code", "")
+    language = (state.get("submission") or {}).get("language", "cpp")
+    context = source_context(source, language)
     result = await invoke_agent(
         load_prompt("guided_revision") + "\n" + load_prompt("combined_stage_revision"),
         {"stage": stage, "problem": state.get("problem"),
-         "source_code": sanitize_code_comments((state.get("submission") or {}).get("source_code", "")),
-         "language": (state.get("submission") or {}).get("language"),
+         "source_code": source,
+         "source_context": context,
+         "language": language,
          "complexity_details": state.get("complexity_details"),
          "style_details": state.get("style_details"),
          "feedback": state.get("feedback"),
+         "saved_supported_guide": state.get("last_valid_guide"),
          "previous_candidate_result": state.get("previous_candidate_result")},
         CombinedStageOutput, {}, capability="score_projection",
     )
     guide = dict(result.get("guide") or {})
+    candidate, patch_errors = "", []
+    if result.get("analysis_source") == "groq":
+        guide["guided_steps"] = [step["change"] for step in guide.get("steps", [])]
+        if result.get("patches") or guide.get("steps"):
+            candidate, patch_errors = apply_source_patches(source, result.get("patches") or [],
+                guide.get("steps") or [], result.get("source_hash"))
     guide.update(stage=stage, improved_code="", changes=[], starter_fragment="",
                  revision_source="ai" if result.get("analysis_source") == "groq" else "fallback",
                  verification={"status": "guided_step", "verified": False,
                                "message": "Apply this focused stage in your own code, then submit it for assessment."})
-    return {"guide": guide, "candidate_code": result.get("candidate_code", ""),
+    return {"guide": guide, "candidate_code": candidate,
+            "patches": result.get("patches") or [], "candidate_format": PATCH_FORMAT,
+            "patch_validation_errors": patch_errors,
             "analysis_source": result.get("analysis_source"),
-            "provider_error": result.get("provider_error"), "retry_after": result.get("retry_after")}
+            "provider_error": result.get("provider_error"), "retry_after": result.get("retry_after"),
+            "quota_scope": result.get("quota_scope"), "request_metrics": result.get("request_metrics")}
 
 
 async def private_stage_revision_node(

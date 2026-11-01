@@ -5,7 +5,7 @@ import asyncio
 import time
 from pathlib import Path
 from typing import Any, Dict
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 try:
     from langchain_core.messages import SystemMessage, HumanMessage
 except ImportError:
@@ -25,12 +25,14 @@ logger = logging.getLogger(__name__)
 _groq_request_lock = asyncio.Lock()
 _last_groq_request_at = 0.0
 _groq_cooldown_until = 0.0
+_groq_quota_scope = "unknown"
 
 
 class ProviderCooldownError(Exception):
     status_code = 429
 
-    def __init__(self, seconds):
+    def __init__(self, seconds, scope="minute"):
+        self.quota_scope = scope
         self.response = type("CooldownResponse", (), {"headers": {"retry-after": str(seconds)}})()
 
 # Initialize Groq LLM
@@ -111,15 +113,36 @@ def _retry_after_seconds(exc: Exception) -> float:
     try:
         return max(0.0, float(headers.get("retry-after", 0)))
     except (TypeError, ValueError):
-        return 0.0
+        from email.utils import parsedate_to_datetime
+        from datetime import datetime, timezone
+        try:
+            deadline = parsedate_to_datetime(headers.get("retry-after", ""))
+            if deadline.tzinfo is None:
+                deadline = deadline.replace(tzinfo=timezone.utc)
+            return max(0.0, (deadline - datetime.now(timezone.utc)).total_seconds())
+        except (TypeError, ValueError, OverflowError):
+            return 0.0
+
+
+def _quota_scope(exc):
+    # Inspect privately; never log a provider body that may contain a prompt.
+    if isinstance(exc, ProviderCooldownError):
+        return exc.quota_scope
+    detail = str(exc).lower()
+    if any(token in detail for token in ("per day", "daily", "tokens per day", "requests per day", "(tpd)", "(rpd)")):
+        return "daily"
+    if isinstance(exc, ProviderCooldownError) or any(token in detail for token in ("per minute", "(tpm)", "(rpm)")):
+        return "minute"
+    wait = _retry_after_seconds(exc)
+    return "minute" if 0 < wait <= 3600 else "unknown"
 
 
 async def _request_groq(messages: list[Any]) -> Any:
     """Make one rate-coordinated model request for every AI agent role."""
-    global _last_groq_request_at, _groq_cooldown_until
+    global _last_groq_request_at, _groq_cooldown_until, _groq_quota_scope
     async with _groq_request_lock:
         if time.monotonic() < _groq_cooldown_until:
-            raise ProviderCooldownError(_groq_cooldown_until - time.monotonic())
+            raise ProviderCooldownError(_groq_cooldown_until - time.monotonic(), _groq_quota_scope)
         elapsed = time.monotonic() - _last_groq_request_at
         delay = max(0.0, float(settings.GROQ_MIN_REQUEST_INTERVAL_SECONDS) - elapsed)
         if delay:
@@ -131,7 +154,8 @@ async def _request_groq(messages: list[Any]) -> Any:
         except Exception as error:
             _last_groq_request_at = time.monotonic()
             if getattr(error, "status_code", None) == 429:
-                _groq_cooldown_until = time.monotonic() + max(120.0, _retry_after_seconds(error))
+                _groq_quota_scope = _quota_scope(error)
+                _groq_cooldown_until = time.monotonic() + (_retry_after_seconds(error) or (86400 if _groq_quota_scope == "daily" else 60))
             raise
 
 async def invoke_agent(
@@ -154,11 +178,17 @@ async def invoke_agent(
         SystemMessage(content=system_prompt),
         HumanMessage(content=json.dumps(user_payload))
     ]
+    started = time.monotonic()
     try:
         response = await _request_groq(messages)
         content = extract_clean_json(response.content)
         validated = schema.model_validate_json(content)
-        return {**validated.model_dump(), "analysis_source": "groq"}
+        result = {**validated.model_dump(), "analysis_source": "groq"}
+        if capability == "score_projection":
+            result["request_metrics"] = {"model": settings.GROQ_MODEL,
+                "latency_ms": round((time.monotonic() - started) * 1000),
+                "token_usage": getattr(response, "usage_metadata", None) or {}}
+        return result
     except Exception as exc:
         # Projection errors are returned to the job coordinator. Never retry
         # a rejected request or a rate limit inside a provider invocation.
@@ -186,5 +216,7 @@ async def invoke_agent(
         if capability != "score_projection":
             return {**fallback_dict, "analysis_source": "fallback"}
         return {**fallback_dict, "analysis_source": "fallback",
-                "provider_error": "rate_limit" if status == 429 else "bad_request" if status == 400 else "unavailable",
-                "retry_after": max(120.0, _retry_after_seconds(exc)) if status == 429 else 0.0}
+                "provider_error": "rate_limit" if status == 429 else "authentication" if status in {401, 403} else "bad_request" if status == 400 else "invalid_response" if isinstance(exc, ValidationError) else "unavailable",
+                "quota_scope": _quota_scope(exc) if status == 429 else None,
+                "request_metrics": {"model": settings.GROQ_MODEL, "latency_ms": round((time.monotonic() - started) * 1000)},
+                "retry_after": (_retry_after_seconds(exc) or 60.0) if status == 429 else 0.0}

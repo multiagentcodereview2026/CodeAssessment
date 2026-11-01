@@ -112,8 +112,40 @@ def test_fresh_database_migration_is_repeatable(tmp_path):
     )
     with engine.connect() as connection:
         version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert version == "20261029_0011"
+    assert version == "20261101_0012"
+    assert {"candidate_attempts", "generation_requests", "infrastructure_retries", "retry_available_at", "lease_until"}.issubset(
+        {column["name"] for column in inspector.get_columns("revision_jobs")})
     assert "private_projection" in {column["name"] for column in inspector.get_columns("submissions")}
     for table in ("problems", "assignment_problems"):
         assert "scoring_weights" in {column["name"] for column in inspector.get_columns(table)}
+    engine.dispose()
+
+
+def test_revision_job_backfill_preserves_duplicate_legacy_request_ids(tmp_path):
+    backend_dir = Path(__file__).resolve().parents[1]
+    environment = {**os.environ, "DATABASE_URL": "sqlite:///" + str(tmp_path / "legacy-jobs.sqlite")}
+    command = [sys.executable, "-m", "alembic", "-c", "alembic.ini"]
+    def migrate(*args):
+        result = subprocess.run([*command, *args], cwd=backend_dir, env=environment, capture_output=True, text=True)
+        assert result.returncode == 0, result.stdout + result.stderr
+    migrate("upgrade", "head")
+    migrate("downgrade", "20261029_0011")
+    engine = sa.create_engine(environment["DATABASE_URL"])
+    submissions = sa.Table("submissions", sa.MetaData(), autoload_with=engine)
+    with engine.begin() as connection:
+        for index in range(2):
+            connection.execute(submissions.insert().values(submission_id=f"legacy-{index}", student_id=f"learner-{index}",
+                problem_id="problem", code="print(0)", language="python", overall_score=80,
+                improved_code={"projection_request_id": "shared-request", "score_projection": {"job_status": "queued", "pending": True}},
+                private_projection={"request_id": "shared-request", "generated_source": f"private-{index}"}))
+    migrate("upgrade", "head")
+    jobs = sa.Table("revision_jobs", sa.MetaData(), autoload_with=engine)
+    with engine.connect() as connection:
+        rows = connection.execute(sa.select(jobs)).mappings().all()
+        assert len(rows) == 2 and len({row["id"] for row in rows}) == 2
+        for row in rows:
+            saved = connection.execute(sa.select(submissions).where(submissions.c.submission_id == row["submission_id"])).mappings().one()
+            assert saved["improved_code"]["projection_request_id"] == row["id"]
+            assert row["private_snapshot"]["request_id"] == row["id"]
+            assert saved["overall_score"] == 80
     engine.dispose()
