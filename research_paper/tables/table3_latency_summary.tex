@@ -1,0 +1,16 @@
+% Table III: Infrastructure Latency & Colocation Impact
+\begin{table}[!t]
+\centering
+\caption{Infrastructure Latency & Colocation Performance (US-East vs. Mumbai)}
+\label{tab:latency_colocation_summary}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Metric} & \textbf{US-East} & \textbf{Mumbai} & \textbf{Absolute $\Delta$} & \textbf{Improvement} \\
+\midrule
+TLS Handshake Latency & 2,198.4 ms & 240.2 ms & -1,958.2 ms & \textbf{89.1\% faster} \\
+Single Query (SELECT 1) & 553.90 ms & 43.18 ms & -510.72 ms & \textbf{92.2\% faster} \\
+Problem Ingest (1,890 rows) & 1,842.1 ms & 406.2 ms & -1,435.9 ms & \textbf{77.9\% faster} \\
+Pytest Suite (251+ tests) & 28.50 s & 4.70 s & -23.80 s & \textbf{83.5\% faster} \\
+\bottomrule
+\end{tabular}
+\end{table}

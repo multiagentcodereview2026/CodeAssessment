@@ -16,6 +16,12 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./codeassessment_v2.db")
 engine_options = {"pool_pre_ping": True}
 if DATABASE_URL.startswith("sqlite"):
     engine_options["connect_args"] = {"check_same_thread": False}
+else:
+    engine_options["pool_size"] = int(os.getenv("DB_POOL_SIZE", "5"))
+    engine_options["max_overflow"] = int(os.getenv("DB_MAX_OVERFLOW", "2"))
+    engine_options["pool_recycle"] = int(os.getenv("DB_POOL_RECYCLE", "300"))
+    if ":6543" in DATABASE_URL:
+        engine_options["connect_args"] = {"prepare_threshold": None}
 
 engine = create_engine(DATABASE_URL, **engine_options)
 

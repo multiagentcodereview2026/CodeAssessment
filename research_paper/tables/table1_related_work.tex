@@ -1,0 +1,16 @@
+% Table I: Comparison of Related Automated Assessment Frameworks
+\begin{table*}[!t]
+\centering
+\caption{Comparison of Automated Programming Assessment Approaches}
+\label{tab:related_work_comparison}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Framework / Paradigm} & \textbf{Correctness Basis} & \textbf{Complexity Evaluation} & \textbf{Pedagogical Feedback} & \textbf{Grade Integrity Guardrails} & \textbf{Similarity Role} \\
+\midrule
+\textbf{Web-CAT} (Edwards et al.)~\cite{edwards2008webcat} & Subprocess Test Suite & None & Test failures only & Deterministic test pass \% & External plagiarism tool \\
+\textbf{Pure LLM Grader} (Zero-shot) & Model Inference & Generative Big-O Guess & Full code replacement & Stochastic drift ($\sigma^2 > 10$) & Uncalibrated self-estimate \\
+\textbf{Autograder+} (Sahu et al.)~\cite{sahu2026autograder} & Tests + Model Grading & Unranked LLM Analysis & Conversational advice & Model marks influence grade & Uncalibrated peer Jaccard \\
+\textbf{CodeAssessment} (This Work) & Sandboxed Container Tests & 10-Level Ordinal Rank Ladder & Staged Hints / Structural AST & 79.0\% Non-Accepted Cap & Strictly Instructor Review Queue \\
+\bottomrule
+\end{tabular}
+\end{table*}
