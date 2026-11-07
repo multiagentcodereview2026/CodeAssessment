@@ -78,7 +78,7 @@ export const StudentDashboard: React.FC = () => {
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
       {/* Top Banner (Clean Greeting & Primary CTAs) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-[#0c0c0e] via-[#141418] to-[#0c0c0e] border border-neutral-800/80 p-6 sm:p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-full bg-gradient-to-l from-indigo-500/10 to-transparent pointer-events-none" />
         
         <div className="relative z-10">

@@ -82,7 +82,7 @@ export const StudentProfileView: React.FC = () => {
       {/* Main Profile Card (Matches diagram profile layout) */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
         {/* Banner */}
-        <div className="h-32 bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 relative">
+        <div className="h-32 bg-gradient-to-r from-[#0c0c0e] via-[#141418] to-[#0c0c0e] border-b border-neutral-800/80 relative">
           <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur text-white text-xs font-semibold border border-white/20">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
             <span>Academic Verification Active</span>

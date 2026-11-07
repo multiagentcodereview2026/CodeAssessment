@@ -14,8 +14,11 @@ frontend/.env
 backend_local_backup/
 codeassessment_v2.db
 codeassessment-problem-bank-verified-20260927.jsonl
+codeassessment_backup.json.gz
 research-data/
 research-results/
+.DS_Store
+*/.DS_Store
 
 # Temporary spreadsheet owner/lock files.
 ~$*

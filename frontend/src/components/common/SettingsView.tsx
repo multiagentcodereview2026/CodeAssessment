@@ -321,7 +321,7 @@ export const SettingsView: React.FC = () => {
                 </div>
                 <p className="mt-3 font-bold text-sm text-slate-900 dark:text-slate-100">Dark theme</p>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-300 leading-relaxed">
-                  Deep slate background designed for low eye strain during long coding sessions.
+                  Aesthetic obsidian black theme with sleek contrast and low eye strain.
                 </p>
               </button>
 
