@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, ChevronDown, Code2, LoaderCircle, Users } from 'lucide-react';
+import { Check, ChevronDown, Code2, LoaderCircle, Users, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
+import { FilterDropdown } from '../ui/filter-dropdown';
 
 type StudentSubmission = {
   id: string; name: string; rollNumber: string; submissionId: string; language?: string;
@@ -128,25 +129,46 @@ export const SimilarityReviewView: React.FC = () => {
     return () => { cancelled = true; };
   }, [authFetch]);
 
+  const courseOptions = useMemo(() => {
+    const options = [
+      { value: 'all', label: 'All courses' },
+      ...courses.map((course) => ({
+        value: String(course.id),
+        label: course.course_code ? `${course.course_code} · ${course.title}` : course.title,
+      })),
+    ];
+    if (courseId !== 'all' && !options.some((opt) => opt.value === courseId)) {
+      options.push({ value: courseId, label: `Course #${courseId}` });
+    }
+    return options;
+  }, [courses, courseId]);
+
   return <div className="space-y-6 pb-12 animate-fadeIn">
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Code Similarity Review</h1>
-        <p className="mt-1 text-xs sm:text-sm text-slate-500">Groups are shown only when at least two students share a code pattern or implementation approach. This is instructor-only analysis, not a grade or misconduct finding.</p>
+    <div className="flex flex-col gap-4 border-b border-slate-200 pb-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Code Similarity Review</h1>
+          <p className="mt-1 text-xs sm:text-sm text-slate-500">Groups are shown only when at least two students share a code pattern or implementation approach. This is instructor-only analysis, not a grade or misconduct finding.</p>
+        </div>
       </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="text-xs font-semibold text-slate-600">Course:
-          <select value={courseId} onChange={(event) => setCourseId(event.target.value)} className="ml-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
-            <option value="all">All courses</option>
-            {courses.map((course) => <option key={course.id} value={String(course.id)}>{course.course_code ? `${course.course_code} · ` : ''}{course.title}</option>)}
-          </select>
-        </label>
+
+      <div className="flex flex-wrap items-center gap-2.5 pt-1">
+        <FilterDropdown
+          label="Course"
+          placeholder="All courses"
+          searchable={courseOptions.length > 5}
+          searchPlaceholder="Search courses..."
+          variant="emerald"
+          options={courseOptions}
+          value={courseId}
+          onChange={(val) => setCourseId(val.length ? val[val.length - 1] : 'all')}
+        />
       </div>
     </div>
 
     {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}<button onClick={() => void loadCases()} className="ml-3 font-bold underline">Retry</button></div>}
     {loading ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-slate-500"><LoaderCircle className="mx-auto mb-3 h-6 w-6 animate-spin" />Loading evaluated submissions…</div>
-      : reviewItems.length === 0 ? <div className="space-y-3 rounded-3xl border border-slate-200 bg-white p-12 text-center"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600"><Check className="h-6 w-6" /></div><h2 className="text-base font-bold text-slate-800">No submission groups found</h2><p className="mx-auto max-w-lg text-sm text-slate-500">There are no evaluated submissions for instructor-assigned problems in this scope.</p></div>
+      : reviewItems.length === 0 ? <div className="space-y-3 rounded-3xl border border-slate-200 bg-white p-12 text-center"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600"><Check className="h-6 w-6" /></div><h2 className="text-base font-bold text-slate-800">No submission groups found</h2><p className="mx-auto max-w-lg text-sm text-slate-500">There are no evaluated submissions for instructor-assigned problems in this scope.</p>{courseId !== 'all' && <button type="button" onClick={() => setCourseId('all')} className="mt-2 inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 ring-1 ring-rose-200 dark:ring-rose-800/40 transition-all cursor-pointer whitespace-nowrap"><RotateCcw className="w-3 h-3" /><span>Clear all filters</span></button>}</div>
       : <>
         <section className="space-y-6">{problemSections.map((section) => <div key={section.title} className="space-y-3"><div className="flex items-center justify-between"><h2 className="text-base font-extrabold text-slate-900">{section.title}</h2><span className="text-xs font-semibold text-slate-500">{section.items.length} group{section.items.length === 1 ? '' : 's'}</span></div>{section.items.map((item, index) => { const open = item.kind === 'code-overlap' ? selectedClusterId === item.id : selectedApproachId === item.id; const detail = item.detail as SimilarityCluster; return <div key={item.id} className="space-y-2"><button type="button" aria-expanded={open} onClick={() => { if (item.kind === 'code-overlap') { setSelectedClusterId(open ? '' : item.id); setSelectedApproachId(''); } else { setSelectedApproachId(open ? '' : item.id); setSelectedClusterId(''); } }} className={`flex w-full flex-col gap-3 rounded-2xl border p-4 text-left transition sm:flex-row sm:items-center sm:justify-between ${open ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-white hover:border-emerald-300 hover:bg-slate-50'}`}><div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-extrabold uppercase text-emerald-800">Group {index + 1}</span><p className="text-sm font-bold text-slate-900">{detail.groupLabel || 'Submission group'}</p></div><p className="mt-2 flex items-center gap-1.5 text-xs text-slate-600"><Users className="h-3.5 w-3.5" />{item.members.length} student{item.members.length === 1 ? '' : 's'}</p><p className="mt-2 font-mono text-[11px] text-slate-500">{item.members.map((member) => member.id).join(' · ')}</p></div><ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition ${open ? 'rotate-180' : ''}`} /></button>{open && (item.kind === 'code-overlap' ? <SimilarityGroupDetails cluster={detail} cases={cases} codesBySubmission={codesBySubmission} /> : <ApproachGroupDetails group={item.detail as ApproachGroup} />)}</div>; })}</div>)}</section>
       </>}

@@ -31,6 +31,7 @@ import { Modal } from '../common/Modal';
 import { DoubleConfirmDialog } from '../common/DoubleConfirmDialog';
 import { Problem, Difficulty } from '../../types';
 import { useAuth } from '../../context/useAuth';
+import { FilterDropdown } from '../ui/filter-dropdown';
 
 interface TestCaseItem {
   id: string;
@@ -62,8 +63,8 @@ export const ProblemsListView: React.FC = () => {
     location.pathname.startsWith('/instructor') || new URLSearchParams(location.search).get('view') === 'instructor' ? 'instructor' : 'practice'
   );
   const [search, setSearch] = useState('');
-  const [difficultyFilter, setDifficultyFilter] = useState<string>('all');
-  const [selectedTag, setSelectedTag] = useState<string>('all');
+  const [difficultyFilters, setDifficultyFilters] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [languageFilter, setLanguageFilter] = useState<string>('all');
   const [isSkillsOpen, setIsSkillsOpen] = useState(false);
   const [isInstructorSkillsOpen, setIsInstructorSkillsOpen] = useState(false);
@@ -97,7 +98,7 @@ export const ProblemsListView: React.FC = () => {
 
   useEffect(() => {
     setPracticePage(1);
-  }, [search, difficultyFilter, selectedTag, languageFilter]);
+  }, [search, difficultyFilters, selectedTags, languageFilter]);
 
   useEffect(() => {
     if (!isInstructor) {
@@ -235,13 +236,13 @@ export const ProblemsListView: React.FC = () => {
       p.tags.some(t => t.toLowerCase().includes(search.toLowerCase())) ||
       (p.courseCode && p.courseCode.toLowerCase().includes(search.toLowerCase()));
 
-    const matchDiff = difficultyFilter === 'all' || p.difficulty.toLowerCase() === difficultyFilter.toLowerCase();
-    const matchTag = selectedTag === 'all' || p.tags.includes(selectedTag);
+    const matchDiff = difficultyFilters.length === 0 || difficultyFilters.includes(p.difficulty.toLowerCase());
+    const matchTag = selectedTags.length === 0 || p.tags.some(t => selectedTags.includes(t));
 
     return matchSearch && matchDiff && matchTag;
   });
 
-  const hasActiveFilters = search !== '' || difficultyFilter !== 'all' || selectedTag !== 'all' || languageFilter !== 'all';
+  const hasActiveFilters = search !== '' || difficultyFilters.length > 0 || selectedTags.length > 0 || languageFilter !== 'all';
   const selectedTabCount = activeTab === 'instructor' ? instructorCount : practiceCount;
   const completionCount = filtered.filter(p => solvedSlugs.has(p.slug) || solvedSlugs.has(p.id)).length;
   const focusLabel = activeTab === 'instructor'
@@ -250,8 +251,8 @@ export const ProblemsListView: React.FC = () => {
 
   const handleClearFilters = () => {
     setSearch('');
-    setDifficultyFilter('all');
-    setSelectedTag('all');
+    setDifficultyFilters([]);
+    setSelectedTags([]);
     setLanguageFilter('all');
   };
 
@@ -416,8 +417,8 @@ export const ProblemsListView: React.FC = () => {
     const matchesNumber = /^\d+$/.test(normalizedStudentSearch) && questionOrder(problem.id) === Number(normalizedStudentSearch);
     const matchesText = !normalizedStudentSearch || `${problem.id} ${problem.title} ${problem.tags.join(' ')}`.toLowerCase().includes(normalizedStudentSearch);
     return (matchesNumber || matchesText) &&
-      (difficultyFilter === 'all' || problem.difficulty.toLowerCase() === difficultyFilter) &&
-      (selectedTag === 'all' || problem.tags.includes(selectedTag)) &&
+      (difficultyFilters.length === 0 || difficultyFilters.includes(problem.difficulty.toLowerCase())) &&
+      (selectedTags.length === 0 || problem.tags.some(t => selectedTags.includes(t))) &&
       (languageFilter === 'all' || Object.keys(problem.starterCode || {}).some((language) => language.toLowerCase() === languageFilter));
   });
 
@@ -429,8 +430,8 @@ export const ProblemsListView: React.FC = () => {
   const visibleStudentInstructor = studentInstructorProblems.filter((problem) => {
     const content = `${problem.title} ${problem.courseCode || ''} ${problem.tags.join(' ')}`.toLowerCase();
     const matchSearch = !normalizedStudentSearch || content.includes(normalizedStudentSearch);
-    const matchDiff = difficultyFilter === 'all' || problem.difficulty.toLowerCase() === difficultyFilter.toLowerCase();
-    const matchTag = selectedTag === 'all' || problem.tags.includes(selectedTag);
+    const matchDiff = difficultyFilters.length === 0 || difficultyFilters.includes(problem.difficulty.toLowerCase());
+    const matchTag = selectedTags.length === 0 || problem.tags.some(t => selectedTags.includes(t));
     return matchSearch && matchDiff && matchTag;
   });
 
@@ -519,165 +520,44 @@ export const ProblemsListView: React.FC = () => {
                   )}
                 </div>
 
-                {/* Skills Popover Filter */}
-                <div className="relative" ref={skillsDropdownRef}>
-                  <button
-                    type="button"
-                    onClick={() => setIsSkillsOpen((open) => !open)}
-                    aria-expanded={isSkillsOpen}
-                    className={`inline-flex h-9 w-full items-center justify-between gap-2 rounded-xl border px-3 text-xs font-medium transition-all cursor-pointer sm:w-auto ${
-                      selectedTag !== 'all'
-                        ? 'border-indigo-300 bg-indigo-50 text-indigo-700 shadow-2xs font-semibold'
-                        : isSkillsOpen
-                        ? 'border-indigo-300 bg-indigo-50/50 text-indigo-700 shadow-xs'
-                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <Layers className={`h-3.5 w-3.5 ${selectedTag !== 'all' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                      <span>{selectedTag === 'all' ? 'Skills' : selectedTag}</span>
-                    </div>
-                    {selectedTag !== 'all' ? (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedTag('all');
-                        }}
-                        className="rounded-full p-0.5 text-indigo-500 hover:bg-indigo-200/70 hover:text-indigo-800 transition-colors"
-                        title="Clear skill filter"
-                      >
-                        <X className="h-3 w-3" />
-                      </span>
-                    ) : (
-                      <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform duration-150 ${isSkillsOpen ? 'rotate-180 text-indigo-600' : ''}`} />
-                    )}
-                  </button>
+                {/* Skills Designated Dropdown */}
+                <FilterDropdown
+                  label="Skills"
+                  placeholder="Skills"
+                  icon={<Layers className="h-3.5 w-3.5" />}
+                  searchable
+                  searchPlaceholder="Search topics (e.g., Array, Graph)..."
+                  options={[
+                    {
+                      value: 'all',
+                      label: 'All Topics',
+                      count: activeTab === 'instructor' ? studentInstructorProblems.length : orderedPracticeProblems.length,
+                    },
+                    ...currentTopics.map((topic) => ({
+                      value: topic,
+                      label: topic,
+                      count: (activeTab === 'instructor' ? studentInstructorProblems : orderedPracticeProblems).filter((p) => p.tags.includes(topic)).length,
+                    })),
+                  ]}
+                  value={selectedTags}
+                  onChange={(val) => setSelectedTags(val)}
+                  variant="indigo"
+                />
 
-                  {isSkillsOpen && (
-                    <div className="absolute right-0 top-full z-40 mt-1.5 w-[min(340px,calc(100vw-2rem))] rounded-2xl border border-slate-200/90 bg-white p-3 text-slate-800 shadow-xl shadow-indigo-950/10 animate-fadeIn">
-                      {/* Popover Header */}
-                      <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
-                        <div className="flex items-center gap-1.5">
-                          <Layers className="h-3.5 w-3.5 text-indigo-600" />
-                          <h3 className="text-xs font-bold text-slate-900">Filter by Topic</h3>
-                          <span className="rounded-full bg-slate-100 px-1.5 py-0.2 text-[10px] font-semibold text-slate-600">
-                            {currentTopics.length}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {selectedTag !== 'all' && (
-                            <button
-                              type="button"
-                              onClick={() => { setSelectedTag('all'); setIsSkillsOpen(false); }}
-                              className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer"
-                            >
-                              <RotateCcw className="h-2.5 w-2.5" />
-                              Reset
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setIsSkillsOpen(false)}
-                            aria-label="Close skills"
-                            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Search Input for Topics */}
-                      <div className="relative mt-2.5">
-                        <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-400" />
-                        <input
-                          type="text"
-                          value={skillSearch}
-                          onChange={(e) => setSkillSearch(e.target.value)}
-                          placeholder="Search topics (e.g., Array, Graph, DP)..."
-                          className="w-full rounded-lg border border-slate-200 bg-slate-50/80 py-1.5 pl-8 pr-7 text-xs text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-200"
-                        />
-                        {skillSearch && (
-                          <button
-                            type="button"
-                            onClick={() => setSkillSearch('')}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        )}
-                      </div>
-
-                      {/* All Topics option */}
-                      <div className="mt-2.5">
-                        <button
-                          type="button"
-                          onClick={() => { setSelectedTag('all'); setIsSkillsOpen(false); }}
-                          className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                            selectedTag === 'all'
-                              ? 'bg-indigo-600 text-white shadow-xs font-semibold'
-                              : 'bg-slate-50 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className={`w-1.5 h-1.5 rounded-full ${selectedTag === 'all' ? 'bg-white' : 'bg-slate-400'}`} />
-                            <span>All Topics</span>
-                          </div>
-                          <span className={`rounded px-1.5 py-0.2 text-[10px] font-mono ${selectedTag === 'all' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-200/80 text-slate-600'}`}>
-                            {activeTab === 'instructor' ? studentInstructorProblems.length : orderedPracticeProblems.length}
-                          </span>
-                        </button>
-                      </div>
-
-                      {/* Topics Pill Cloud */}
-                      <div className="mt-2 max-h-52 overflow-y-auto pr-1">
-                        <div className="flex flex-wrap gap-1">
-                          {currentTopics
-                            .filter((topic) => !skillSearch || topic.toLowerCase().includes(skillSearch.toLowerCase()))
-                            .map((topic) => {
-                              const count = (activeTab === 'instructor' ? studentInstructorProblems : orderedPracticeProblems).filter((p) => p.tags.includes(topic)).length;
-                              const isSelected = selectedTag === topic;
-                              return (
-                                <button
-                                  type="button"
-                                  key={topic}
-                                  onClick={() => { setSelectedTag(topic); setIsSkillsOpen(false); }}
-                                  className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer ${
-                                    isSelected
-                                      ? 'bg-indigo-600 text-white font-semibold shadow-xs'
-                                      : 'border border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/60 hover:text-indigo-700'
-                                  }`}
-                                >
-                                  <span>{topic}</span>
-                                  <span className={`rounded px-1 py-0.2 text-[9px] font-mono ${
-                                    isSelected ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-500'
-                                  }`}>
-                                    {count}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                        </div>
-                        {currentTopics.filter((topic) => !skillSearch || topic.toLowerCase().includes(skillSearch.toLowerCase())).length === 0 && (
-                          <p className="py-5 text-center text-xs text-slate-400">No topics match &quot;{skillSearch}&quot;</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <select
-                  aria-label="Filter by difficulty"
-                  value={difficultyFilter}
-                  onChange={(event) => setDifficultyFilter(event.target.value)}
-                  className="h-9 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none transition-all hover:border-slate-300 focus:border-indigo-500 cursor-pointer"
-                >
-                  <option value="all">All difficulties</option>
-                  <option value="easy">Easy</option>
-                  <option value="medium">Medium</option>
-                  <option value="hard">Hard</option>
-                </select>
+                {/* Difficulty Designated Dropdown */}
+                <FilterDropdown
+                  label="Difficulty"
+                  placeholder="All difficulties"
+                  options={[
+                    { value: 'all', label: 'All difficulties' },
+                    { value: 'easy', label: 'Easy' },
+                    { value: 'medium', label: 'Medium' },
+                    { value: 'hard', label: 'Hard' },
+                  ]}
+                  value={difficultyFilters}
+                  onChange={(val) => setDifficultyFilters(val)}
+                  variant="indigo"
+                />
 
                 {activeTab === 'practice' && studentPracticeLanguages.length > 0 && (
                   <select
@@ -693,16 +573,6 @@ export const ProblemsListView: React.FC = () => {
                       </option>
                     ))}
                   </select>
-                )}
-
-                {hasActiveFilters && (
-                  <button
-                    type="button"
-                    onClick={handleClearFilters}
-                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:underline px-2 py-1 cursor-pointer"
-                  >
-                    Reset Filters
-                  </button>
                 )}
               </div>
 
@@ -1088,175 +958,44 @@ export const ProblemsListView: React.FC = () => {
             )}
           </div>
 
-          {/* Topics Popover Filter */}
-          <div className="relative" ref={instructorSkillsDropdownRef}>
-            <button
-              type="button"
-              onClick={() => setIsInstructorSkillsOpen((open) => !open)}
-              aria-expanded={isInstructorSkillsOpen}
-              className={`inline-flex h-9 w-full items-center justify-between gap-2 rounded-xl border px-3 text-xs font-medium transition-all cursor-pointer sm:w-auto ${
-                selectedTag !== 'all'
-                  ? 'border-emerald-300 bg-emerald-50 text-emerald-700 shadow-2xs font-semibold'
-                  : isInstructorSkillsOpen
-                  ? 'border-emerald-300 bg-emerald-50/50 text-emerald-700 shadow-xs'
-                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <Layers className={`h-3.5 w-3.5 ${selectedTag !== 'all' ? 'text-emerald-600' : 'text-slate-400'}`} />
-                <span>{selectedTag === 'all' ? 'Skills' : selectedTag}</span>
-              </div>
-              {selectedTag !== 'all' ? (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedTag('all');
-                  }}
-                  className="rounded-full p-0.5 text-emerald-500 hover:bg-emerald-200/70 hover:text-emerald-800 transition-colors"
-                  title="Clear skill filter"
-                >
-                  <X className="h-3 w-3" />
-                </span>
-              ) : (
-                <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform duration-150 ${isInstructorSkillsOpen ? 'rotate-180 text-emerald-600' : ''}`} />
-              )}
-            </button>
+          {/* Skills Designated Dropdown */}
+          <FilterDropdown
+            label="Skills"
+            placeholder="Skills"
+            icon={<Layers className="h-3.5 w-3.5" />}
+            searchable
+            searchPlaceholder="Search topics..."
+            options={[
+              {
+                value: 'all',
+                label: 'All Topics',
+                count: instructorProblems.length,
+              },
+              ...allTags.map((topic) => ({
+                value: topic,
+                label: topic,
+                count: instructorProblems.filter((p) => p.tags.includes(topic)).length,
+              })),
+            ]}
+            value={selectedTags}
+            onChange={(val) => setSelectedTags(val)}
+            variant="emerald"
+          />
 
-            {isInstructorSkillsOpen && (
-              <div className="absolute right-0 top-full z-40 mt-1.5 w-[min(340px,calc(100vw-2rem))] rounded-2xl border border-slate-200/90 bg-white p-3 text-slate-800 shadow-xl shadow-emerald-950/10 animate-fadeIn">
-                {/* Popover Header */}
-                <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
-                  <div className="flex items-center gap-1.5">
-                    <Layers className="h-3.5 w-3.5 text-emerald-600" />
-                    <h3 className="text-xs font-bold text-slate-900">Filter by Topic</h3>
-                    <span className="rounded-full bg-slate-100 px-1.5 py-0.2 text-[10px] font-semibold text-slate-600">
-                      {allTags.length}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {selectedTag !== 'all' && (
-                      <button
-                        type="button"
-                        onClick={() => { setSelectedTag('all'); setIsInstructorSkillsOpen(false); }}
-                        className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-800 cursor-pointer"
-                      >
-                        <RotateCcw className="h-2.5 w-2.5" />
-                        Reset
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setIsInstructorSkillsOpen(false)}
-                      aria-label="Close skills"
-                      className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Search Input for Topics */}
-                <div className="relative mt-2.5">
-                  <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={skillSearch}
-                    onChange={(e) => setSkillSearch(e.target.value)}
-                    placeholder="Search topics..."
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50/80 py-1.5 pl-8 pr-7 text-xs text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-200"
-                  />
-                  {skillSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setSkillSearch('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
-
-                {/* All Topics option */}
-                <div className="mt-2.5">
-                  <button
-                    type="button"
-                    onClick={() => { setSelectedTag('all'); setIsInstructorSkillsOpen(false); }}
-                    className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                      selectedTag === 'all'
-                        ? 'bg-emerald-600 text-white shadow-xs font-semibold'
-                        : 'bg-slate-50 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full ${selectedTag === 'all' ? 'bg-white' : 'bg-slate-400'}`} />
-                      <span>All Topics</span>
-                    </div>
-                    <span className={`rounded px-1.5 py-0.2 text-[10px] font-mono ${selectedTag === 'all' ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-200/80 text-slate-600'}`}>
-                      {instructorProblems.length}
-                    </span>
-                  </button>
-                </div>
-
-                {/* Topics Pill Cloud */}
-                <div className="mt-2 max-h-52 overflow-y-auto pr-1">
-                  <div className="flex flex-wrap gap-1">
-                    {allTags
-                      .filter((topic) => !skillSearch || topic.toLowerCase().includes(skillSearch.toLowerCase()))
-                      .map((topic) => {
-                        const count = instructorProblems.filter((p) => p.tags.includes(topic)).length;
-                        const isSelected = selectedTag === topic;
-                        return (
-                          <button
-                            type="button"
-                            key={topic}
-                            onClick={() => { setSelectedTag(topic); setIsInstructorSkillsOpen(false); }}
-                            className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer ${
-                              isSelected
-                                ? 'bg-emerald-600 text-white font-semibold shadow-xs'
-                                : 'border border-slate-200 bg-white text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/60 hover:text-emerald-700'
-                            }`}
-                          >
-                            <span>{topic}</span>
-                            <span className={`rounded px-1 py-0.2 text-[9px] font-mono ${
-                              isSelected ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-100 text-slate-500'
-                            }`}>
-                              {count}
-                            </span>
-                          </button>
-                        );
-                      })}
-                  </div>
-                  {allTags.filter((topic) => !skillSearch || topic.toLowerCase().includes(skillSearch.toLowerCase())).length === 0 && (
-                    <p className="py-5 text-center text-xs text-slate-400">No topics match &quot;{skillSearch}&quot;</p>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <select
-            aria-label="Filter by difficulty"
-            value={difficultyFilter}
-            onChange={(event) => setDifficultyFilter(event.target.value)}
-            className="h-9 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none transition-all hover:border-slate-300 focus:border-emerald-500 cursor-pointer"
-          >
-            <option value="all">All difficulties</option>
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
-          </select>
-
-          {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={handleClearFilters}
-              className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline px-2 py-1 cursor-pointer"
-            >
-              Reset Filters
-            </button>
-          )}
+          {/* Difficulty Designated Dropdown */}
+          <FilterDropdown
+            label="Difficulty"
+            placeholder="All difficulties"
+            options={[
+              { value: 'all', label: 'All difficulties' },
+              { value: 'easy', label: 'Easy' },
+              { value: 'medium', label: 'Medium' },
+              { value: 'hard', label: 'Hard' },
+            ]}
+            value={difficultyFilters}
+            onChange={(val) => setDifficultyFilters(val)}
+            variant="emerald"
+          />
         </div>
 
         {/* Row-wise Problems Table or Empty State */}

@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { AlertTriangle, BarChart3, Send } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, BarChart3, Send, RotateCcw } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth';
 import { ScoreDistributionBarChart } from '../common/ChartComponents';
+import { FilterDropdown } from '../ui/filter-dropdown';
 
 type Scope = { id: number; title: string; course_id?: number; kind: 'course' | 'assignment' };
 type Analytics = {
@@ -83,6 +84,32 @@ export const ClassAnalyticsView: React.FC = () => {
   }, [auth.authFetch, courseId, assignmentId, refreshTick]);
 
   const scopeTitle = activeAssignment?.title ?? activeCourse?.title ?? 'All courses';
+
+  const scopeOptions = useMemo(() => {
+    const options: Array<{ value: string; label: string }> = [
+      { value: 'all', label: 'All courses' },
+    ];
+    courses.forEach((item) => {
+      options.push({
+        value: `course:${item.id}`,
+        label: item.title,
+      });
+    });
+    assignments.forEach((item) => {
+      options.push({
+        value: `assignment:${item.id}`,
+        label: item.title,
+      });
+    });
+    if (scopeValue !== 'all' && !options.some((opt) => opt.value === scopeValue)) {
+      options.push({
+        value: scopeValue,
+        label: scopeTitle !== 'All courses' ? scopeTitle : scopeValue,
+      });
+    }
+    return options;
+  }, [courses, assignments, scopeValue, scopeTitle]);
+
   const openRoster = (topic?: string) => {
     const params = new URLSearchParams();
     if (courseId || activeAssignment?.course_id) params.set('courseId', courseId || String(activeAssignment?.course_id));
@@ -103,8 +130,26 @@ export const ClassAnalyticsView: React.FC = () => {
   };
 
   return <div className="space-y-6 pb-12 animate-fadeIn">
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div><h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Class Performance Analytics</h1><p className="text-xs text-slate-500 mt-1">Evaluated submission results for {scopeTitle}.</p></div>
-      <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Scope:<select value={scopeValue} onChange={(event) => changeScope(event.target.value)} className="bg-white border border-slate-200 text-xs font-semibold text-slate-700 rounded-xl px-3 py-2"><option value="all">All courses</option><optgroup label="Courses">{courses.map((item) => <option key={`course-${item.id}`} value={`course:${item.id}`}>{item.title}</option>)}</optgroup><optgroup label="Assignments">{assignments.map((item) => <option key={`assignment-${item.id}`} value={`assignment:${item.id}`}>{item.title}</option>)}</optgroup></select></label>
+    <div className="flex flex-col gap-4 border-b border-slate-200 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Class Performance Analytics</h1>
+          <p className="text-xs text-slate-500 mt-1">Evaluated submission results for {scopeTitle}.</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <FilterDropdown
+          label="Scope"
+          placeholder="All courses"
+          searchable
+          searchPlaceholder="Search courses or assignments..."
+          options={scopeOptions}
+          value={scopeValue}
+          onChange={(val) => changeScope(val.length ? val[val.length - 1] : 'all')}
+          variant="emerald"
+        />
+      </div>
     </div>
     {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}<button onClick={() => setSearchParams(new URLSearchParams(searchParams))} className="ml-3 font-bold underline">Retry</button></div>}
     {loading ? <div className="rounded-2xl border bg-white p-12 text-center text-slate-500">Loading analytics…</div> : <div className="space-y-6">

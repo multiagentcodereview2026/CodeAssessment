@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, BookOpen, ClipboardList, RefreshCw, Search, Send, Sparkles, Target, Users, X } from 'lucide-react';
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, BookOpen, ClipboardList, RefreshCw, Search, Send, Sparkles, Target, Users, X, RotateCcw } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/useAuth';
 import { StudentRosterItem } from '../../types';
 import { Modal } from '../common/Modal';
+import { FilterDropdown } from '../ui/filter-dropdown';
 
 type ApiRosterItem = {
   id: string; name: string; rollNumber: string; email?: string | null; department?: string | null;
@@ -23,8 +24,8 @@ export const StudentRosterView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
-  const [filterTopic, setFilterTopic] = useState(topicParam || 'all');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterTopics, setFilterTopics] = useState<string[]>(topicParam ? [topicParam] : []);
+  const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
 
   const loadRoster = useCallback(async () => {
     setLoading(true); setLoadError('');
@@ -56,18 +57,55 @@ export const StudentRosterView: React.FC = () => {
       window.removeEventListener('focus', refresh);
     };
   }, [loadRoster]);
-  useEffect(() => { setFilterTopic(topicParam || 'all'); }, [topicParam]);
+  useEffect(() => { setFilterTopics(topicParam ? [topicParam] : []); }, [topicParam]);
   const allTopics = useMemo(() => Array.from(new Set(studentRoster.flatMap((student) => student.weakTopics))), [studentRoster]);
   const atRiskCount = studentRoster.filter((student) => student.status === 'At Risk').length;
   const needsAttentionCount = studentRoster.filter((student) => student.status === 'Needs Attention').length;
   const mostCommonWeakTopic = allTopics.map((topic) => ({ topic, count: studentRoster.filter((student) => student.weakTopics.includes(topic)).length })).sort((a, b) => b.count - a.count)[0];
   const filtered = studentRoster.filter((student) => (
     (student.name.toLowerCase().includes(search.toLowerCase()) || student.rollNumber.toLowerCase().includes(search.toLowerCase()))
-    && (filterTopic === 'all' || student.weakTopics.includes(filterTopic))
-    && (filterStatus === 'all' || student.status.toLowerCase() === filterStatus.toLowerCase())
+    && (filterTopics.length === 0 || student.weakTopics.some(t => filterTopics.includes(t)))
+    && (filterStatuses.length === 0 || filterStatuses.includes(student.status.toLowerCase()))
   ));
 
   const emptyMessage = studentRoster.length ? 'No students match these filters.' : 'No students are enrolled in your active courses yet.';
+
+  const statusOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All Statuses', count: studentRoster.length },
+      {
+        value: 'on track',
+        label: 'On Track',
+        count: studentRoster.filter((s) => s.status?.toLowerCase() === 'on track').length,
+      },
+      { value: 'needs attention', label: 'Needs Attention', count: needsAttentionCount },
+      { value: 'at risk', label: 'At Risk', count: atRiskCount },
+    ],
+    [studentRoster, needsAttentionCount, atRiskCount]
+  );
+
+  const topicOptions = useMemo(() => {
+    const list = allTopics.slice();
+    if (filterTopic !== 'all' && !list.includes(filterTopic)) {
+      list.push(filterTopic);
+    }
+    return [
+      { value: 'all', label: 'All Topics' },
+      ...list.map((topic) => ({
+        value: topic,
+        label: topic,
+        count: studentRoster.filter((s) => s.weakTopics.includes(topic)).length,
+      })),
+    ];
+  }, [allTopics, filterTopics, studentRoster]);
+
+  const hasActiveFilters = search.trim() !== '' || filterTopics.length > 0 || filterStatuses.length > 0;
+
+  const handleClearAllFilters = () => {
+    setSearch('');
+    setFilterTopics([]);
+    setFilterStatuses([]);
+  };
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
@@ -111,19 +149,19 @@ export const StudentRosterView: React.FC = () => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <button onClick={() => setFilterStatus('at risk')} className="text-left bg-white rounded-2xl border border-rose-200/80 p-4 shadow-2xs hover:border-rose-400 transition-all cursor-pointer">
+        <button onClick={() => setFilterStatuses(['at risk'])} className="text-left bg-white rounded-2xl border border-rose-200/80 p-4 shadow-2xs hover:border-rose-400 transition-all cursor-pointer">
           <div className="flex justify-between items-center"><span className="text-xs font-bold uppercase text-rose-700">At Risk</span><AlertTriangle className="w-4 h-4 text-rose-500" /></div>
           <div className="mt-2 flex items-baseline gap-2"><span className="text-2xl font-extrabold text-rose-700 font-mono">{atRiskCount}</span><span className="text-xs text-slate-500">students</span></div>
           <p className="mt-1 text-[11px] text-slate-500">Average score below 50%.</p>
         </button>
 
-        <button onClick={() => setFilterStatus('needs attention')} className="text-left bg-white rounded-2xl border border-amber-200/80 p-4 shadow-2xs hover:border-amber-400 transition-all cursor-pointer">
+        <button onClick={() => setFilterStatuses(['needs attention'])} className="text-left bg-white rounded-2xl border border-amber-200/80 p-4 shadow-2xs hover:border-amber-400 transition-all cursor-pointer">
           <div className="flex justify-between items-center"><span className="text-xs font-bold uppercase text-amber-700">Needs Attention</span><Target className="w-4 h-4 text-amber-500" /></div>
           <div className="mt-2 flex items-baseline gap-2"><span className="text-2xl font-extrabold text-amber-700 font-mono">{needsAttentionCount}</span><span className="text-xs text-slate-500">students</span></div>
           <p className="mt-1 text-[11px] text-slate-500">Low scores, weak topics, or no coursework submissions.</p>
         </button>
 
-        <button onClick={() => mostCommonWeakTopic && setFilterTopic(mostCommonWeakTopic.topic)} className="text-left bg-white rounded-2xl border border-emerald-200/80 p-4 shadow-2xs hover:border-emerald-400 transition-all cursor-pointer">
+        <button onClick={() => mostCommonWeakTopic && setFilterTopics([mostCommonWeakTopic.topic])} className="text-left bg-white rounded-2xl border border-emerald-200/80 p-4 shadow-2xs hover:border-emerald-400 transition-all cursor-pointer">
           <div className="flex justify-between items-center"><span className="text-xs font-bold uppercase text-emerald-700">Common Gap</span><ClipboardList className="w-4 h-4 text-emerald-500" /></div>
           <div className="mt-2 text-sm font-extrabold text-slate-900">{mostCommonWeakTopic?.topic || 'No assessed weak topics'}</div>
           <p className="mt-1 text-[11px] text-slate-500">{mostCommonWeakTopic ? `${mostCommonWeakTopic.count} students show this gap.` : 'Appears after evaluated submissions.'}</p>
@@ -132,53 +170,48 @@ export const StudentRosterView: React.FC = () => {
 
       {/* Main Table Container */}
       <main className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by student name or ID..."
-              className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50/70 py-1.5 pl-9 pr-8 text-xs text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:ring-1 focus:ring-emerald-100"
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 border-b border-slate-100 p-4">
+          <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search by student name or ID..."
+                className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50/70 py-1.5 pl-9 pr-8 text-xs text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:ring-1 focus:ring-emerald-100"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  aria-label="Clear search"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Designated Dropdown Box for Status */}
+            <FilterDropdown
+              label="Status"
+              placeholder="All Statuses"
+              options={statusOptions}
+              value={filterStatuses}
+              onChange={(val) => setFilterStatuses(val)}
+              variant="emerald"
             />
-            {search && (
-              <button
-                onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
-              Weak Area:
-              <select
-                value={filterTopic}
-                onChange={(event) => setFilterTopic(event.target.value)}
-                className="h-9 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none transition-all hover:border-slate-300 focus:border-emerald-500 cursor-pointer"
-              >
-                <option value="all">All Topics</option>
-                {allTopics.map((topic) => (
-                  <option key={topic} value={topic}>{topic}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
-              Status:
-              <select
-                value={filterStatus}
-                onChange={(event) => setFilterStatus(event.target.value)}
-                className="h-9 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none transition-all hover:border-slate-300 focus:border-emerald-500 cursor-pointer"
-              >
-                <option value="all">All Statuses</option>
-                <option value="on track">On Track</option>
-                <option value="needs attention">Needs Attention</option>
-                <option value="at risk">At Risk</option>
-              </select>
-            </label>
+            {/* Designated Dropdown Box for Weak Area */}
+            <FilterDropdown
+              label="Weak Area"
+              placeholder="All Topics"
+              searchable
+              options={topicOptions}
+              value={filterTopics}
+              onChange={(val) => setFilterTopics(val)}
+              variant="emerald"
+            />
           </div>
         </div>
 
@@ -202,6 +235,16 @@ export const StudentRosterView: React.FC = () => {
                   <td colSpan={6} className="px-6 py-12 text-center">
                     <p className="font-bold text-slate-700">{emptyMessage}</p>
                     <p className="mt-1 text-slate-500">{studentRoster.length ? 'Clear a filter or search term to view the roster.' : 'Open a course, choose Manage Class, then enroll a registered student account.'}</p>
+                    {studentRoster.length > 0 && hasActiveFilters && (
+                      <button
+                        type="button"
+                        onClick={handleClearAllFilters}
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 ring-1 ring-rose-200 dark:ring-rose-800/40 transition-all cursor-pointer whitespace-nowrap"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Clear all filters</span>
+                      </button>
+                    )}
                     {!studentRoster.length && (
                       <button onClick={() => navigate('/instructor/courses')} className="mt-4 text-emerald-600 font-bold hover:underline cursor-pointer">
                         Go to Courses
