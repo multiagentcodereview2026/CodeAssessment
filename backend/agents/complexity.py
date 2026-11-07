@@ -159,13 +159,20 @@ async def analyze_student_complexity(
     This function is deliberately independent from Docker execution, allowing
     callers to run it concurrently with sandbox testing.
     """
+    from analysis.core_scope import extract_core_scope
+    scope = extract_core_scope(source_code, language)
     prompt = load_prompt("complexity")
     payload = {
         "problem": public_problem_context(problem),
         "submission": {
             "language": language,
-            "source_code": sanitize_code_comments(source_code),
+            "source_code": sanitize_code_comments(scope.source),
         },
+        "analysis_convention": (
+            "Core algorithm plus reachable helpers only. Exclude stdin/stdout. "
+            "Auxiliary space excludes supplied input and required output storage; "
+            "include scratch storage, copies, library workspace and recursion stack."
+        ),
     }
 
     result = await invoke_agent(
@@ -177,15 +184,21 @@ async def analyze_student_complexity(
     )
     analysis_source = result.get("analysis_source", "fallback")
     if not result.get("time_complexity") and not result.get("space_complexity"):
-        result = infer_static_complexity(source_code)
+        from dataclasses import asdict
+        from analysis.analyzer_service import analyze_static_complexity
+        result = asdict(analyze_static_complexity(source_code, language))
         analysis_source = "static_fallback"
     return {
         "analysis_source": analysis_source,
+        "analysis_scope": "core_method",
+        "space_convention": "auxiliary",
+        "status": result.get("status"),
+        "confidence": result.get("confidence"),
         "time_complexity": normalize_complexity(result.get("time_complexity")),
         "space_complexity": normalize_complexity(result.get("space_complexity")),
         "bottlenecks": result.get("bottlenecks") or [],
         "optimization_suggestion": result.get("optimization_suggestion") or "No optimization suggestion was available.",
-        "reasoning": result.get("reasoning") or "No complexity analysis was available.",
+        "reasoning": result.get("reasoning") or result.get("explanation") or "No complexity analysis was available.",
     }
 
 
@@ -242,7 +255,15 @@ def score_complexity_analysis(
         "space_scoring_reason": _student_complexity_reason(space_assessment.get("status"), "space"),
         "bottlenecks": analysis.get("bottlenecks") or [],
         "optimization_suggestion": analysis.get("optimization_suggestion") or "",
-        "reasoning": analysis.get("reasoning") or "",
+        "reasoning": analysis.get("reasoning") or analysis.get("explanation") or "",
+        "analysis_scope": (
+            "core_method" if "scope:core-method" in (analysis.get("signals") or [])
+            else analysis.get("analysis_scope")
+        ),
+        "space_convention": (
+            "auxiliary" if "scope:core-method" in (analysis.get("signals") or [])
+            else analysis.get("space_convention")
+        ),
         "analysis_source": analysis.get("analysis_source", "unknown"),
         "analysis_method": analysis.get("method") or "ast",
         "analysis_confidence": analysis.get("confidence"),

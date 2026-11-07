@@ -1,0 +1,2284 @@
+{
+  "version": "curated-446-v1",
+  "source": "User-supplied Complete DSA Roadmap",
+  "foundations": [
+    {
+      "id": "recursion",
+      "title": "Recursion",
+      "description": "Understand base cases, the call stack and recursive decomposition before backtracking and graph traversal."
+    },
+    {
+      "id": "linked-list",
+      "title": "Linked Lists",
+      "description": "Learn node traversal, pointer updates and cycle detection as optional preparation."
+    },
+    {
+      "id": "tree-bst",
+      "title": "Trees and BSTs",
+      "description": "Learn tree traversal and BST ordering before tree and graph exercises."
+    }
+  ],
+  "steps": [
+    {
+      "id": "arrays",
+      "title": "Array",
+      "level": "Beginner",
+      "aliases": [
+        "Array",
+        "Arrays",
+        "Arrays & Hashing"
+      ],
+      "prerequisites": [],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-66",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-121",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-252",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-746",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-217",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-163",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-228",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-485",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-674",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-717",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-896",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-57",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-56",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-152",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-454",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-54",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-59",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-49",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-665",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-849",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-41",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-123",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "strings",
+      "title": "String",
+      "level": "Beginner",
+      "aliases": [
+        "String",
+        "Strings"
+      ],
+      "prerequisites": [],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-459",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-796",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-13",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-387",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-58",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-293",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-434",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-520",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-521",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-551",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-686",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1016",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2414",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2914",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-245",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-722",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1419",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1513",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-65",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1153",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "hash-table",
+      "title": "Hash Table",
+      "level": "Beginner",
+      "aliases": [
+        "Hash Table"
+      ],
+      "prerequisites": [
+        "arrays"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-290",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-448",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-575",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-697",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-771",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-859",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1207",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1399",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1426",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1496",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1015",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-554",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-822",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1540",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1711",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2610",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2718",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2808",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1224",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-2763",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "sorting",
+      "title": "Sorting",
+      "level": "Beginner",
+      "aliases": [
+        "Sorting"
+      ],
+      "prerequisites": [
+        "arrays"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-414",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1200",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1491",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1619",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1637",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1913",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-2164",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1288",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1333",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1887",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2165",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2655",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2740",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2943",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-891",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "two-pointers",
+      "title": "Two Pointers",
+      "level": "Beginner",
+      "aliases": [
+        "Two Pointers"
+      ],
+      "prerequisites": [
+        "arrays",
+        "sorting"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-26",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-27",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-125",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-28",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-202",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-392",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-680",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-408",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-795",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-11",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-15",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-647",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-253",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-287",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-475",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-567",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-42",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-719",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "stack",
+      "title": "Stack",
+      "level": "Beginner",
+      "aliases": [
+        "Stack"
+      ],
+      "prerequisites": [
+        "arrays",
+        "strings"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-496",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1475",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1598",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-2696",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-844",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1700",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-503",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-739",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2104",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-456",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-907",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-636",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-856",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1003",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-84",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "math",
+      "title": "Math",
+      "level": "Beginner",
+      "aliases": [
+        "Math"
+      ],
+      "prerequisites": [],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-9",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1523",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-492",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-728",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1056",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1118",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1134",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1175",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-7",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-172",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-319",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1276",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1344",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1551",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-660",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "prefix-sum",
+      "title": "Prefix Sum",
+      "level": "Beginner",
+      "aliases": [
+        "Prefix Sum"
+      ],
+      "prerequisites": [
+        "arrays",
+        "hash-table"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-724",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1413",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1422",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1732",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1991",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-560",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-209",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1004",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1140",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1371",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1664",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1744",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2145",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-410",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-862",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "matrix",
+      "title": "Matrix",
+      "level": "Beginner",
+      "aliases": [
+        "Matrix"
+      ],
+      "prerequisites": [
+        "arrays"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-422",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-661",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-766",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1380",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1572",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1582",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-794",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-835",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-3030",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-3195",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-311",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-498",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-531",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1072",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-3197",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "bitmask",
+      "title": "Bit Manipulation",
+      "level": "Beginner",
+      "aliases": [
+        "Bit Manipulation"
+      ],
+      "prerequisites": [
+        "math"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-461",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-136",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-191",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1486",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-231",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-342",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-476",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1318",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-29",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-371",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-477",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-421",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-464",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-473",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1542",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "simulation",
+      "title": "Simulation",
+      "level": "Beginner",
+      "aliases": [
+        "Simulation"
+      ],
+      "prerequisites": [
+        "arrays",
+        "strings"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-258",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-495",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-657",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1103",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-755",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-985",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1535",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1599",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1701",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2079",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-68",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "binary-search",
+      "title": "Binary Search",
+      "level": "Intermediate",
+      "aliases": [
+        "Binary Search"
+      ],
+      "prerequisites": [
+        "arrays",
+        "sorting"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-69",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-268",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1337",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-441",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1064",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1150",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-33",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-34",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-81",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-153",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-162",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-875",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1011",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1283",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1482",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2187",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2226",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-154",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-668",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-4",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "sliding-window",
+      "title": "Sliding Window",
+      "level": "Intermediate",
+      "aliases": [
+        "Sliding Window"
+      ],
+      "prerequisites": [
+        "two-pointers",
+        "hash-table"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-643",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1176",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1652",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-2379",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-3",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-424",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-438",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-904",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1493",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-187",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-718",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1438",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1151",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1234",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1456",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-220",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-239",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-30",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "greedy",
+      "title": "Greedy",
+      "level": "Intermediate",
+      "aliases": [
+        "Greedy"
+      ],
+      "prerequisites": [
+        "sorting"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-409",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-605",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-860",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1013",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1708",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1827",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-134",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1899",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-45",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-55",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-122",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-376",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-452",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1029",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1642",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1921",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2233",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1665",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-44",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-135",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "heap",
+      "title": "Heap",
+      "level": "Intermediate",
+      "aliases": [
+        "Heap",
+        "Priority Queue"
+      ],
+      "prerequisites": [
+        "sorting"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-1046",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-2231",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-506",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1464",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-215",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-264",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-347",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-621",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-743",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-787",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-973",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1135",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1686",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-218",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1354",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "backtracking",
+      "title": "Backtracking",
+      "level": "Intermediate",
+      "aliases": [
+        "Backtracking"
+      ],
+      "prerequisites": [],
+      "foundation_prerequisites": [
+        "recursion"
+      ],
+      "problems": [
+        {
+          "id": "leetcode-401",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-93",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-216",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-306",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-842",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-22",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-494",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-698",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-967",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1718",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1849",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2698",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-357",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-816",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1774",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2664",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-52",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-679",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1240",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "graph-traversal",
+      "title": "DFS / BFS (Graph Traversal)",
+      "level": "Intermediate",
+      "aliases": [
+        "Depth-First Search",
+        "Breadth-First Search",
+        "DFS",
+        "BFS",
+        "Graph"
+      ],
+      "prerequisites": [
+        "stack"
+      ],
+      "foundation_prerequisites": [
+        "recursion"
+      ],
+      "problems": [
+        {
+          "id": "leetcode-463",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-733",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1791",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-279",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-322",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-994",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1091",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1334",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-200",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-207",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-210",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-261",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-323",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-417",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-547",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-684",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-695",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1192",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-913",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1761",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "monotonic-stack",
+      "title": "Monotonic Stack",
+      "level": "Intermediate",
+      "aliases": [
+        "Monotonic Stack"
+      ],
+      "prerequisites": [
+        "stack"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-1762",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1950",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2832",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2865",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2866",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-255",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-581",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-769",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1944",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1063",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-321",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-683",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "trees",
+      "title": "Tree",
+      "level": "Intermediate",
+      "aliases": [
+        "Tree",
+        "Trees"
+      ],
+      "prerequisites": [
+        "graph-traversal"
+      ],
+      "foundation_prerequisites": [
+        "recursion"
+      ],
+      "problems": [
+        {
+          "id": "leetcode-3249",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1104",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-96",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-331",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-666",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1245",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1719",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-3313",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-2509",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1377",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "divide-conquer",
+      "title": "Divide and Conquer",
+      "level": "Intermediate",
+      "aliases": [
+        "Divide and Conquer"
+      ],
+      "prerequisites": [
+        "sorting"
+      ],
+      "foundation_prerequisites": [
+        "recursion"
+      ],
+      "problems": [
+        {
+          "id": "leetcode-169",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-53",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-932",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-240",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2343",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-395",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-315",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-493",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1569",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "dynamic-programming",
+      "title": "Dynamic Programming",
+      "level": "Advanced",
+      "aliases": [
+        "Dynamic Programming",
+        "Memoization"
+      ],
+      "prerequisites": [
+        "backtracking",
+        "greedy"
+      ],
+      "foundation_prerequisites": [
+        "recursion"
+      ],
+      "problems": [
+        {
+          "id": "leetcode-70",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1137",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-509",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1025",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-118",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-72",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-91",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-97",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-198",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-213",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-309",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-416",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-516",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-518",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-583",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1143",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2140",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-62",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-63",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-64",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-300",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-375",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1220",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-115",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-132",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-188",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-312",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-664",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1312",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-10",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "union-find",
+      "title": "Union Find",
+      "level": "Advanced",
+      "aliases": [
+        "Union Find",
+        "Union-Find"
+      ],
+      "prerequisites": [
+        "graph-traversal"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-128",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1319",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1584",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1722",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2948",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-694",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-305",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-2157",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-711",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-924",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "topological-sort",
+      "title": "Topological Sort",
+      "level": "Advanced",
+      "aliases": [
+        "Topological Sort"
+      ],
+      "prerequisites": [
+        "graph-traversal"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-802",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1059",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-310",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1462",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1786",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-329",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1591",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1632",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "shortest-path",
+      "title": "Shortest Path",
+      "level": "Advanced",
+      "aliases": [
+        "Shortest Path"
+      ],
+      "prerequisites": [
+        "graph-traversal",
+        "heap"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-2093",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-505",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2473",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2662",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2976",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2203",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-882",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-2699",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1368",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "trie",
+      "title": "Trie",
+      "level": "Advanced",
+      "aliases": [
+        "Trie"
+      ],
+      "prerequisites": [
+        "strings",
+        "trees"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-139",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2452",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-692",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-792",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-820",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1316",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1707",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1803",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "segment-tree-bit",
+      "title": "Segment Tree & BIT",
+      "level": "Advanced",
+      "aliases": [
+        "Segment Tree",
+        "Binary Indexed Tree",
+        "Fenwick Tree"
+      ],
+      "prerequisites": [
+        "prefix-sum",
+        "divide-conquer"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-673",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-406",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1395",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2031",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-850",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-699",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1964",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-2921",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-3187",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-3410",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "string-matching",
+      "title": "String Matching",
+      "level": "Advanced",
+      "aliases": [
+        "String Matching"
+      ],
+      "prerequisites": [
+        "strings",
+        "hash-table"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-1062",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1461",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1023",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1554",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-3303",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1960",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1147",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "number-theory",
+      "title": "Number Theory",
+      "level": "Advanced",
+      "aliases": [
+        "Number Theory"
+      ],
+      "prerequisites": [
+        "math"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-2413",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-1952",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-204",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1492",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2523",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-858",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1447",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2543",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-2183",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-2197",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "combinatorics",
+      "title": "Combinatorics",
+      "level": "Advanced",
+      "aliases": [
+        "Combinatorics"
+      ],
+      "prerequisites": [
+        "math",
+        "dynamic-programming"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-634",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1621",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1641",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2929",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1201",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2221",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2927",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-3426",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-458",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "game-theory",
+      "title": "Game Theory",
+      "level": "Advanced",
+      "aliases": [
+        "Game Theory"
+      ],
+      "prerequisites": [
+        "dynamic-programming"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-292",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-486",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-877",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1908",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1927",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-810",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1563",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "ordered-set",
+      "title": "Ordered Set",
+      "level": "Advanced",
+      "aliases": [
+        "Ordered Set"
+      ],
+      "prerequisites": [
+        "binary-search",
+        "heap"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-3073",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1418",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1818",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-2021",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-975",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1606",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1649",
+          "difficulty": "Hard"
+        },
+        {
+          "id": "leetcode-1675",
+          "difficulty": "Hard"
+        }
+      ]
+    },
+    {
+      "id": "geometry",
+      "title": "Geometry",
+      "level": "Advanced",
+      "aliases": [
+        "Geometry"
+      ],
+      "prerequisites": [
+        "math",
+        "sorting"
+      ],
+      "foundation_prerequisites": [],
+      "problems": [
+        {
+          "id": "leetcode-2481",
+          "difficulty": "Easy"
+        },
+        {
+          "id": "leetcode-223",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-1401",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-963",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-593",
+          "difficulty": "Medium"
+        },
+        {
+          "id": "leetcode-149",
+          "difficulty": "Hard"
+        }
+      ]
+    }
+  ]
+}

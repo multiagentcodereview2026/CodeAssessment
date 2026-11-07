@@ -51,6 +51,20 @@ def validate_candidate(source, candidate, language, steps):
     identifiers = {node.text.decode() for node in _nodes(original_tree.root_node)
                    if node.type in {"identifier", "field_identifier", "property_identifier"}}
     errors = []
+    # Optimization stages must not delete input extraction operations.
+    # In particular, row lengths are serialization metadata, not unused work.
+    # This conservative precheck complements (never replaces) judge execution.
+    if language.lower() in {"cpp", "c++", "cc", "cxx"} and all(step.get("area") != "correctness" for step in steps):
+        def read_count(tree):
+            return sum(
+                1 for node in _nodes(tree.root_node)
+                if node.type == "binary_expression"
+                and node.child_by_field_name("operator") is not None
+                and node.child_by_field_name("operator").text == b">>"
+                and re.match(rb"\s*(?:std::)?cin\b", node.text)
+            )
+        if read_count(candidate_tree) < read_count(original_tree):
+            errors.append("input_extraction_removed")
     ids = set()
     for step in steps:
         if step.get("id") in ids:
@@ -136,6 +150,8 @@ def release_decision(current_score, baseline, projection, steps, minimum_gain=1.
     def finite(value):
         return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
     candidate = projection.get("projected_score")
+    if projection.get("status") == "candidate_tests_failed":
+        return "correctness_not_complete"
     if not finite(style_tolerance) or not 0 <= style_tolerance <= 1:
         return "assessment_incomplete"
     if not projection.get("verified") or not projection.get("available") or not finite(candidate) or not finite(current_score):

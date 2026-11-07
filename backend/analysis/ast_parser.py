@@ -903,15 +903,24 @@ class ASTComplexityAnalyzer:
             if re.search(r'\brange\s*\(\s*(?:0\s*,\s*)?(?:[1-9]|[1-9]\d|100)\s*\)', lower):
                 return True
             # C/C++ loop conditions bounded by a numeric literal.
-            if re.search(r';[^;]*[<>]=?\s*(?:[1-9]|[1-9]\d|100)\b', lower):
-                return True
+            initial = node.child_by_field_name('initializer')
+            condition = node.child_by_field_name('condition')
+            if initial is not None and condition is not None:
+                start = re.fullmatch(
+                    r'\s*(?:(?:const\s+)?(?:int|long|size_t|short|auto)\s+)?'
+                    r'([A-Za-z_]\w*)\s*=\s*[+-]?\d+\s*;?\s*',
+                    initial.text.decode('utf-8'),
+                )
+                if start and re.fullmatch(
+                    rf'\s*{re.escape(start.group(1))}\s*(?:<|<=|>|>=|!=)\s*[+-]?\d+\s*',
+                    condition.text.decode('utf-8'),
+                ):
+                    return True
             # Small fixed direction/array-alphabet loops are also constant.
             # Python ``range(n - 2)`` is input-sized; do not mistake its
             # offset literal for a constant bound. Literal Python ranges were
             # handled by the stricter rule above, so this fallback is only for
             # C/C++/Java-style headers.
-            if re.search(r'\b(?:2|3|4|8|10|26|27|36|52)\b', lower) and 'for' in lower and 'range' not in lower:
-                return True
             return False
 
         # Tree-sitter may materialize distinct Python wrapper objects for the
@@ -1143,9 +1152,8 @@ class ASTComplexityAnalyzer:
             r'for\s+\w+\s+in\s+range\(\s*(?:10|16|26|52|64|100)\s*\))',
             src_lower,
         )) and max_depth >= 2
-        if loop.has_constant_inner_loop:
-            loop.depth = max(1, loop.depth - 1)
-            loop.structure = "sequential"
+        # Constant nodes were already excluded while counting ancestors.
+        # Do not subtract another scalable loop level here.
 
         # Nested scans over disjoint groups are linear in the total number of
         # elements, e.g. ``for group in buckets.values(): for item in group``.

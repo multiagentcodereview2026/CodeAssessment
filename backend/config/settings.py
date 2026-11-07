@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     SCORE_PROJECTION_BACKGROUND_RETRIES: int = 1
     SCORE_PROJECTION_RETRY_DELAY_SECONDS: int = 120
     REVISION_DAILY_JOB_LIMIT: int = Field(default=3, ge=1, le=10)
+    REVISION_DAILY_PROBLEM_LIMIT: int = Field(default=5, ge=1, le=100)
     REVISION_JOB_CONCURRENCY: int = Field(default=1, ge=1, le=2)
     REVISION_JOB_TTL_SECONDS: int = Field(default=3600, ge=300, le=86400)
     SCORE_PROJECTION_JUDGE_TIMEOUT_SECONDS: int = Field(default=180, ge=30, le=300)

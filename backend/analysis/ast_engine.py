@@ -457,7 +457,7 @@ def infer_complexity_from_ir(
         space_complexity = "O(n)"
 
     # A bounded inner alphabet/range adds only constant work per input item.
-    elif loop.has_constant_inner_loop:
+    elif loop.has_constant_inner_loop and loop.depth <= 1:
         time_complexity = "O(n log n)" if loop.has_sort else "O(n)"
         space_complexity = "O(n)" if ir.has_dynamic_allocation else "O(1)"
 

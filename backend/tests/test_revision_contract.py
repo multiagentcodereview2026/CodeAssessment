@@ -30,6 +30,25 @@ def test_supported_minimal_candidate_passes_precheck():
     assert validate_candidate(SOURCE, SOURCE, "cpp", [STEP]) == []
 
 
+def test_time_stage_cannot_remove_nested_input_row_length():
+    original = "int main(){int n;cin>>n;for(int i=0;i<n;i++){int width,x,y;cin>>width;cin>>x>>y;}}"
+    candidate = original.replace("cin>>width;", "")
+    assert "input_extraction_removed" in validate_candidate(original, candidate, "cpp", [STEP])
+
+
+def test_test_failure_is_not_an_incomplete_assessment():
+    assert release_decision(93, {}, {"status": "candidate_tests_failed"}, [STEP]) == "correctness_not_complete"
+
+
+def test_retry_wakeup_respects_persisted_deadline():
+    from datetime import datetime, timezone, timedelta
+    from revision_jobs import projection_retry_delay
+    now = datetime(2026, 11, 7, tzinfo=timezone.utc)
+    pending = {"next_retry_at": (now + timedelta(seconds=120)).isoformat()}
+    assert projection_retry_delay(pending, now) == 120
+    assert projection_retry_delay(pending, now + timedelta(seconds=121)) == 0
+
+
 def baseline_and_projection():
     baseline = {key: {"score": score} for key, score in {
         "correctness": 100, "time": 60, "space": 100, "style": 95}.items()}

@@ -541,6 +541,14 @@ def _has_only_constant_bound_loops(source: str) -> bool:
             condition = parts[1].strip()
             if not fixed_bound(condition):
                 return False
+            # Both ends determine the iteration count.  A reverse loop ending
+            # at zero is not constant when its initial value depends on input.
+            initial = parts[0].split("=", 1)
+            if len(initial) != 2:
+                return False
+            value = initial[1].strip()
+            if not (re.fullmatch(r"[+-]?\d+", value) or value in constant_names):
+                return False
         else:
             return False
 
@@ -2017,6 +2025,37 @@ def _compose_helper_scan_cost(analyzer, result):
 
 
 def analyze_source(
+    source: str,
+    language: str,
+    *,
+    mode: str = "legacy",
+) -> ComplexityAnalysis:
+    result = _analyze_source_impl(source, language, mode=mode)
+    # Insertion into contiguous storage may shift an input-sized suffix.
+    # The current IR does not compose that receiver cost with loop growth.
+    # Discard the unsupported time formula rather than certify a unit-cost
+    # estimate.  An absent field can be filled by the existing hybrid reviewer.
+    if language.lower().strip() in {"cpp", "c++", "cc", "cxx"}:
+        contiguous = set(re.findall(
+            r"\b(?:std::)?vector\s*<[^;{}]+?>\s+([A-Za-z_]\w*)\b|"
+            r"\b(?:std::)?string\s+([A-Za-z_]\w*)\b", source))
+        receivers = {name for group in contiguous for name in group if name}
+        shifting = any(re.search(
+            rf"\b{re.escape(name)}\s*\.\s*(?:insert|erase)\s*\(", source
+        ) for name in receivers)
+        if shifting:
+            result.time_complexity = None
+            result.confidence = min(result.confidence, 0.60)
+            result.status = "REVIEW_REQUIRED"
+            result.signals = [*result.signals, "structural:unresolved-contiguous-shift-cost"]
+            result.explanation = (
+                "Contiguous-container insertion or erasure requires a shifting "
+                "cost that the AST could not compose; hybrid review is required."
+            )
+    return result
+
+
+def _analyze_source_impl(
     source: str,
     language: str,
     *,

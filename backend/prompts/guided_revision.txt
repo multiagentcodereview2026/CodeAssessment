@@ -59,8 +59,12 @@ Rules:
   OPTIMIZE_LOCAL = remove one demonstrated repeated operation or unnecessary
   pass while retaining the current algorithm family and primary data structure;
   do not introduce a new algorithm family or replacement structure in this stage;
-  OPTIMIZE_DATA_STRUCTURE = introduce one appropriate structure only after an
-  earlier optimization stage has been submitted and assessed;
+  OPTIMIZE_DATA_STRUCTURE = introduce one better algorithm OR one appropriate
+  structure after an earlier optimization stage has been submitted and assessed.
+  A new container is not required: a better ordering/search strategy using the
+  current container is allowed. Judge the remaining bottleneck, not the stage
+  name. Do not return an empty guide solely because no new structure is needed,
+  and do not send the learner back to a local stage already completed;
   OPTIMIZE_SPACE = remove one measured input-sized allocation while preserving
   the current correct algorithm; do not mix this with unrelated style changes;
   OPTIMIZE = remove one demonstrated bottleneck, at most one complexity tier;

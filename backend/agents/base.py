@@ -208,9 +208,16 @@ async def invoke_agent(
         # provider request until the whole submission times out. Log only the
         # exception class: provider errors can contain URLs, request payloads,
         # or other sensitive context.
+        # Preserve a safe machine error code for diagnosis, never the provider
+        # message, failed generation, request body, student code or API key.
+        body = getattr(exc, "body", None)
+        error_data = body.get("error", body) if isinstance(body, dict) else {}
+        error_code = error_data.get("code") if isinstance(error_data, dict) else None
+        if not isinstance(error_code, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", error_code):
+            error_code = None
         logger.warning(
-            "Groq request or response validation failed (%s); using deterministic fallback",
-            type(exc).__name__,
+            "Groq request or response validation failed (%s, code=%s); using deterministic fallback",
+            type(exc).__name__, error_code or "unspecified",
         )
         status = getattr(exc, "status_code", None)
         if capability != "score_projection":
@@ -218,5 +225,6 @@ async def invoke_agent(
         return {**fallback_dict, "analysis_source": "fallback",
                 "provider_error": "rate_limit" if status == 429 else "authentication" if status in {401, 403} else "bad_request" if status == 400 else "invalid_response" if isinstance(exc, ValidationError) else "unavailable",
                 "quota_scope": _quota_scope(exc) if status == 429 else None,
-                "request_metrics": {"model": settings.GROQ_MODEL, "latency_ms": round((time.monotonic() - started) * 1000)},
+                "request_metrics": {"model": settings.GROQ_MODEL, "latency_ms": round((time.monotonic() - started) * 1000),
+                                    "provider_error_code": error_code},
                 "retry_after": (_retry_after_seconds(exc) or 60.0) if status == 429 else 0.0}

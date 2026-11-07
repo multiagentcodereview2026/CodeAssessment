@@ -127,7 +127,12 @@ def build_review_payload(
     """
     payload = {
         "instruction": (
-            "Analyze only the submitted code. Do not infer the problem's optimal "
+            "Analyze only the core algorithm and reachable helpers. Exclude pure "
+            "stdin parsing and stdout formatting. Auxiliary space excludes input "
+            "storage and required output storage, but includes temporary copies, "
+            "working containers and recursion stack. Analysis-only slices may "
+            "reference input variables whose parsing declarations were removed; "
+            "treat them as supplied inputs. Do not infer the problem's optimal "
             "solution. Return valid JSON with time_complexity, space_complexity, "
             "confidence, reasoning, evidence, and status. Explain source-code "
             "structures that support the estimate. Use NEEDS_REVIEW when the code "

@@ -18,8 +18,7 @@ def detect_library_costs(source: str, language: str = "") -> LibraryCostEvidence
     text = (source or "").lower()
     sort = bool(re.search(r"\b(?:std::)?sort\s*\(|\bsorted\s*\(|\.sort\s*\(", text))
     hash_ops = bool(re.search(
-        r"\b(?:unordered_map|unordered_set|hash_map|hash_set|dict|set|map)\b"
-        r"|\.(?:find|contains|count|add|insert|emplace|get)\s*\(", text,
+        r"\b(?:unordered_map|unordered_set|hash_map|hash_set|dict)\b", text,
     ))
     heap = bool(re.search(
         r"\b(?:heapq|priority_queue|binary_heap|heap)\b"

@@ -23,7 +23,7 @@ int main() {
 @pytest.fixture
 def require_ai_review(monkeypatch):
     """Exercise corroboration independently of the production direct threshold."""
-    monkeypatch.setattr(settings, "COMPLEXITY_AST_DIRECT_CONFIDENCE", 0.90)
+    monkeypatch.setattr(settings, "COMPLEXITY_AST_DIRECT_CONFIDENCE", 1.0)
 
 
 def test_low_confidence_ast_is_ai_corroborated_before_becoming_analyzed(monkeypatch, require_ai_review):

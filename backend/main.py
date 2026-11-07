@@ -28,7 +28,7 @@ from similarity_clustering import build_approach_groups, build_similarity_cluste
 from recommendation_engine import build_recommendations, build_roadmap, normalize_topics
 
 import models
-from revision_jobs import day_start, failure_policy, safe_unverified_guide, utcnow, remember_supported_guide, retained_revision_guide
+from revision_jobs import day_start, failure_policy, safe_unverified_guide, utcnow, remember_supported_guide, retained_revision_guide, guide_request_limit_reason
 from auth import (
     create_access_token,
     get_current_user,
@@ -713,6 +713,7 @@ async def score_revision_stage(
         return {
             **unavailable,
             "message": "The private stage draft did not pass every evaluated case, so no score projection is shown.",
+            "status": "candidate_tests_failed",
             # Persist only allowlisted aggregate verification metadata.  It
             # lets support/debug flows distinguish a compile failure from an
             # incorrect candidate without retaining hidden inputs, outputs,
@@ -1224,6 +1225,11 @@ async def _verify_projection_job(submission_id: str, stage: str) -> None:
                         "gate_failure": decision,
                     }
                     public_projection = projection_pending(current_score)
+                    if decision == "correctness_not_complete":
+                        public_projection["message"] = (
+                            "The private candidate failed test verification. "
+                            "A bounded retry is scheduled; no projected score is available yet."
+                        )
             except asyncio.TimeoutError:
                 if private_projection and private_projection.pop("candidate_reserved", False):
                     attempt_number -= 1
@@ -1327,7 +1333,8 @@ async def _verify_projection_job(submission_id: str, stage: str) -> None:
     finally:
         db.close()
     if retry_projection:
-        schedule_projection_retry(submission_id, stage, public_projection.get("retry_after", 0))
+        from revision_jobs import projection_retry_delay
+        schedule_projection_retry(submission_id, stage, projection_retry_delay(public_projection))
 
 
 def schedule_projection_retry(submission_id: str, stage: str, cooldown: float = 0) -> None:
@@ -2787,6 +2794,20 @@ async def regenerate_submission_revision(
         ):
             return revision_job_response(saved)
 
+    # Enforce new-job limits before spending provider tokens. Returning a
+    # cached guide or resuming its saved candidate consumes no new job slot.
+    if policy == "GUIDED_STEPS" and stage != "NO_CHANGE":
+        can_resume = bool(settings.SCORE_PROJECTION_ENABLED and submission.private_projection
+            and saved.get("stage") == stage and saved.get("projection_request_id")
+            and saved.get("guidance_version") == CONTRACT_VERSION
+            and saved_projection.get("job_status") != "cancelled"
+            and int(saved_projection.get("attempts") or 0) < 2
+            and saved_projection.get("status") != "expired")
+        if not can_resume:
+            limit_reason = guide_request_limit_reason(db, student.student_id, submission.problem_id,
+                CONTRACT_VERSION, settings.REVISION_DAILY_JOB_LIMIT, settings.REVISION_DAILY_PROBLEM_LIMIT)
+            if limit_reason:
+                raise HTTPException(status_code=429, detail=limit_reason)
     previous_revision = previous_guided_revision_context(db, submission) if policy == "GUIDED_STEPS" else None
     # Ignore legacy stages that were generated under the earlier retry-count
     # policy. They are not valid predecessors for the new measured ladder.
@@ -2854,12 +2875,10 @@ async def regenerate_submission_revision(
                            and int((saved.get("score_projection") or {}).get("attempts") or 0) < 2
                            and (saved.get("score_projection") or {}).get("status") != "expired")
         if not reuse_draft and stage != "NO_CHANGE":
-            count = db.query(models.RevisionJob).filter(
-                models.RevisionJob.student_id == student.student_id, models.RevisionJob.problem_id == submission.problem_id,
-                models.RevisionJob.revision_snapshot["guidance_version"].as_integer() == CONTRACT_VERSION,
-                models.RevisionJob.created_at >= day_start()).count()
-            if count >= settings.REVISION_DAILY_JOB_LIMIT:
-                raise HTTPException(status_code=429, detail="The daily guide limit for this problem has been reached. Try tomorrow.")
+            limit_reason = guide_request_limit_reason(db, student.student_id, submission.problem_id,
+                CONTRACT_VERSION, settings.REVISION_DAILY_JOB_LIMIT, settings.REVISION_DAILY_PROBLEM_LIMIT)
+            if limit_reason:
+                raise HTTPException(status_code=429, detail=limit_reason)
         revision["projection_request_id"] = saved["projection_request_id"] if reuse_draft else uuid4().hex
         revision["evidence_links"] = guided_revision_evidence_links(submission)
         if previous_revision:

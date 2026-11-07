@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from uuid import uuid4
 
-from sqlalchemy import event
+from sqlalchemy import event, func
 from sqlalchemy.orm import Session
 
 import models
@@ -17,6 +17,20 @@ def utcnow():
 def day_start(now=None):
     local = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo("Asia/Kolkata"))
     return local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def guide_request_limit_reason(db, student_id, problem_id, version, per_problem=3, distinct_problems=5):
+    counts = dict(db.query(models.RevisionJob.problem_id, func.count(models.RevisionJob.id)).filter(
+        models.RevisionJob.student_id == student_id,
+        models.RevisionJob.revision_snapshot["guidance_version"].as_integer() == version,
+        models.RevisionJob.revision_snapshot["usage_reset_at"].as_string().is_(None),
+        models.RevisionJob.created_at >= day_start(),
+    ).group_by(models.RevisionJob.problem_id).all())
+    if counts.get(problem_id, 0) >= per_problem:
+        return f"You have used {per_problem} guide requests for this problem today. Resets at midnight India time."
+    if problem_id not in counts and len(counts) >= distinct_problems:
+        return f"You have requested guides for {distinct_problems} different problems today. Continue an existing problem or return after midnight India time."
+    return None
 
 
 def safe_unverified_guide(guide):
@@ -37,6 +51,18 @@ def retained_revision_guide(current, previous):
     if (not safe_unverified_guide(current) or current.get("guidance_supported") is not True) and safe_unverified_guide(previous or {}):
         return {**copy.deepcopy(previous), "last_candidate_result": current.get("last_candidate_result")}
     return current
+
+
+def projection_retry_delay(projection, now=None):
+    """Do not wake before the persisted deadline and silently lose the retry."""
+    now = now or datetime.now(timezone.utc)
+    retry_at = projection.get("next_retry_at")
+    if not retry_at:
+        return max(0, float(projection.get("retry_after") or 0))
+    deadline = datetime.fromisoformat(retry_at)
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=timezone.utc)
+    return max(0, (deadline - now).total_seconds(), float(projection.get("retry_after") or 0))
 
 
 def failure_policy(kind, candidate_attempts, infrastructure_retries, quota_scope=None):
@@ -88,7 +114,10 @@ def persist_revision_outbox(session, flush_context, instances):
         job.failure_type = projection.get("failure_type") or projection.get("status")
         job.verified = projection.get("verified") is True
         job.current_score, job.projected_score = submission.overall_score, projection.get("projected_score")
+        usage_reset_at = (job.revision_snapshot or {}).get("usage_reset_at")
         job.revision_snapshot = copy.deepcopy(revision)
+        if usage_reset_at:
+            job.revision_snapshot = {**job.revision_snapshot, "usage_reset_at": usage_reset_at}
         job.private_snapshot = copy.deepcopy(private)
         job.cache_key = private.get("job_context")
         job.updated_at = utcnow()

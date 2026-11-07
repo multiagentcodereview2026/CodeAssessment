@@ -13,6 +13,7 @@ from .confidence_policy import apply_confidence_policy, build_llm_handoff
 from .models import ComplexityAnalysis, ComplexityEvidence
 from .static_analyzer import analyze_source
 from .python_loop_evidence import guard_python_complexity
+from .core_scope import extract_core_scope
 
 
 _review_limiter = AIReviewRateLimiter(
@@ -23,10 +24,37 @@ _review_cache = ComplexityReviewCache(settings.COMPLEXITY_AI_CACHE_TTL_SECONDS)
 
 
 def analyze_static_complexity(source_code: str, language: str) -> ComplexityAnalysis:
-    """Run only the deterministic AST stage; never contacts an AI provider."""
-    return apply_confidence_policy(
-        guard_python_complexity(source_code, language, analyze_source(source=source_code, language=language))
-    ) or ComplexityAnalysis(status="REVIEW_REQUIRED", method="ast")
+    """Analyze algorithm work and auxiliary storage, never executable I/O."""
+    scope = extract_core_scope(source_code, language)
+    result = guard_python_complexity(
+        scope.source, language,
+        analyze_source(source=scope.source, language=language, mode="structural"),
+    )
+    if scope.space_source != scope.source:
+        storage = analyze_source(source=scope.space_source, language=language, mode="structural")
+        result.space_complexity = storage.space_complexity
+        result.confidence = min(result.confidence, storage.confidence)
+    if scope.auxiliary_copy and result.space_complexity in {"O(1)", "O(log n)", "O(log(n))"}:
+        result.space_complexity = "O(n)"
+        result.signals.append("space:input-container-copy")
+    result.signals = list(dict.fromkeys([
+        *result.signals, "scope:core-method", "space:auxiliary-excludes-input-output",
+        *([f"scope:input-storage-excluded:{','.join(sorted(scope.inputs))}"] if scope.inputs else []),
+        *([f"scope:required-output-excluded:{','.join(sorted(scope.outputs))}"] if scope.outputs else []),
+        *scope.issues,
+    ]))
+    if scope.issues:
+        # Do not certify a total-program estimate when scope cannot be proven.
+        # The existing optional reviewer can derive missing core-only fields.
+        result.time_complexity = None
+        result.space_complexity = None
+        result.confidence = min(result.confidence, 0.50)
+        result.status = "REVIEW_REQUIRED"
+    result.explanation = (
+        "Core algorithm and reachable helpers; auxiliary space excludes input "
+        "and required output storage. " + (result.explanation or "")
+    )
+    return apply_confidence_policy(result) or ComplexityAnalysis(status="REVIEW_REQUIRED", method="ast")
 
 
 async def _invoke_complexity_reviewer(payload: dict) -> dict:
@@ -101,7 +129,13 @@ async def analyze_submission_complexity(
     static_result = static_result or analyze_static_complexity(
         source_code, language,
     )
-    static_result = guard_python_complexity(source_code, language, static_result)
+    scope = extract_core_scope(source_code, language)
+    static_result = guard_python_complexity(scope.source, language, static_result)
+    # End-to-end judge timings include parsing, serialization and process
+    # startup. They cannot corroborate or contradict core-method growth.
+    if "scope:core-method" in static_result.signals and dynamic_result is not None:
+        if "scope:core-method" not in dynamic_result.signals:
+            dynamic_result = None
     # Source-level unresolved evidence cannot be promoted by confidence,
     # coincidental runtime agreement, or an optional model's opinion.
     if "structural-review-blocked" in static_result.signals:
@@ -143,7 +177,7 @@ async def analyze_submission_complexity(
     should_review_with_ai = settings.COMPLEXITY_AI_REVIEW_ENABLED
     if should_review_with_ai:
         review = await review_with_limits(
-            source_code,
+            scope.source,
             language,
             asdict(static_result) if static_result else {},
             invoke=_invoke_complexity_reviewer,

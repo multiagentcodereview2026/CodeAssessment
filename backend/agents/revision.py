@@ -133,7 +133,7 @@ class ExpectedComplexity(BaseModel):
     time_after: Optional[str] = None
     space_before: Optional[str] = None
     space_after: Optional[str] = None
-    space_definition: Literal["total"] = "total"
+    space_definition: Literal["auxiliary", "total"] = "auxiliary"
 
 
 class RevisionStep(BaseModel):

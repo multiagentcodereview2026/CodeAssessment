@@ -88,20 +88,13 @@ def test_small_sample_does_not_fill_easy_queue_with_harder_problems():
     assert [item["difficulty"] for item in result["problems"]] == ["Easy"]
 
 
-def test_roadmap_requires_twenty_high_scoring_mixed_difficulty_problems():
-    problems = [
-        problem(f"array-easy-{index}", "Easy", "Array", ["Array"])
-        for index in range(12)
-    ] + [
-        problem(f"array-medium-{index}", "Medium", "Array", ["Array"])
-        for index in range(10)
-    ] + [
-        problem(f"array-hard-{index}", "Hard", "Array", ["Array"])
-        for index in range(5)
-    ]
-    result = build_roadmap(problems, [submission(item.id, 95) for item in problems])
-    arrays = next(step for step in result["steps"] if step["id"] == "arrays")
-
-    assert arrays["core_required_problems"] == 27
-    assert arrays["core_complete"] is True
-    assert arrays["completed_by_difficulty"] == {"Easy": 12, "Medium": 10, "Hard": 5}
+def test_roadmap_uses_the_exact_curated_array_set():
+    from curated_roadmap import CURRICULUM
+    configured = next(s for s in CURRICULUM['steps'] if s['id'] == 'arrays')
+    problems = [problem(p['id'], p['difficulty'], 'Array', ['Array']) for p in configured['problems']]
+    result = build_roadmap(problems, [submission(p.id, 95) for p in problems])
+    arrays = next(step for step in result['steps'] if step['id'] == 'arrays')
+    assert arrays['core_required_problems'] == 22
+    assert arrays['core_complete'] is True
+    assert arrays['mastered'] is False
+    assert arrays['completed_by_difficulty'] == {'Easy': 11, 'Medium': 9, 'Hard': 2}

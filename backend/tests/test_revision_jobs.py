@@ -33,6 +33,53 @@ def test_failure_budgets_and_local_day_boundary():
     assert failure_policy("judge_unavailable", 0, 1) == "unavailable"
     assert failure_policy("no_improvement", 1, 1) == "retry_candidate"
     assert failure_policy("no_improvement", 2, 0) == "failed"
+
+
+def test_three_guides_each_and_five_distinct_problems_daily(db_session):
+    from revision_jobs import guide_request_limit_reason, utcnow
+    from agents.revision_contract import CONTRACT_VERSION
+    for problem in range(5):
+        for attempt in range(2):
+            db_session.add(models.RevisionJob(
+                id=f"quota-{problem}-{attempt}", submission_id=f"submission-{problem}",
+                student_id="learner", problem_id=f"problem-{problem}", status="passed",
+                revision_snapshot={"guidance_version": CONTRACT_VERSION}, created_at=utcnow(),
+            ))
+    db_session.commit()
+    check = lambda problem: guide_request_limit_reason(db_session, "learner", problem, CONTRACT_VERSION)
+    assert check("problem-0") is None  # Third request remains available.
+    assert "5 different problems" in check("problem-5")
+    db_session.add(models.RevisionJob(
+        id="third", submission_id="submission-0", student_id="learner",
+        problem_id="problem-0", status="passed",
+        revision_snapshot={"guidance_version": CONTRACT_VERSION}, created_at=utcnow(),
+    ))
+    db_session.commit()
+    assert "3 guide requests" in check("problem-0")
+    assert guide_request_limit_reason(db_session, "another-learner", "problem-5", CONTRACT_VERSION) is None
+
+
+def test_usage_reset_preserves_history_and_counts_new_jobs(db_session):
+    from revision_jobs import guide_request_limit_reason, utcnow
+    from agents.revision_contract import CONTRACT_VERSION
+    for number in range(3):
+        db_session.add(models.RevisionJob(
+            id=f"old-{number}", submission_id="old", student_id="learner",
+            problem_id="problem", status="passed",
+            revision_snapshot={"guidance_version": CONTRACT_VERSION, "usage_reset_at": utcnow().isoformat()},
+            created_at=utcnow(),
+        ))
+    db_session.commit()
+    assert guide_request_limit_reason(db_session, "learner", "problem", CONTRACT_VERSION) is None
+    for number in range(3):
+        db_session.add(models.RevisionJob(
+            id=f"new-{number}", submission_id="new", student_id="learner",
+            problem_id="problem", status="passed",
+            revision_snapshot={"guidance_version": CONTRACT_VERSION}, created_at=utcnow(),
+        ))
+    db_session.commit()
+    assert "3 guide requests" in guide_request_limit_reason(db_session, "learner", "problem", CONTRACT_VERSION)
+    assert db_session.query(models.RevisionJob).count() == 6
     assert day_start(datetime(2026, 11, 1, 19, tzinfo=timezone.utc)) == datetime(2026, 11, 1, 18, 30)
 
 

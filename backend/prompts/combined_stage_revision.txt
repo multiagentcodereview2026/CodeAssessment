@@ -15,7 +15,7 @@ Every edit must reference a step_id in guide.steps; every step needs an edit.
 The guide must include one to three structured steps:
 {"id":"step_1", "area":"time", "target":{"symbol":"an EXACT name from source_context.symbols", "operation":"the observed operation to change"},
  "change":"one concrete action in plain English",
- "expected_complexity":{"time_before":"O(n^3)","time_after":"O(n^2)","space_before":"O(n)","space_after":"O(n)","space_definition":"total"},
+ "expected_complexity":{"time_before":"O(n^3)","time_after":"O(n^2)","space_before":"O(n)","space_after":"O(n)","space_definition":"auxiliary"},
  "risk":"the boundary or invariant to preserve", "risk_level":"low|medium|high"}.
 
 Use only existing AST names as targets. A new helper name is not a valid target;
@@ -32,6 +32,11 @@ Required Java/Python standard-library imports may likewise be added without
 removing or replacing existing imports. Each non-header/non-import edit must
 include the targeted identifier in its old text.
 Keep the algorithm stage bounded: no later optimization or style cleanup.
+Input extraction is a fixed contract. Nested-list row lengths and dimension
+tokens must still be consumed even when their variables are not used by the
+algorithm. Never remove a read because it looks redundant or unused.
+Analyze core work and auxiliary space only; exclude supplied input and required
+output storage. Parsing cleanup cannot earn algorithm-complexity gains.
 Do not promise a score increase for a constant-factor memory improvement.
 Never invent scores. The backend compiles, tests and scores the assembled code.
 If no supported change exists, use empty patches, empty guide.steps and
