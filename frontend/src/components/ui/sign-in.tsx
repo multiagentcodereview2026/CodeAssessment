@@ -280,24 +280,6 @@ export const SignInPage: React.FC<SignInPageProps> = ({
               </button>
             </form>
 
-            {mode === 'login' && (
-              <>
-                <div className="animate-element animate-delay-700 relative flex items-center justify-center my-1">
-                  <span className="w-full border-t border-border"></span>
-                  <span className="px-4 text-xs uppercase tracking-wider text-muted-foreground bg-background absolute">Or continue with</span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={onGoogleSignIn}
-                  className="animate-element animate-delay-800 w-full flex items-center justify-center gap-3 border border-border rounded-2xl py-4 hover:bg-secondary transition-colors cursor-pointer text-foreground font-medium text-sm shadow-xs"
-                >
-                  <GoogleIcon />
-                  Continue with Google
-                </button>
-              </>
-            )}
-
             {/* Toggle between Login and Register (for students) */}
             {role !== 'instructor' && (
               <p className="animate-element animate-delay-900 text-center text-sm text-muted-foreground">

@@ -108,12 +108,6 @@ const Login = () => {
     }
   };
 
-  const handleGoogleSignIn = () => {
-    alert(
-      "Google SSO: Campus Single Sign-On is managed through your institution's Google Workspace. For demo access, please sign in with your student or instructor credentials."
-    );
-  };
-
   const handleResetPassword = () => {
     alert(
       "Password Reset: Please contact your lab coordinator or institutional administrator at admin@kmit.in to reset your portal password."
@@ -171,9 +165,6 @@ const Login = () => {
               Kod<span className="text-emerald-600 dark:text-emerald-400">acharya</span>
             </>
           )}
-          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-border bg-foreground/5 text-muted-foreground">
-            AI v2.4
-          </span>
         </div>
         <p className="text-xs text-muted-foreground">
           {role === 'student' ? 'Intelligent Code Assessment Platform' : 'Instructor Evaluation Portal'}
@@ -205,7 +196,6 @@ const Login = () => {
       heroImageSrc="https://cdn.21st.dev/assets/mirror/ec/ecff1664e7fc3185d0e947571f984ea5fa3de9580fb0e73a03cd9c9b3461cb09.jpg"
       testimonials={codeVedhaTestimonials}
       onSignIn={handleSignIn}
-      onGoogleSignIn={handleGoogleSignIn}
       onResetPassword={handleResetPassword}
       mode={mode}
       onToggleMode={(newMode) => {

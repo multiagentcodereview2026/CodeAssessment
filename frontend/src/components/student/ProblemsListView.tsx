@@ -498,7 +498,7 @@ export const ProblemsListView: React.FC = () => {
 
         <section className="space-y-4">
           <div className="relative">
-            <main className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <main className="relative rounded-2xl border border-slate-200 bg-white shadow-sm">
               {/* Filter and Search Bar */}
               <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center">
                 <div className="relative flex-1">
@@ -620,7 +620,7 @@ export const ProblemsListView: React.FC = () => {
                     )}
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto rounded-b-2xl">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -717,7 +717,7 @@ export const ProblemsListView: React.FC = () => {
                   <div>
                     {practiceLoadError && orderedPracticeProblems.length > 0 && <div role="status" className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900">Showing the last saved problem list. The latest refresh failed. <button type="button" onClick={() => { setIsPracticeLoading(true); setPracticeReloadKey((key) => key + 1); }} className="ml-1 font-semibold underline">Retry</button></div>}
                     {/* Row-wise Problems Table */}
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto rounded-b-2xl">
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -935,7 +935,7 @@ export const ProblemsListView: React.FC = () => {
         </div>
       </div>
 
-      <main className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <main className="relative rounded-2xl border border-slate-200 bg-white shadow-sm">
         {/* Filter and Search Bar */}
         <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center">
           <div className="relative flex-1">
@@ -1029,7 +1029,7 @@ export const ProblemsListView: React.FC = () => {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-b-2xl">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">

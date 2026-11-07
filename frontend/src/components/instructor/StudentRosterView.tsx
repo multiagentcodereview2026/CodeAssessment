@@ -169,7 +169,7 @@ export const StudentRosterView: React.FC = () => {
       </div>
 
       {/* Main Table Container */}
-      <main className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <main className="relative rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 border-b border-slate-100 p-4">
           <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
             <div className="relative flex-1 max-w-sm">
@@ -215,7 +215,7 @@ export const StudentRosterView: React.FC = () => {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-b-2xl">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">

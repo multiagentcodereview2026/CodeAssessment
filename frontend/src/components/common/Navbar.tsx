@@ -42,9 +42,6 @@ export const Navbar: React.FC = () => {
                 <span className="font-extrabold text-lg text-slate-900 tracking-tight">
                   Auto<span className="text-indigo-600">Grade</span>
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.2 rounded">
-                  AI v2.4
-                </span>
               </div>
               <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
                 Intelligent Code Assessment Platform
