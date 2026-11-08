@@ -57,12 +57,13 @@ export const ReportsExportView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-white/10 pb-5">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+          <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">Compliance & Export</span>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1">
             Institutional Reports & Exports
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
             Export cohort grade distribution and concept breakdown CSVs.
           </p>
         </div>
@@ -70,15 +71,15 @@ export const ReportsExportView: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => window.print()}
-            className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 rounded-2xl text-xs font-bold border border-slate-200 shadow-xs flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            className="px-4 py-2.5 bg-white dark:bg-[#121217] hover:bg-slate-50 dark:hover:bg-neutral-800 text-slate-700 dark:text-slate-200 rounded-2xl text-xs font-bold border border-slate-200 dark:border-white/12 shadow-xs flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
           >
-            <Printer className="w-4 h-4 text-slate-500" />
+            <Printer className="w-4 h-4 text-slate-500 dark:text-slate-400" />
             <span>Print Summary</span>
           </button>
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer ring-1 ring-white/20"
           >
             <Plus className="w-4 h-4" />
             <span>Export Course CSV</span>
@@ -90,22 +91,22 @@ export const ReportsExportView: React.FC = () => {
         {courses.map((course) => (
           <div
             key={course.id}
-            className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-7 shadow-xs hover:border-emerald-300 card-hover transition-all flex flex-col justify-between space-y-5 group"
+            className="bg-white dark:bg-[#121217] rounded-3xl border border-slate-200/80 dark:border-white/12 p-6 sm:p-7 shadow-xs hover:border-emerald-300 dark:hover:border-emerald-500/40 card-hover transition-all flex flex-col justify-between space-y-5 group"
           >
             <div className="flex items-start gap-4">
-              <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-2xl flex-shrink-0 group-hover:scale-105 transition-transform shadow-xs">
+              <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-2xl flex-shrink-0 group-hover:scale-105 transition-transform shadow-xs">
                 <FileSpreadsheet className="w-6 h-6" />
               </div>
               <div className="space-y-1.5 flex-1">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                     {course.title}
                   </h3>
-                  <span className="px-2.5 py-0.5 text-[10px] font-bold font-mono uppercase rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                  <span className="px-2.5 py-0.5 text-[10px] font-bold font-mono uppercase rounded-full bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/10">
                     CSV
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                   {course.course_code} Full Analytics Export
                 </p>
                 <div className="flex items-center gap-3 text-xs text-slate-400 font-mono pt-2">
@@ -120,7 +121,7 @@ export const ReportsExportView: React.FC = () => {
             <button
               onClick={() => handleDownload(course.id)}
               disabled={downloadingId === course.id}
-              className="w-full py-3 bg-slate-900 hover:bg-emerald-600 text-white rounded-2xl text-xs font-bold shadow-xs flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer disabled:opacity-50"
+              className="w-full py-3 bg-slate-900 dark:bg-[#1c1c24] hover:bg-emerald-600 dark:hover:bg-emerald-600 text-white rounded-2xl text-xs font-bold border border-transparent dark:border-white/10 shadow-xs flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer disabled:opacity-50"
             >
               {downloadingId === course.id ? (
                 <>
@@ -137,7 +138,7 @@ export const ReportsExportView: React.FC = () => {
           </div>
         ))}
         {courses.length === 0 && (
-          <div className="col-span-1 md:col-span-2 text-center py-12 text-slate-500">
+          <div className="col-span-1 md:col-span-2 text-center py-12 text-slate-500 dark:text-slate-400">
             No active courses found to export.
           </div>
         )}
@@ -151,12 +152,12 @@ export const ReportsExportView: React.FC = () => {
       >
         <form onSubmit={handleCreateReport} className="space-y-4 text-xs">
           <div>
-            <label className="block font-bold text-slate-700 mb-1">Select Course</label>
+            <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Select Course</label>
             <select
               value={selectedCourseId}
               onChange={(e) => setSelectedCourseId(e.target.value)}
               required
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium cursor-pointer"
+              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#16161d] border border-slate-200 dark:border-white/12 text-slate-900 dark:text-white rounded-xl focus:outline-none focus:border-emerald-500 font-medium cursor-pointer"
             >
               <option value="" disabled>Select a course</option>
               {courses.map(c => (
@@ -165,11 +166,11 @@ export const ReportsExportView: React.FC = () => {
             </select>
           </div>
 
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+          <div className="pt-4 border-t border-slate-100 dark:border-white/10 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-bold transition-colors cursor-pointer"
+              className="px-4 py-2 text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl font-bold transition-colors cursor-pointer"
             >
               Cancel
             </button>

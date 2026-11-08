@@ -93,7 +93,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   };
 
   return (
-    <div className="min-h-[100dvh] flex flex-col md:flex-row font-geist w-full bg-background text-foreground relative">
+    <div className="min-h-[100dvh] flex flex-col md:flex-row font-sans w-full bg-background text-foreground relative">
       {/* Top right floating accessories (e.g. Theme toggle) */}
       {topRightElement && (
         <div className="absolute top-4 right-4 z-30">

@@ -44,19 +44,19 @@ export const CompilerFeedback: React.FC<CompilerFeedbackProps> = ({ diagnostics 
   const feedback = explainCompilerDiagnostic(diagnostics);
 
   return (
-    <section className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-950" aria-live="polite">
+    <section className="rounded-xl border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-950/20 p-4 text-rose-950 dark:text-rose-200" aria-live="polite">
       <div className="flex items-center gap-2 text-sm font-bold">
-        <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600" />
+        <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
         Compiler feedback{feedback.line ? ` · near line ${feedback.line}${feedback.column ? `, column ${feedback.column}` : ''}` : ''}
       </div>
       <p className="mt-2 text-sm font-semibold">{feedback.explanation}</p>
-      <p className="mt-1 flex gap-1.5 text-sm text-rose-900">
-        <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+      <p className="mt-1 flex gap-1.5 text-sm text-rose-900 dark:text-rose-300">
+        <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
         <span>{feedback.suggestion}</span>
       </p>
-      <details className="mt-3 rounded-lg border border-rose-200 bg-white/70 px-3 py-2">
-        <summary className="cursor-pointer text-xs font-semibold text-rose-800">Show compiler details</summary>
-        <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 text-slate-700">{diagnostics || feedback.message}</pre>
+      <details className="mt-3 rounded-lg border border-rose-200 dark:border-rose-500/30 bg-white/70 dark:bg-[#0c0c0e] px-3 py-2">
+        <summary className="cursor-pointer text-xs font-semibold text-rose-800 dark:text-rose-300">Show compiler details</summary>
+        <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 text-slate-700 dark:text-zinc-300">{diagnostics || feedback.message}</pre>
       </details>
     </section>
   );

@@ -222,16 +222,16 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.98 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
-            className={`absolute ${align === "left" ? "left-0" : "right-0"} top-full z-[70] mt-1.5 ${dropdownWidth} min-w-[280px] max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200/90 dark:border-neutral-800 bg-white dark:bg-[#0c0c0e] p-3.5 text-slate-800 dark:text-zinc-200 shadow-2xl dark:shadow-black/90`}
+            className={`absolute ${align === "left" ? "left-0" : "right-0"} top-full z-[70] mt-1.5 ${dropdownWidth} min-w-[280px] max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200/90 dark:border-white/12 bg-white dark:bg-[#121217] p-3.5 text-slate-800 dark:text-zinc-200 shadow-2xl dark:shadow-[0_12px_40px_rgba(0,0,0,0.85),inset_0_1px_0_0_rgba(255,255,255,0.06)]`}
           >
             {/* Popover Header with Title, Options Count, Reset, and Close */}
-            <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-neutral-800">
+            <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-white/10">
               <div className="flex items-center gap-1.5">
                 {icon && <span className={theme.headerIcon}>{icon}</span>}
                 <h3 className="text-xs font-bold text-slate-900 dark:text-white">
                   Filter by {label}
                 </h3>
-                <span className="rounded-full bg-slate-100 dark:bg-neutral-900 px-1.5 py-0.2 text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                <span className="rounded-full bg-slate-100 dark:bg-white/10 px-1.5 py-0.2 text-[10px] font-semibold text-slate-600 dark:text-zinc-300">
                   {normalizedOptions.length}
                 </span>
               </div>
@@ -266,7 +266,7 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder={searchPlaceholder}
-                  className={`w-full rounded-lg border border-slate-200 dark:border-neutral-800 bg-slate-50/80 dark:bg-neutral-900/80 py-1.5 pl-8 pr-7 text-xs text-slate-800 dark:text-zinc-200 placeholder-slate-400 dark:placeholder-zinc-500 focus:bg-white dark:focus:bg-black focus:outline-none focus:ring-1 ${theme.focusRing}`}
+                  className={`w-full rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-[#16161d] py-1.5 pl-8 pr-7 text-xs text-slate-800 dark:text-zinc-200 placeholder-slate-400 dark:placeholder-zinc-500 focus:bg-white dark:focus:bg-[#0c0c0e] focus:outline-none focus:ring-1 ${theme.focusRing}`}
                 />
                 {searchTerm && (
                   <button
@@ -289,7 +289,7 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
                   transition={{ duration: 0.15 }}
                   className="py-5 px-3 text-center flex flex-col items-center justify-center my-auto"
                 >
-                  <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-neutral-900 flex items-center justify-center text-slate-400 dark:text-zinc-500 mb-2">
+                  <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center text-slate-400 dark:text-zinc-400 mb-2">
                     <Search className="w-4 h-4" />
                   </div>
                   <p className="text-xs font-semibold text-slate-700 dark:text-zinc-300">

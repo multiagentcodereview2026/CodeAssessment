@@ -435,31 +435,34 @@ export const CourseDetailsView: React.FC = () => {
       {/* Back */}
       <Link
         to="/instructor/courses"
-        className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-emerald-700"
+        className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
-        Courses
+        Back to Courses
       </Link>
 
       {/* Course Header */}
-      <header className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end">
+      <header className="flex flex-col justify-between gap-4 border-b border-slate-200 dark:border-white/10 pb-5 sm:flex-row sm:items-end">
         <div>
-          <p className="font-mono text-xs font-bold text-emerald-700">
-            {course.course_code} · {course.term || 'No term'}
-          </p>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">Course Administration</span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold text-[11px]">
+              {course.course_code} • {course.term || 'No term'}
+            </span>
+          </div>
 
-          <h1 className="mt-1 text-2xl font-bold text-slate-900">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             {course.title}
           </h1>
 
           {course.description && (
-            <p className="mt-2 max-w-2xl text-sm text-slate-600">
+            <p className="mt-2 max-w-2xl text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
               {course.description}
             </p>
           )}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2.5">
           <button
             onClick={() => {
               setEditCode(course.course_code);
@@ -468,7 +471,7 @@ export const CourseDetailsView: React.FC = () => {
               setEditDescription(course.description || '');
               setIsEditModalOpen(true);
             }}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-neutral-800 shadow-xs transition-all hover:scale-105 active:scale-95 cursor-pointer"
           >
             Edit course
           </button>
@@ -479,7 +482,7 @@ export const CourseDetailsView: React.FC = () => {
                 `/instructor/assignments?courseId=${course.id}`,
               )
             }
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-600"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 shadow-md shadow-emerald-600/20 transition-all hover:scale-105 active:scale-95 cursor-pointer ring-1 ring-white/20"
           >
             <BookOpen className="h-4 w-4" />
             Create assignment
@@ -489,15 +492,15 @@ export const CourseDetailsView: React.FC = () => {
 
       {/* Tabs */}
       <nav
-        className="flex gap-5 border-b border-slate-200"
+        className="flex gap-6 border-b border-slate-200 dark:border-white/10"
         aria-label="Course views"
       >
         <button
           onClick={() => changeTab('students')}
-          className={`border-b-2 px-1 pb-3 text-sm font-semibold ${
+          className={`border-b-2 px-1 pb-3 text-xs sm:text-sm font-bold transition-colors cursor-pointer ${
             activeTab === 'students'
-              ? 'border-emerald-700 text-emerald-800'
-              : 'border-transparent text-slate-500'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           Students ({students.length})
@@ -505,10 +508,10 @@ export const CourseDetailsView: React.FC = () => {
 
         <button
           onClick={() => changeTab('assignments')}
-          className={`border-b-2 px-1 pb-3 text-sm font-semibold ${
+          className={`border-b-2 px-1 pb-3 text-xs sm:text-sm font-bold transition-colors cursor-pointer ${
             activeTab === 'assignments'
-              ? 'border-emerald-700 text-emerald-800'
-              : 'border-transparent text-slate-500'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           Assignments ({assignments.length})
@@ -516,7 +519,7 @@ export const CourseDetailsView: React.FC = () => {
 
         <button
           onClick={() => changeTab('requests')}
-          className={`border-b-2 px-1 pb-3 text-sm font-semibold ${activeTab === 'requests' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500'}`}
+          className={`border-b-2 px-1 pb-3 text-xs sm:text-sm font-bold transition-colors cursor-pointer ${activeTab === 'requests' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
         >
           Join Requests ({joinRequests.length})
         </button>
@@ -527,7 +530,7 @@ export const CourseDetailsView: React.FC = () => {
               `/instructor/analytics?courseId=${course.id}`,
             )
           }
-          className="pb-3 text-sm font-semibold text-slate-500 hover:text-emerald-800"
+          className="pb-3 text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer"
         >
           Analytics
         </button>
@@ -537,7 +540,7 @@ export const CourseDetailsView: React.FC = () => {
       {error && (
         <p
           role="alert"
-          className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"
+          className="rounded-xl border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 px-4 py-3 text-xs font-semibold text-rose-700 dark:text-rose-400"
         >
           {error}
         </p>
@@ -550,13 +553,13 @@ export const CourseDetailsView: React.FC = () => {
         <section className="space-y-5">
 
           {/* Student management header */}
-          <div className="flex flex-col justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:flex-row sm:items-center">
+          <div className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] p-5 shadow-xs sm:flex-row sm:items-center">
             <div>
-              <h2 className="font-semibold text-slate-900">
+              <h2 className="font-bold text-slate-900 dark:text-white text-base">
                 Course Students
               </h2>
 
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 Enroll a registered student account in this course.
               </p>
             </div>
@@ -565,7 +568,7 @@ export const CourseDetailsView: React.FC = () => {
               type="button"
               onClick={openAddStudentModal}
               disabled={busy}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
               <UserPlus className="h-4 w-4" />
               Add Student
@@ -589,13 +592,13 @@ export const CourseDetailsView: React.FC = () => {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search student name or ID"
-              className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+              className="min-w-0 flex-1 rounded-xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#16161d] px-3.5 py-2.5 text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500 placeholder:text-slate-400"
             />
 
             <button
               type="submit"
               disabled={busy || !search.trim()}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-neutral-800 disabled:opacity-50 cursor-pointer shadow-xs transition-colors"
             >
               <Search className="h-4 w-4" />
               Search
@@ -621,7 +624,7 @@ export const CourseDetailsView: React.FC = () => {
                 onChange={(event) =>
                   setSelectedStudentId(event.target.value)
                 }
-                className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+                className="min-w-0 flex-1 rounded-xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#16161d] px-3.5 py-2.5 text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500 cursor-pointer"
               >
                 <option value="">
                   Select student
@@ -640,7 +643,7 @@ export const CourseDetailsView: React.FC = () => {
               <button
                 type="submit"
                 disabled={busy || !selectedStudentId}
-                className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 dark:bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50 cursor-pointer transition-colors shadow-xs"
               >
                 <UserPlus className="h-4 w-4" />
                 Enroll
@@ -652,47 +655,47 @@ export const CourseDetailsView: React.FC = () => {
           {search.trim() &&
             !busy &&
             matches.length === 0 && (
-              <p className="max-w-2xl rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              <p className="max-w-2xl rounded-xl border border-slate-200 dark:border-white/12 bg-slate-50 dark:bg-[#121217] px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
                 No registered student account found. Ask the student to create an account first, then search by their Student ID or name.
               </p>
             )}
 
           {/* Roster */}
-          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <div className="grid grid-cols-[1fr_auto_auto] gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] shadow-xs">
+            <div className="grid grid-cols-[1fr_auto_auto] gap-4 border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-[#16161d] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <span>Student</span>
               <span>Enrolled</span>
               <span>Action</span>
             </div>
 
             {students.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-slate-500">
+              <p className="px-4 py-8 text-center text-xs text-slate-500 dark:text-slate-400">
                 No students enrolled in this course yet.
               </p>
             ) : (
               students.map((student) => (
                 <div
                   key={student.id}
-                  className="grid grid-cols-[1fr_auto_auto] items-center gap-4 border-b border-slate-100 px-4 py-3 text-sm last:border-0"
+                  className="grid grid-cols-[1fr_auto_auto] items-center gap-4 border-b border-slate-100 dark:border-white/5 px-4 py-3 text-xs last:border-0 hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors"
                 >
                   <div>
-                    <div className="font-semibold text-slate-900">
+                    <div className="font-bold text-slate-900 dark:text-white">
                       {student.student_name ||
                         student.student_id}
                     </div>
 
-                    <div className="font-mono text-xs text-slate-500">
+                    <div className="font-mono text-[11px] text-slate-400">
                       Student ID: {student.student_id}
                     </div>
 
                     {student.student_email && (
-                      <div className="mt-1 text-xs text-slate-400">
+                      <div className="mt-0.5 text-[11px] text-slate-400">
                         {student.student_email}
                       </div>
                     )}
                   </div>
 
-                  <time className="text-xs text-slate-500">
+                  <time className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                     {new Date(
                       student.enrollment_date,
                     ).toLocaleDateString()}
@@ -702,7 +705,7 @@ export const CourseDetailsView: React.FC = () => {
                     title="Deactivate enrollment"
                     disabled={busy}
                     onClick={() => setEnrollmentRemoveTarget(student)}
-                    className="rounded-md p-2 text-slate-500 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"
+                    className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-50 cursor-pointer transition-colors"
                   >
                     <UserRoundMinus className="h-4 w-4" />
                   </button>
@@ -713,37 +716,37 @@ export const CourseDetailsView: React.FC = () => {
         </section>
       ) : activeTab === 'requests' ? (
         <section className="space-y-4">
-          <div><h2 className="text-lg font-semibold text-slate-900">Student join requests</h2><p className="mt-1 text-sm text-slate-500">Approve a request to create the student’s active course enrollment, or reject it. Students can request again after a rejection.</p></div>
-          {joinRequests.length === 0 ? <p className="rounded-lg border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">No pending requests for this course.</p> : <div className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">{joinRequests.map((joinRequest) => <article key={joinRequest.id} className="flex flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center"><div><p className="font-semibold text-slate-900">{joinRequest.student_name}</p><p className="font-mono text-xs text-slate-500">Student ID: {joinRequest.student_id}</p><p className="mt-1 text-xs text-slate-400">Requested {new Date(joinRequest.requested_at).toLocaleString()}</p></div><div className="flex gap-2"><button disabled={busy} onClick={() => setRequestRejectTarget(joinRequest)} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Reject</button><button disabled={busy} onClick={() => void decideJoinRequest(joinRequest, 'approve')} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-50">Approve and enroll</button></div></article>)}</div>}
+          <div><h2 className="text-base font-bold text-slate-900 dark:text-white">Student join requests</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Approve a request to create the student’s active course enrollment, or reject it. Students can request again after a rejection.</p></div>
+          {joinRequests.length === 0 ? <p className="rounded-2xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] px-4 py-10 text-center text-xs text-slate-500 dark:text-slate-400">No pending requests for this course.</p> : <div className="divide-y divide-slate-200 dark:divide-white/5 rounded-2xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] overflow-hidden">{joinRequests.map((joinRequest) => <article key={joinRequest.id} className="flex flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center"><div><p className="font-bold text-slate-900 dark:text-white">{joinRequest.student_name}</p><p className="font-mono text-xs text-slate-400">Student ID: {joinRequest.student_id}</p><p className="mt-1 text-xs text-slate-400">Requested {new Date(joinRequest.requested_at).toLocaleString()}</p></div><div className="flex gap-2"><button disabled={busy} onClick={() => setRequestRejectTarget(joinRequest)} className="rounded-xl border border-rose-200 dark:border-rose-900/40 px-3 py-2 text-xs font-bold text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 disabled:opacity-50 cursor-pointer transition-colors">Reject</button><button disabled={busy} onClick={() => void decideJoinRequest(joinRequest, 'approve')} className="rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50 cursor-pointer transition-colors">Approve and enroll</button></div></article>)}</div>}
         </section>
       ) : (
         /* =====================================================
            ASSIGNMENTS TAB
         ===================================================== */
-        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] shadow-xs">
           {assignments.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-slate-500">
+            <p className="px-4 py-8 text-center text-xs text-slate-500 dark:text-slate-400">
               No assignments for this course yet.
             </p>
           ) : (
             assignments.map((assignment) => (
               <article
                 key={assignment.id}
-                className="flex flex-col gap-3 border-b border-slate-100 p-4 last:border-0 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-3 border-b border-slate-100 dark:border-white/5 p-4 last:border-0 hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors sm:flex-row sm:items-center sm:justify-between"
               >
                 <div>
-                  <h2 className="font-semibold text-slate-900">
+                  <h2 className="font-bold text-slate-900 dark:text-white text-sm">
                     {assignment.title}
                   </h2>
 
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                     {assignment.problem_titles.join(' · ') ||
                       'No problems attached'}{' '}
                     · {assignment.status}
                   </p>
                 </div>
 
-                <div className="text-left text-xs text-slate-600 sm:text-right">
+                <div className="text-left text-xs text-slate-600 dark:text-slate-400 sm:text-right font-mono">
                   <div>
                     {assignment.submitted_count}/
                     {assignment.total_students} submissions
@@ -779,7 +782,7 @@ export const CourseDetailsView: React.FC = () => {
           className="space-y-4 text-xs"
         >
           <div>
-            <label className="mb-1 block font-bold text-slate-700">
+            <label className="mb-1 block font-bold text-slate-700 dark:text-zinc-300">
               Course Code
             </label>
 
@@ -787,12 +790,12 @@ export const CourseDetailsView: React.FC = () => {
               type="text"
               value={editCode}
               disabled
-              className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-3.5 py-2.5 font-mono text-xs focus:outline-none"
+              className="w-full cursor-not-allowed rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-[#16161d] text-slate-500 dark:text-zinc-400 px-3.5 py-2.5 font-mono text-xs focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="mb-1 block font-bold text-slate-700">
+            <label className="mb-1 block font-bold text-slate-700 dark:text-zinc-300">
               Course Title
             </label>
 
@@ -803,12 +806,12 @@ export const CourseDetailsView: React.FC = () => {
                 setEditTitle(e.target.value)
               }
               required
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs focus:border-emerald-500 focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#16161d] text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 px-3.5 py-2.5 text-xs focus:border-emerald-500 focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="mb-1 block font-bold text-slate-700">
+            <label className="mb-1 block font-bold text-slate-700 dark:text-zinc-300">
               Academic Term
             </label>
 
@@ -818,12 +821,12 @@ export const CourseDetailsView: React.FC = () => {
               onChange={(e) =>
                 setEditTerm(e.target.value)
               }
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs focus:border-emerald-500 focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#16161d] text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 px-3.5 py-2.5 text-xs focus:border-emerald-500 focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="mb-1 block font-bold text-slate-700">
+            <label className="mb-1 block font-bold text-slate-700 dark:text-zinc-300">
               Description
             </label>
 
@@ -832,19 +835,19 @@ export const CourseDetailsView: React.FC = () => {
               onChange={(e) =>
                 setEditDescription(e.target.value)
               }
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs focus:border-emerald-500 focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#16161d] text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 px-3.5 py-2.5 text-xs focus:border-emerald-500 focus:outline-none"
               rows={3}
             />
           </div>
 
-          <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+          <div className="flex items-center justify-end gap-3 border-t border-slate-100 dark:border-white/10 pt-4">
             <button
               type="button"
               onClick={() =>
                 setIsEditModalOpen(false)
               }
               disabled={busy}
-              className="cursor-pointer rounded-xl px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+              className="cursor-pointer rounded-xl px-4 py-2 font-bold text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-50"
             >
               Cancel
             </button>
@@ -899,7 +902,7 @@ export const CourseDetailsView: React.FC = () => {
           <div>
             <label
               htmlFor="new-student-id"
-              className="mb-1.5 block text-xs font-bold text-slate-700"
+              className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-zinc-300"
             >
               Student ID
             </label>
@@ -914,28 +917,28 @@ export const CourseDetailsView: React.FC = () => {
               placeholder="e.g. 22BD1A0501"
               disabled={busy}
               autoFocus
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-emerald-500 focus:bg-white"
+              className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#16161d] text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 px-3.5 py-2.5 text-sm outline-none transition focus:border-emerald-500 focus:bg-white dark:focus:bg-[#16161d]"
             />
 
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-slate-400 dark:text-zinc-500">
               Enter the Student ID used to sign in. Only active, registered student accounts can be enrolled.
             </p>
           </div>
 
           {/* Information */}
-          <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
-            <p className="text-xs leading-5 text-emerald-800">
+          <div className="rounded-xl border border-emerald-100 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-950/20 px-4 py-3">
+            <p className="text-xs leading-5 text-emerald-800 dark:text-emerald-300">
               The student must register first. Once enrolled, this course appears in their My Courses section the next time they sign in or refresh it.
             </p>
           </div>
 
           {/* Buttons */}
-          <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+          <div className="flex items-center justify-end gap-3 border-t border-slate-100 dark:border-white/10 pt-4">
             <button
               type="button"
               onClick={closeAddStudentModal}
               disabled={busy}
-              className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+              className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-50 cursor-pointer"
             >
               Cancel
             </button>

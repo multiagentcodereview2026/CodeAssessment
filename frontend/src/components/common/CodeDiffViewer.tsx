@@ -32,7 +32,7 @@ export const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+    <div className="bg-white dark:bg-[#121217] border border-slate-200 dark:border-white/12 rounded-2xl overflow-hidden shadow-sm">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between px-5 py-4 bg-slate-950 border-b border-slate-800 gap-3">
         <div className="flex items-center gap-2">
@@ -152,7 +152,7 @@ export const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({
           <span>Key optimizations: Bucket pre-allocation with <code className="text-purple-300">reserve()</code> & semantic variable naming.</span>
         </div>
         <div className="flex items-center gap-1 text-slate-500">
-          <span>Iterative Engine v2.4</span>
+          <span>Iterative AI Engine</span>
           <ArrowRight className="w-3 h-3" />
         </div>
       </div>

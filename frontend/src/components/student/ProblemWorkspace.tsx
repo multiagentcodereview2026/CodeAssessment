@@ -638,22 +638,22 @@ export const ProblemWorkspace: React.FC = () => {
       <div className="min-h-[60vh] w-full">
         <button
           onClick={() => navigate(isInstructorProblem ? '/problems?view=instructor' : '/problems')}
-          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-100 hover:text-indigo-600"
+          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-slate-600 dark:text-zinc-300 transition-colors hover:bg-slate-100 dark:hover:bg-white/10 hover:text-indigo-600 dark:hover:text-indigo-400"
         >
           <ArrowLeft className="h-4 w-4" />
           <span>{isInstructorProblem ? 'Back to Instructor Problems' : 'Back to Problem Bank'}</span>
         </button>
-        <div className="mt-6 grid min-h-[45vh] place-items-center rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+        <div className="mt-6 grid min-h-[45vh] place-items-center rounded-2xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] p-8 text-center shadow-sm">
           {isProblemLoading ? (
-            <div className="space-y-3 text-slate-500">
+            <div className="space-y-3 text-slate-500 dark:text-zinc-400">
               <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
               <p className="text-sm font-semibold">Loading problem and test cases…</p>
             </div>
           ) : (
             <div className="max-w-md space-y-2">
               <XCircle className="mx-auto h-7 w-7 text-rose-500" />
-              <h1 className="text-lg font-bold text-slate-900">Problem could not be loaded</h1>
-              <p className="text-sm text-rose-700">{problemLoadError || 'The server problem is unavailable.'}</p>
+              <h1 className="text-lg font-bold text-slate-900 dark:text-white">Problem could not be loaded</h1>
+              <p className="text-sm text-rose-700 dark:text-rose-400">{problemLoadError || 'The server problem is unavailable.'}</p>
             </div>
           )}
         </div>
@@ -663,7 +663,7 @@ export const ProblemWorkspace: React.FC = () => {
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-[1800px] space-y-4 pb-12">
-      {assignmentId && <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+      {assignmentId && <div role="status" className="rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm text-amber-900 dark:text-amber-200">
         {!assignmentAccess ? 'Checking assignment availability…' : assignmentAccess.unavailable ? 'Assignment availability could not be verified. Editing and submission are paused until access is restored.' : assignmentLocked ? 'This assignment is closed. You can review the instructions and your draft, but cannot run or submit code.' : assignmentAccess.due_date ? `Due ${new Date(assignmentAccess.due_date).toLocaleString()}` : 'Assignment open · No deadline'}
       </div>}
       {/* Keep the workspace entry point quiet so the problem and editor lead. */}
@@ -672,7 +672,7 @@ export const ProblemWorkspace: React.FC = () => {
           onClick={() => {
             navigate(isInstructorProblem ? '/problems?view=instructor' : '/problems');
           }}
-          className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer py-1.5 px-3 rounded-xl hover:bg-slate-100 active:scale-95"
+          className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-zinc-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer py-1.5 px-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 active:scale-95"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>{isInstructorProblem ? 'Back to Instructor Problems' : 'Back to Problem Bank'}</span>
@@ -683,7 +683,7 @@ export const ProblemWorkspace: React.FC = () => {
           onClick={toggleTheme}
           title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
           aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] text-xs font-semibold text-slate-600 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-[#16161d] transition-all cursor-pointer shadow-xs"
         >
           {resolvedTheme === 'dark' ? (
             <>
@@ -699,15 +699,15 @@ export const ProblemWorkspace: React.FC = () => {
         </button>
       </div>
 
-      <details className="text-xs text-slate-500"><summary className="cursor-pointer">Scoring rubric</summary><p className="mt-2">Correctness {(assignmentAccess?.scoring_weights || selectedProblem.scoringWeights)?.correctness ?? 30}% · time {(assignmentAccess?.scoring_weights || selectedProblem.scoringWeights)?.time ?? 35}% · space {(assignmentAccess?.scoring_weights || selectedProblem.scoringWeights)?.space ?? 25}% · style {(assignmentAccess?.scoring_weights || selectedProblem.scoringWeights)?.style ?? 10}%. Final score is the lower of weighted quality and correctness. Pass every public test to submit; acceptance requires all evaluation tests to pass.</p></details>
+      <details className="text-xs text-slate-500 dark:text-zinc-400"><summary className="cursor-pointer">Scoring rubric</summary><p className="mt-2">Correctness {(assignmentAccess?.scoring_weights || selectedProblem.scoringWeights)?.correctness ?? 30}% · time {(assignmentAccess?.scoring_weights || selectedProblem.scoringWeights)?.time ?? 35}% · space {(assignmentAccess?.scoring_weights || selectedProblem.scoringWeights)?.space ?? 25}% · style {(assignmentAccess?.scoring_weights || selectedProblem.scoringWeights)?.style ?? 10}%. Final score is the lower of weighted quality and correctness. Pass every public test to submit; acceptance requires all evaluation tests to pass.</p></details>
       {/* Main Split Grid */}
       <div className="grid min-w-0 grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(390px,1fr)_minmax(500px,1.2fr)] xl:grid-cols-[minmax(450px,1fr)_minmax(660px,1.2fr)]">
         {/* LEFT PANEL: Problem Details & Constraints (Col span 5) */}
-        <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:flex lg:h-[900px] lg:flex-col">
+        <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] shadow-sm lg:flex lg:h-[900px] lg:flex-col">
           {/* Header */}
-          <div className="p-5 border-b border-slate-100">
+          <div className="p-5 border-b border-slate-100 dark:border-white/10">
             <div className="flex items-center gap-2.5 mb-2">
-              <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
+              <h1 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
                 {selectedProblem.title}
               </h1>
               <DifficultyBadge difficulty={selectedProblem.difficulty} />
@@ -715,13 +715,13 @@ export const ProblemWorkspace: React.FC = () => {
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex border-b border-slate-200 bg-white px-4 text-sm font-medium">
+          <div className="flex border-b border-slate-200 dark:border-white/10 bg-white dark:bg-[#121217] px-4 text-sm font-medium">
             <button
               onClick={() => setActiveLeftTab('statement')}
               className={`py-3 px-3 border-b-2 transition-all ${
                 activeLeftTab === 'statement'
-                  ? 'border-indigo-600 text-indigo-600 bg-white'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                  ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#121217]'
+                  : 'border-transparent text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-white'
               }`}
             >
               Problem Statement
@@ -730,8 +730,8 @@ export const ProblemWorkspace: React.FC = () => {
               onClick={() => setActiveLeftTab('testcases')}
               className={`py-3 px-3 border-b-2 transition-all ${
                 activeLeftTab === 'testcases'
-                  ? 'border-indigo-600 text-indigo-600 bg-white'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                  ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#121217]'
+                  : 'border-transparent text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-white'
               }`}
             >
               Test Cases ({selectedProblem.testCases.length})
@@ -739,12 +739,12 @@ export const ProblemWorkspace: React.FC = () => {
           </div>
 
           {/* Left Tab Content */}
-          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-6 pr-4 text-sm text-slate-700">
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-6 pr-4 text-sm text-slate-700 dark:text-zinc-300">
             {activeLeftTab === 'statement' ? (
               <>
                 {/* Description */}
                 <div className="prose prose-slate prose-sm max-w-none">
-                  <div className="whitespace-pre-line leading-relaxed text-slate-600">
+                  <div className="whitespace-pre-line leading-relaxed text-slate-600 dark:text-zinc-300">
                     {visibleProblemDescription}
                   </div>
                 </div>
@@ -752,23 +752,23 @@ export const ProblemWorkspace: React.FC = () => {
                 {/* Examples */}
                 <div className="space-y-4">
                   {selectedProblem.examples.slice(0, 1).map((ex, idx) => (
-                    <div key={idx} className="bg-slate-50 rounded-xl p-4 border border-slate-200/80">
-                      <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
+                    <div key={idx} className="bg-slate-50 dark:bg-[#16161d] rounded-xl p-4 border border-slate-200/80 dark:border-white/10">
+                      <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-200 uppercase tracking-wider mb-2">
                         Example {idx + 1}:
                       </h4>
                       <div className="space-y-1.5 font-mono text-xs">
-                        <div className="text-slate-600">
-                          <strong className="text-slate-800 font-sans">Input:</strong>
-                          <pre className="mt-1 whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-white p-2 text-slate-800">
+                        <div className="text-slate-600 dark:text-zinc-400">
+                          <strong className="text-slate-800 dark:text-zinc-200 font-sans">Input:</strong>
+                          <pre className="mt-1 whitespace-pre-wrap break-words rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0c0c0e] p-2 text-slate-800 dark:text-zinc-200">
                             {displayInput(ex.input)}
                           </pre>
                         </div>
-                        <div className="text-slate-600">
-                          <strong className="text-slate-800 font-sans">Output: </strong>
+                        <div className="text-slate-600 dark:text-zinc-400">
+                          <strong className="text-slate-800 dark:text-zinc-200 font-sans">Output: </strong>
                           <code>{ex.output}</code>
                         </div>
                         {ex.explanation && (
-                          <div className="text-slate-500 text-[11px] font-sans pt-1">
+                          <div className="text-slate-500 dark:text-zinc-400 text-[11px] font-sans pt-1">
                             <strong>Explanation: </strong> {ex.explanation}
                           </div>
                         )}
@@ -778,11 +778,11 @@ export const ProblemWorkspace: React.FC = () => {
                 </div>
 
                 {/* Constraints */}
-                <div className="bg-amber-50/40 rounded-xl p-4 border border-amber-200/60">
-                  <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider mb-2">
+                <div className="bg-amber-50/40 dark:bg-amber-950/20 rounded-xl p-4 border border-amber-200/60 dark:border-amber-500/30">
+                  <h4 className="text-xs font-bold text-amber-900 dark:text-amber-300 uppercase tracking-wider mb-2">
                     Constraints:
                   </h4>
-                  <ul className="list-disc list-inside space-y-1 text-xs text-amber-900 font-mono">
+                  <ul className="list-disc list-inside space-y-1 text-xs text-amber-900 dark:text-amber-200 font-mono">
                     {displayConstraints.map((c, i) => (
                       <li key={i}>{c}</li>
                     ))}
@@ -791,14 +791,14 @@ export const ProblemWorkspace: React.FC = () => {
 
                 {/* Topic tags */}
                 <div>
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  <h4 className="text-xs font-bold text-slate-400 dark:text-zinc-400 uppercase tracking-wider mb-2">
                     Algorithmic Tags
                   </h4>
                   <div className="flex flex-wrap gap-1.5">
                     {selectedProblem.tags.map((t, idx) => (
                       <span
                         key={idx}
-                        className="px-2.5 py-1 text-xs font-medium bg-slate-100 text-slate-700 rounded-lg border border-slate-200"
+                        className="px-2.5 py-1 text-xs font-medium bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-zinc-200 rounded-lg border border-slate-200 dark:border-white/12"
                       >
                         {t}
                       </span>
@@ -806,41 +806,41 @@ export const ProblemWorkspace: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4">
+                <div className="rounded-xl border border-indigo-200 dark:border-indigo-500/30 bg-indigo-50/50 dark:bg-indigo-950/20 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div><h4 className="text-xs font-bold text-indigo-900">Need a nudge?</h4><p className="mt-1 text-xs text-indigo-800">Hints are optional and reveal one level at a time.</p></div>
-                    <button onClick={() => void revealHint()} disabled={hintsLoading || visibleHints >= 3} className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{hintsLoading ? 'Generating hint…' : visibleHints ? (visibleHints >= 3 ? 'All hints revealed' : 'Reveal next hint') : 'Get a hint'}</button>
+                    <div><h4 className="text-xs font-bold text-indigo-900 dark:text-indigo-300">Need a nudge?</h4><p className="mt-1 text-xs text-indigo-800 dark:text-indigo-400">Hints are optional and reveal one level at a time.</p></div>
+                    <button onClick={() => void revealHint()} disabled={hintsLoading || visibleHints >= 3} className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{hintsLoading ? 'Generating hint…' : visibleHints ? (visibleHints >= 3 ? 'All hints revealed' : 'Reveal next hint') : 'Get a hint'}</button>
                   </div>
-                  {hintError && <p role="alert" className="mt-3 text-xs text-rose-700">{hintError} <button onClick={() => void revealHint()} className="font-bold underline">Retry</button></p>}
-                  {hints.slice(0, visibleHints).map((hint, index) => <div key={index} className="mt-3 rounded-lg border border-indigo-100 bg-white p-3 text-xs text-slate-700"><span className="font-bold text-indigo-700">Hint {index + 1}: </span>{hint}</div>)}
+                  {hintError && <p role="alert" className="mt-3 text-xs text-rose-700 dark:text-rose-400">{hintError} <button onClick={() => void revealHint()} className="font-bold underline">Retry</button></p>}
+                  {hints.slice(0, visibleHints).map((hint, index) => <div key={index} className="mt-3 rounded-lg border border-indigo-100 dark:border-indigo-500/20 bg-white dark:bg-[#16161d] p-3 text-xs text-slate-700 dark:text-zinc-200"><span className="font-bold text-indigo-700 dark:text-indigo-400">Hint {index + 1}: </span>{hint}</div>)}
                 </div>
               </>
             ) : (
               /* Test Cases Tab */
               <div className="space-y-4">
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-zinc-400">
                   Run Code checks these examples. Submit evaluates the full test suite securely on the backend.
                 </p>
                 {selectedProblem.testCases.slice(0, 3).map((tc, idx) => (
-                  <div key={tc.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+                  <div key={tc.id} className="p-4 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#16161d] space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-800">
+                      <span className="text-xs font-bold text-slate-800 dark:text-zinc-200">
                         Case {idx + 1}
                       </span>
-                      <span className="text-[10px] font-mono text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/15 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-500/30">
                         Verification
                       </span>
                     </div>
                     <div className="space-y-1 font-mono text-xs">
                       <div>
-                        <span className="text-slate-400 font-sans text-[11px]">Input:</span>
-                        <pre className="mt-1 whitespace-pre-wrap break-words p-2 bg-white rounded border border-slate-200 text-slate-800">
+                        <span className="text-slate-400 dark:text-zinc-500 font-sans text-[11px]">Input:</span>
+                        <pre className="mt-1 whitespace-pre-wrap break-words p-2 bg-white dark:bg-[#0c0c0e] rounded border border-slate-200 dark:border-white/10 text-slate-800 dark:text-zinc-200">
                           {displayInput(tc.input)}
                         </pre>
                       </div>
                       <div>
-                        <span className="text-slate-400 font-sans text-[11px]">Expected Output:</span>
-                        <div className="p-2 bg-white rounded border border-slate-200 text-slate-800">{tc.expectedOutput}</div>
+                        <span className="text-slate-400 dark:text-zinc-500 font-sans text-[11px]">Expected Output:</span>
+                        <div className="p-2 bg-white dark:bg-[#0c0c0e] rounded border border-slate-200 dark:border-white/10 text-slate-800 dark:text-zinc-200">{tc.expectedOutput}</div>
                       </div>
                     </div>
                   </div>
@@ -932,7 +932,7 @@ export const ProblemWorkspace: React.FC = () => {
                 options={{
                   automaticLayout: true,
                   fontSize: 14,
-                  fontFamily: "Consolas, 'Courier New', monospace",
+                  fontFamily: "'JetBrains Mono', Consolas, 'Courier New', monospace",
                   lineHeight: 22,
                   minimap: { enabled: true },
                   lineNumbers: 'on',
@@ -956,28 +956,28 @@ export const ProblemWorkspace: React.FC = () => {
 
           {/* Test Case Output Drawer */}
           {runOutput && (
-            <div ref={runOutputRef} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs animate-fadeIn">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+            <div ref={runOutputRef} className="bg-white dark:bg-[#121217] rounded-2xl border border-slate-200 dark:border-white/12 p-5 shadow-xs animate-fadeIn">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/10 mb-3">
                 <div className="flex items-center gap-2">
                   {runOutput.status === 'success' ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-rose-500" />}
-                  <span className="text-xs font-bold text-slate-800">
+                  <span className="text-xs font-bold text-slate-800 dark:text-zinc-200">
                     {runOutput.compileError
                       ? `Compilation Error · 0 of ${runOutput.results.length} test cases executed`
                       : `Test Output: ${runOutput.results.filter((result) => result.passed).length} of ${runOutput.results.length} test cases passed`}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 text-xs font-mono text-slate-500">
+                <div className="flex items-center gap-3 text-xs font-mono text-slate-500 dark:text-zinc-400">
                   <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                    <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500" />
                     {runOutput.time}
                   </span>
                   <span className="flex items-center gap-1">
-                    <HardDrive className="w-3.5 h-3.5 text-slate-400" />
+                    <HardDrive className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500" />
                     {runOutput.memory}
                   </span>
                 </div>
               </div>
-              {runOutput.status === 'error' && <p className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">Reason: {runOutput.reason}</p>}
+              {runOutput.status === 'error' && <p className="mb-3 rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-500/30 px-3 py-2 text-xs font-medium text-rose-700 dark:text-rose-300">Reason: {runOutput.reason}</p>}
 
               {runOutput.compileError && (
                 <div className="mb-3">
@@ -993,12 +993,12 @@ export const ProblemWorkspace: React.FC = () => {
                   <button
                     key={i}
                     onClick={() => setActiveTestTab(i)}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
                       activeTestTab === i
                         ? r.passed
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-rose-50 text-rose-700 border border-rose-200'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          ? 'bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/40'
+                          : 'bg-rose-50 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/40'
+                        : 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-white/15'
                     }`}
                   >
                     {r.passed ? <CheckCircle className="w-3 h-3 text-emerald-500" /> : <XCircle className="w-3 h-3 text-rose-500" />}
@@ -1009,27 +1009,27 @@ export const ProblemWorkspace: React.FC = () => {
 
               {/* The fields deliberately use pre-wrap: student-visible values
                   retain their readable structure and stdout is never collapsed. */}
-              {activeRunCase && <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs font-mono space-y-3">
-                <div className={`flex items-center gap-1.5 font-sans text-xs font-bold ${activeRunCase.passed ? 'text-emerald-700' : 'text-rose-700'}`}>
+              {activeRunCase && <div className="bg-slate-50 dark:bg-[#16161d] p-3 rounded-xl border border-slate-200 dark:border-white/10 text-xs font-mono space-y-3">
+                <div className={`flex items-center gap-1.5 font-sans text-xs font-bold ${activeRunCase.passed ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
                   {activeRunCase.passed ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
                   {activeRunCase.passed ? 'Passed' : 'Failed'}
                 </div>
                 <div>
-                  <span className="text-slate-400 font-sans text-[11px]">Input:</span>
-                  <pre className="mt-1 whitespace-pre-wrap break-words text-slate-800">{displayInput(activeRunCase.input)}</pre>
+                  <span className="text-slate-400 dark:text-zinc-500 font-sans text-[11px]">Input:</span>
+                  <pre className="mt-1 whitespace-pre-wrap break-words text-slate-800 dark:text-zinc-200">{displayInput(activeRunCase.input)}</pre>
                 </div>
                 <div>
-                  <span className="text-slate-400 font-sans text-[11px]">Your output:</span>
-                  <pre className={`mt-1 whitespace-pre-wrap break-words font-bold ${activeRunCase.passed ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  <span className="text-slate-400 dark:text-zinc-500 font-sans text-[11px]">Your output:</span>
+                  <pre className={`mt-1 whitespace-pre-wrap break-words font-bold ${activeRunCase.passed ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
                     {activeRunCase.output || '∅ (no output produced)'}
                   </pre>
                 </div>
                 <div>
-                  <span className="text-slate-400 font-sans text-[11px]">Expected output:</span>
-                  <pre className="mt-1 whitespace-pre-wrap break-words text-slate-700">{activeRunCase.expected || '∅ (empty output)'}</pre>
+                  <span className="text-slate-400 dark:text-zinc-500 font-sans text-[11px]">Expected output:</span>
+                  <pre className="mt-1 whitespace-pre-wrap break-words text-slate-700 dark:text-zinc-300">{activeRunCase.expected || '∅ (empty output)'}</pre>
                 </div>
                 {activeRunCase.error && (
-                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 font-sans text-xs text-rose-700">
+                  <div className="rounded-lg border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-950/30 px-3 py-2 font-sans text-xs text-rose-700 dark:text-rose-300">
                     <span className="font-bold">Execution message: </span>
                     <span className="whitespace-pre-wrap break-words">{activeRunCase.error}</span>
                   </div>

@@ -67,27 +67,33 @@ html.dark {
   --color-brand-amber: #f59e0b;
   --color-brand-red: #ef4444;
 
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-inter: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --font-geist: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-inter: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-poppins: "Poppins", sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 html {
   scroll-behavior: smooth;
+  font-family: var(--font-sans);
 }
 
 body {
-  background-color: var(--color-primary);
+  background-color: var(--color-background);
   color: #0f172a;
-  font-family: var(--font-inter);
+  font-family: var(--font-sans);
   margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+html.dark body {
+  background-color: #000000;
+  color: #f4f4f5;
+}
+
 button, input, select, textarea {
-  font: inherit;
+  font-family: inherit;
 }
 
 :focus-visible {
@@ -101,11 +107,12 @@ button, input, select, textarea {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-poppins);
+  font-family: var(--font-sans);
+  letter-spacing: -0.025em;
 }
 
 code, pre, .font-mono {
-  font-family: var(--font-mono);
+  font-family: var(--font-mono) !important;
 }
 
 /* Page animations */
@@ -351,111 +358,114 @@ html.dark ::selection {
 
 /* Background surfaces - Pure Black / Rich Obsidian */
 html.dark .bg-white {
-  background-color: #0a0a0c;
+  background-color: #111116;
 }
 
 html.dark .bg-slate-50 {
-  background-color: #000000;
+  background-color: #0a0a0d;
 }
 
 html.dark .bg-slate-100 {
-  background-color: #141417;
+  background-color: #181820;
 }
 
 html.dark .bg-slate-200 {
-  background-color: #222226;
+  background-color: #24242c;
 }
 
 html.dark .bg-slate-50\/50,
 html.dark .bg-slate-50\/60,
 html.dark .bg-slate-50\/70,
 html.dark .bg-slate-50\/75 {
-  background-color: #0e0e11 !important;
+  background-color: #14141a !important;
 }
 
 html.dark .bg-slate-100\/50,
 html.dark .bg-slate-100\/60,
 html.dark .bg-slate-100\/80 {
-  background-color: #141417 !important;
+  background-color: #1a1a22 !important;
 }
 
 html.dark .bg-slate-200\/60,
 html.dark .bg-slate-200\/70,
 html.dark .bg-slate-200\/80 {
-  background-color: #222226 !important;
+  background-color: #24242c !important;
 }
 
 /* Tailwind dark: classes overrides for slate to eliminate all blue */
 html.dark .dark\:bg-slate-950,
+html.dark .bg-slate-950 {
+  background-color: #0c0c10 !important;
+}
+
 html.dark .dark\:bg-slate-900,
-html.dark .bg-slate-950,
 html.dark .bg-slate-900 {
-  background-color: #0a0a0c !important;
+  background-color: #111116 !important;
 }
 
 html.dark .dark\:bg-slate-900\/60,
 html.dark .dark\:bg-slate-900\/70,
 html.dark .dark\:bg-slate-900\/80 {
-  background-color: rgba(10, 10, 12, 0.75) !important;
+  background-color: rgba(17, 17, 22, 0.85) !important;
 }
 
 html.dark .dark\:bg-slate-800,
 html.dark .bg-slate-800 {
-  background-color: #141417 !important;
+  background-color: #181820 !important;
 }
 
 html.dark .dark\:bg-slate-800\/50,
 html.dark .dark\:bg-slate-800\/60,
 html.dark .dark\:bg-slate-800\/70,
 html.dark .dark\:bg-slate-800\/80 {
-  background-color: #101013 !important;
+  background-color: #14141a !important;
 }
 
 html.dark .dark\:border-slate-800,
 html.dark .dark\:border-slate-800\/60,
 html.dark .dark\:border-slate-800\/80,
 html.dark .border-slate-800 {
-  border-color: #222226 !important;
+  border-color: rgba(255, 255, 255, 0.13) !important;
 }
 
 html.dark .dark\:border-slate-700,
 html.dark .dark\:border-slate-700\/60,
 html.dark .dark\:border-slate-700\/80,
 html.dark .border-slate-700 {
-  border-color: #27272a !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
 }
 
 html.dark .dark\:hover\:border-slate-700:hover,
 html.dark .dark\:hover\:border-slate-600:hover {
-  border-color: #3f3f46 !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
 }
 
 html.dark .dark\:hover\:bg-slate-800\/50:hover,
 html.dark .dark\:hover\:bg-slate-800:hover {
-  background-color: #18181b !important;
+  background-color: #1c1c24 !important;
 }
 
 html.dark .dark\:divide-slate-800 > :not([hidden]) ~ :not([hidden]),
 html.dark .dark\:divide-slate-800\/60 > :not([hidden]) ~ :not([hidden]) {
-  border-color: #1c1c20 !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 html.dark .hover\:bg-indigo-50\/40:hover,
 html.dark .hover\:bg-indigo-50\/50:hover,
 html.dark .hover\:bg-indigo-50:hover {
-  background-color: rgba(99, 102, 241, 0.16) !important;
+  background-color: rgba(99, 102, 241, 0.18) !important;
 }
 
 html.dark .hover\:bg-emerald-50\/40:hover,
 html.dark .hover\:bg-emerald-50\/50:hover,
 html.dark .hover\:bg-emerald-50:hover {
-  background-color: rgba(16, 185, 129, 0.16) !important;
+  background-color: rgba(16, 185, 129, 0.18) !important;
 }
 
 html.dark .hover\:bg-slate-50\/50:hover,
 html.dark .hover\:bg-slate-50\/60:hover,
 html.dark .hover\:bg-slate-50\/70:hover {
-  background-color: #18181b !important;
+  background-color: #1c1c24 !important;
 }
 
 html.dark .bg-emerald-50\/40,
@@ -487,77 +497,122 @@ html.dark .bg-rose-50\/70 {
 }
 
 html.dark .bg-white\/80 {
-  background-color: rgba(10, 10, 12, 0.85);
+  background-color: rgba(17, 17, 22, 0.85);
 }
 
 html.dark .bg-white\/90 {
-  background-color: rgba(10, 10, 12, 0.9);
+  background-color: rgba(17, 17, 22, 0.9);
 }
 
 html.dark .bg-white\/95 {
-  background-color: rgba(10, 10, 12, 0.95);
+  background-color: rgba(17, 17, 22, 0.95);
 }
 
-/* Borders and dividers */
+/* Crisp defined borders and dividers across all cards, containers, and dialogs */
 html.dark .border-slate-100,
-html.dark .border-slate-200 {
-  border-color: #222226;
-}
-
+html.dark .border-slate-200,
 html.dark .border-slate-200\/50,
 html.dark .border-slate-200\/60,
 html.dark .border-slate-200\/70,
 html.dark .border-slate-200\/80,
-html.dark .border-slate-200\/90 {
-  border-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-html.dark .border-slate-300 {
-  border-color: #27272a;
+html.dark .border-slate-200\/90,
+html.dark .border-slate-300,
+html.dark .border-neutral-800,
+html.dark .border-neutral-800\/80,
+html.dark .dark\:border-neutral-800,
+html.dark .dark\:border-neutral-800\/80 {
+  border-color: rgba(255, 255, 255, 0.13) !important;
 }
 
 html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
 html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
-  border-color: #1c1c20;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Defined Card & Component Architecture in Dark Mode */
+html.dark .rounded-3xl.border,
+html.dark .rounded-2xl.border,
+html.dark .rounded-xl.border,
+html.dark main.rounded-2xl,
+html.dark section.rounded-2xl,
+html.dark section.rounded-3xl,
+html.dark article.rounded-2xl,
+html.dark article.rounded-xl,
+html.dark .glass-card {
+  box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.7), inset 0 1px 0 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+/* High-definition interactive card hover */
+html.dark .card-hover {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+html.dark .card-hover:hover,
+html.dark button.rounded-2xl.border:hover,
+html.dark button.rounded-3xl.border:hover,
+html.dark button.rounded-xl.border:hover,
+html.dark div.rounded-2xl.border.cursor-pointer:hover,
+html.dark div.rounded-3xl.border.cursor-pointer:hover {
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 12px 36px -4px rgba(0, 0, 0, 0.85), inset 0 1px 0 0 rgba(255, 255, 255, 0.14) !important;
+}
+
+/* Tables across all student and instructor views */
+html.dark thead tr {
+  background-color: #16161d !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+html.dark thead th {
+  color: #a1a1aa !important;
+  letter-spacing: 0.05em;
+}
+
+html.dark tbody tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+html.dark tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.035) !important;
 }
 
 /* Text color hierarchy */
 html.dark .text-slate-900 {
-  color: #f4f4f5;
+  color: #ffffff !important;
 }
 
 html.dark .text-slate-800 {
-  color: #e4e4e7;
+  color: #f4f4f5 !important;
 }
 
 html.dark .text-slate-700 {
-  color: #d4d4d8;
+  color: #e4e4e7 !important;
 }
 
 html.dark .text-slate-600 {
-  color: #a1a1aa;
+  color: #d4d4d8 !important;
 }
 
 html.dark .text-slate-500 {
-  color: #71717a;
+  color: #a1a1aa !important;
 }
 
 html.dark .text-slate-400 {
-  color: #71717a;
+  color: #8b8b96 !important;
 }
 
 /* Hover background & text interactions */
 html.dark .hover\:bg-slate-50:hover {
-  background-color: #141417;
+  background-color: #181820;
 }
 
 html.dark .hover\:bg-slate-100:hover,
 html.dark .hover\:bg-slate-100\/80:hover {
-  background-color: #18181b !important;
+  background-color: #202028 !important;
 }
 
 html.dark .hover\:bg-slate-200:hover {
-  background-color: #27272a;
+  background-color: #282834;
 }
 
 html.dark .hover\:text-slate-900:hover {
@@ -576,30 +631,39 @@ html.dark .hover\:text-slate-700:hover {
 html.dark input:not([type="checkbox"]):not([type="radio"]),
 html.dark select,
 html.dark textarea {
-  background-color: #0c0c0e;
-  color: #f4f4f5;
-  border-color: #27272a;
+  background-color: #121217 !important;
+  color: #f4f4f5 !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+}
+
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: #6366f1 !important;
+  background-color: #16161d !important;
+  box-shadow: 0 0 0 1px #6366f1, inset 0 1px 2px rgba(0, 0, 0, 0.5) !important;
 }
 
 html.dark input::placeholder,
 html.dark textarea::placeholder {
-  color: #52525b;
+  color: #71717a;
 }
 
 html.dark select option {
-  background-color: #0c0c0e;
+  background-color: #121217;
   color: #f4f4f5;
 }
 
 /* Glass & Glass cards in dark mode */
 html.dark .glass {
-  background: rgba(10, 10, 12, 0.85);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(17, 17, 22, 0.85);
+  border-color: rgba(255, 255, 255, 0.13);
 }
 
 html.dark .glass-card {
-  background: rgba(10, 10, 12, 0.95);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(17, 17, 22, 0.95);
+  border-color: rgba(255, 255, 255, 0.13);
   box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.8);
 }
 
@@ -653,32 +717,40 @@ html.dark .border-indigo-100,
 html.dark .border-indigo-200,
 html.dark .border-indigo-200\/80,
 html.dark .border-indigo-300 {
-  border-color: rgba(99, 102, 241, 0.35);
+  border-color: rgba(99, 102, 241, 0.45) !important;
 }
 
 html.dark .border-emerald-100,
 html.dark .border-emerald-200,
 html.dark .border-emerald-200\/80,
 html.dark .border-emerald-300 {
-  border-color: rgba(16, 185, 129, 0.35);
+  border-color: rgba(16, 185, 129, 0.45) !important;
 }
 
 html.dark .border-amber-100,
 html.dark .border-amber-200,
+html.dark .border-amber-200\/80,
 html.dark .border-amber-300 {
-  border-color: rgba(245, 158, 11, 0.35);
+  border-color: rgba(245, 158, 11, 0.45) !important;
+}
+
+html.dark .border-purple-100,
+html.dark .border-purple-200,
+html.dark .border-purple-200\/80,
+html.dark .border-purple-300 {
+  border-color: rgba(168, 85, 247, 0.45) !important;
 }
 
 html.dark .border-rose-100,
 html.dark .border-rose-200,
 html.dark .border-rose-300 {
-  border-color: rgba(239, 68, 68, 0.35);
+  border-color: rgba(244, 63, 94, 0.45) !important;
 }
 
 html.dark .border-sky-100,
 html.dark .border-sky-200,
 html.dark .border-sky-300 {
-  border-color: rgba(14, 165, 233, 0.35);
+  border-color: rgba(14, 165, 233, 0.45) !important;
 }
 
 /* Semantic Badge Text Contrast */

@@ -439,35 +439,35 @@ export const ProblemsListView: React.FC = () => {
     return (
       <div className="space-y-6 pb-12 animate-fadeIn">
         {/* Unified Page Header Aligned with App Design System */}
-        <header className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end">
+        <header className="flex flex-col justify-between gap-4 border-b border-slate-200 dark:border-white/10 pb-5 sm:flex-row sm:items-end">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-indigo-700">Independent practice</p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-indigo-600 dark:text-indigo-400">Independent practice</p>
+            <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               Find a problem to solve
             </h1>
-            <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-600">
+            <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-600 dark:text-zinc-400">
               Choose a topic and difficulty, then open a problem to write code, run examples, and submit for assessment.
             </p>
           </div>
 
           {/* Compact Tab Switcher Aligned to Header */}
           <div className="flex shrink-0 items-center">
-            <div className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200/90 bg-slate-100 p-0.5 shadow-2xs">
+            <div className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200/90 bg-slate-100 p-0.5 shadow-2xs dark:bg-[#0e0e13] dark:border-white/12">
               <button
                 type="button"
                 onClick={() => { setActiveTab('practice'); navigate('/problems'); }}
                 className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-all cursor-pointer ${
                   activeTab === 'practice'
-                    ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
-                    : 'text-slate-500 hover:text-slate-900 hover:bg-white/50'
+                    ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70 dark:bg-[#1c1c28] dark:text-white dark:border-white/20 dark:shadow-none'
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-white/50 dark:text-zinc-500 dark:hover:text-zinc-200 dark:hover:bg-white/5'
                 }`}
               >
                 <Code2 className={`h-3.5 w-3.5 ${activeTab === 'practice' ? 'text-indigo-600' : 'text-slate-400'}`} />
                 <span>DSA Practice</span>
                 <span className={`ml-0.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[10px] font-mono leading-none transition-colors ${
                   activeTab === 'practice'
-                    ? 'bg-indigo-50 text-indigo-700 font-medium border border-indigo-100'
-                    : 'bg-slate-200/70 text-slate-500'
+                    ? 'bg-indigo-50 text-indigo-700 font-medium border border-indigo-100 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/40'
+                    : 'bg-slate-200/70 text-slate-500 dark:bg-white/8 dark:text-zinc-400'
                 }`}>
                   {orderedPracticeProblems.length || practiceProblems.length}
                 </span>
@@ -478,16 +478,16 @@ export const ProblemsListView: React.FC = () => {
                 onClick={() => { setActiveTab('instructor'); navigate('/problems?view=instructor'); }}
                 className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-all cursor-pointer ${
                   activeTab === 'instructor'
-                    ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70'
-                    : 'text-slate-500 hover:text-slate-900 hover:bg-white/50'
+                    ? 'bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/70 dark:bg-[#1c1c28] dark:text-white dark:border-white/20 dark:shadow-none'
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-white/50 dark:text-zinc-500 dark:hover:text-zinc-200 dark:hover:bg-white/5'
                 }`}
               >
                 <GraduationCap className={`h-3.5 w-3.5 ${activeTab === 'instructor' ? 'text-indigo-600' : 'text-slate-400'}`} />
                 <span>Instructor Problems</span>
                 <span className={`ml-0.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[10px] font-mono leading-none transition-colors ${
                   activeTab === 'instructor'
-                    ? 'bg-indigo-50 text-indigo-700 font-medium border border-indigo-100'
-                    : 'bg-slate-200/70 text-slate-500'
+                    ? 'bg-indigo-50 text-indigo-700 font-medium border border-indigo-100 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/40'
+                    : 'bg-slate-200/70 text-slate-500 dark:bg-white/8 dark:text-zinc-400'
                 }`}>
                   {studentInstructorProblems.length}
                 </span>
@@ -498,22 +498,22 @@ export const ProblemsListView: React.FC = () => {
 
         <section className="space-y-4">
           <div className="relative">
-            <main className="relative rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <main className="relative rounded-2xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] shadow-sm">
               {/* Filter and Search Bar */}
-              <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center">
+              <div className="flex flex-col gap-3 border-b border-slate-100 dark:border-white/10 p-4 sm:flex-row sm:items-center">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                   <input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder={activeTab === 'practice' ? "Search by number, question name, or DSA topic..." : "Search by question name, topic, or course..."}
-                    className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50/70 py-1.5 pl-9 pr-3 text-xs text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:ring-1 focus:ring-indigo-100"
+                    className="h-9 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/70 dark:bg-[#16161d] py-1.5 pl-9 pr-3 text-xs text-slate-900 dark:text-zinc-100 outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:border-indigo-500 focus:bg-white dark:focus:bg-[#16161d] focus:ring-1 focus:ring-indigo-100 dark:focus:ring-indigo-900/40"
                   />
                   {search && (
                     <button
                       type="button"
                       onClick={() => setSearch('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -564,7 +564,7 @@ export const ProblemsListView: React.FC = () => {
                     aria-label="Filter by supported language"
                     value={languageFilter}
                     onChange={(event) => setLanguageFilter(event.target.value)}
-                    className="h-9 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none transition-all hover:border-slate-300 focus:border-indigo-500 cursor-pointer"
+                    className="h-9 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#16161d] px-2.5 text-xs font-medium text-slate-700 dark:text-zinc-200 outline-none transition-all hover:border-slate-300 dark:hover:border-white/20 focus:border-indigo-500 cursor-pointer"
                   >
                     <option value="all">All languages</option>
                     {studentPracticeLanguages.map((language) => (
@@ -623,7 +623,7 @@ export const ProblemsListView: React.FC = () => {
                   <div className="overflow-x-auto rounded-b-2xl">
                     <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        <tr className="border-b border-slate-200/80 dark:border-white/10 bg-slate-50/75 dark:bg-[#16161d] text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
                           <th className="py-3 px-4 w-16 text-center">#</th>
                           <th className="py-3 px-4">Title</th>
                           <th className="py-3 px-4 hidden md:table-cell">Course &amp; Due Date</th>
@@ -631,55 +631,55 @@ export const ProblemsListView: React.FC = () => {
                           <th className="py-3 px-4 w-32 text-right">Action</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                      <tbody className="divide-y divide-slate-100 dark:divide-white/10">
                         {visibleStudentInstructor.map((problem, idx) => {
                           const solved = solvedSlugs.has(problem.slug) || solvedSlugs.has(problem.id);
                           return (
                             <tr
                               key={problem.id}
                               onClick={() => handleSolve(problem.id)}
-                              className="group hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
+                              className="group hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer"
                             >
                               <td className="py-3.5 px-4 text-center">
                                 {solved ? (
-                                  <span className="inline-flex items-center justify-center text-emerald-600" title="Solved">
+                                  <span className="inline-flex items-center justify-center text-emerald-600 dark:text-emerald-400" title="Solved">
                                     <CheckCircle2 className="w-4 h-4" />
                                   </span>
                                 ) : (
-                                  <span className="font-mono text-xs font-semibold text-slate-400 group-hover:text-indigo-600 transition-colors">
+                                  <span className="font-mono text-xs font-semibold text-slate-400 dark:text-zinc-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                                     {idx + 1}
                                   </span>
                                 )}
                               </td>
                               <td className="py-3.5 px-4">
                                 <div className="flex flex-col">
-                                  <span className="text-sm font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                                  <span className="text-sm font-semibold text-slate-900 dark:text-zinc-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                                     {problem.title}
                                   </span>
                                   <div className="flex flex-wrap items-center gap-1 mt-1">
                                     {problem.tags.slice(0, 3).map((tag, tIdx) => (
-                                      <span key={tIdx} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                                      <span key={tIdx} className="rounded bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-zinc-300">
                                         {tag}
                                       </span>
                                     ))}
                                   </div>
                                 </div>
                               </td>
-                              <td className="py-3.5 px-4 hidden md:table-cell text-xs text-slate-500">
+                              <td className="py-3.5 px-4 hidden md:table-cell text-xs text-slate-500 dark:text-zinc-400">
                                 <div className="flex flex-col gap-0.5">
                                   {problem.courseCode && (
-                                    <span className="inline-flex items-center gap-1 font-bold text-slate-700">
-                                      <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
+                                    <span className="inline-flex items-center gap-1 font-bold text-slate-700 dark:text-zinc-300">
+                                      <GraduationCap className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                                       {problem.courseCode}
                                     </span>
                                   )}
                                   {problem.dueDate ? (
-                                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-700">
-                                      <Calendar className="w-3 h-3 text-amber-600" />
+                                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-400">
+                                      <Calendar className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                                       {new Date(problem.dueDate).toLocaleDateString()}
                                     </span>
                                   ) : (
-                                    <span className="text-[11px] text-slate-400">No due date</span>
+                                    <span className="text-[11px] text-slate-400 dark:text-zinc-500">No due date</span>
                                   )}
                                 </div>
                               </td>
@@ -692,8 +692,8 @@ export const ProblemsListView: React.FC = () => {
                                   onClick={() => handleSolve(problem.id)}
                                   className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all shadow-2xs ${
                                     solved
-                                      ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white'
-                                      : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white'
+                                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600 hover:text-white'
+                                      : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-600 hover:text-white'
                                   }`}
                                 >
                                   <span>{solved ? 'Review' : 'Solve'}</span>
@@ -720,7 +720,7 @@ export const ProblemsListView: React.FC = () => {
                     <div className="overflow-x-auto rounded-b-2xl">
                       <table className="w-full text-left border-collapse">
                         <thead>
-                          <tr className="border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                          <tr className="border-b border-slate-200/80 dark:border-white/10 bg-slate-50/75 dark:bg-[#16161d] text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
                             <th className="py-3 px-4 w-16 text-center">#</th>
                             <th className="py-3 px-4">Title</th>
                             <th className="py-3 px-4 hidden md:table-cell">Tags</th>
@@ -728,7 +728,7 @@ export const ProblemsListView: React.FC = () => {
                             <th className="py-3 px-4 w-32 text-right">Action</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                        <tbody className="divide-y divide-slate-100 dark:divide-white/10">
                           {paginatedStudentPractice.map((problem) => {
                             const number = orderedPracticeProblems.findIndex((item) => item.id === problem.id) + 1;
                             const solved = solvedSlugs.has(problem.slug) || solvedSlugs.has(problem.id);
@@ -737,16 +737,16 @@ export const ProblemsListView: React.FC = () => {
                               <tr
                                 key={problem.id}
                                 onClick={() => handleSolve(problem.id)}
-                                className="group hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
+                                className="group hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer"
                               >
                                 {/* Problem Number / Status */}
                                 <td className="py-3.5 px-4 text-center">
                                   {solved ? (
-                                    <span className="inline-flex items-center justify-center text-emerald-600" title="Solved">
+                                    <span className="inline-flex items-center justify-center text-emerald-600 dark:text-emerald-400" title="Solved">
                                       <CheckCircle2 className="w-4 h-4" />
                                     </span>
                                   ) : (
-                                    <span className="font-mono text-xs font-semibold text-slate-400 group-hover:text-indigo-600 transition-colors">
+                                    <span className="font-mono text-xs font-semibold text-slate-400 dark:text-zinc-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                                       {number}
                                     </span>
                                   )}
@@ -755,14 +755,14 @@ export const ProblemsListView: React.FC = () => {
                                 {/* Problem Title & Mobile Tags */}
                                 <td className="py-3.5 px-4">
                                   <div className="flex flex-col">
-                                    <span className="text-sm font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                                    <span className="text-sm font-semibold text-slate-900 dark:text-zinc-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                                       {problem.title}
                                     </span>
                                     <div className="flex flex-wrap items-center gap-1.5 mt-1 md:hidden">
                                       {problem.tags.slice(0, 2).map((tag, tIdx) => (
                                         <span
                                           key={tIdx}
-                                          className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
+                                          className="rounded bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-zinc-300"
                                         >
                                           {tag}
                                         </span>
@@ -777,13 +777,13 @@ export const ProblemsListView: React.FC = () => {
                                     {problem.tags.slice(0, 3).map((tag, tIdx) => (
                                       <span
                                         key={tIdx}
-                                        className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 border border-slate-200/50"
+                                        className="rounded-lg bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-xs font-medium text-slate-600 dark:text-zinc-300 border border-slate-200/50 dark:border-white/10"
                                       >
                                         {tag}
                                       </span>
                                     ))}
                                     {problem.optimalComplexity?.time && problem.optimalComplexity.time !== '—' && (
-                                      <span className="inline-flex items-center gap-1 text-[11px] font-mono text-slate-400 ml-1">
+                                      <span className="inline-flex items-center gap-1 text-[11px] font-mono text-slate-400 dark:text-zinc-500 ml-1">
                                         <Clock className="w-3 h-3" />
                                         {problem.optimalComplexity.time}
                                       </span>
@@ -803,8 +803,8 @@ export const ProblemsListView: React.FC = () => {
                                     onClick={() => handleSolve(problem.id)}
                                     className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all shadow-2xs ${
                                       solved
-                                        ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white'
-                                        : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white'
+                                        ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600 hover:text-white'
+                                        : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-600 hover:text-white'
                                     }`}
                                   >
                                     <span>{solved ? 'Review' : 'Solve'}</span>
@@ -820,9 +820,9 @@ export const ProblemsListView: React.FC = () => {
 
                     {/* Pagination Controls */}
                     {visibleStudentPractice.length > practicePageSize && (
-                      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200/80 px-6 py-3.5 bg-slate-50/60">
-                        <span className="text-xs text-slate-500 font-medium">
-                          Showing <strong className="text-slate-800 font-mono">{(practicePage - 1) * practicePageSize + 1}</strong>–<strong className="text-slate-800 font-mono">{Math.min(practicePage * practicePageSize, visibleStudentPractice.length)}</strong> of <strong className="text-slate-800 font-mono">{visibleStudentPractice.length.toLocaleString()}</strong> problems
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200/80 dark:border-white/10 px-6 py-3.5 bg-slate-50/60 dark:bg-[#16161d]/60">
+                        <span className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
+                          Showing <strong className="text-slate-800 dark:text-zinc-200 font-mono">{(practicePage - 1) * practicePageSize + 1}</strong>–<strong className="text-slate-800 dark:text-zinc-200 font-mono">{Math.min(practicePage * practicePageSize, visibleStudentPractice.length)}</strong> of <strong className="text-slate-800 dark:text-zinc-200 font-mono">{visibleStudentPractice.length.toLocaleString()}</strong> problems
                         </span>
 
                         <div className="flex items-center gap-2">
@@ -830,12 +830,12 @@ export const ProblemsListView: React.FC = () => {
                             type="button"
                             disabled={practicePage === 1}
                             onClick={() => setPracticePage((p) => Math.max(1, p - 1))}
-                            className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                            className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#121217] text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-[#16161d] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
                           >
                             Previous
                           </button>
 
-                          <span className="px-3 py-1 text-xs font-mono font-bold text-slate-700 bg-white rounded-xl border border-slate-200">
+                          <span className="px-3 py-1 text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 bg-white dark:bg-[#121217] rounded-xl border border-slate-200 dark:border-white/10">
                             Page {practicePage} of {totalPracticePages}
                           </span>
 
@@ -843,14 +843,14 @@ export const ProblemsListView: React.FC = () => {
                             type="button"
                             disabled={practicePage === totalPracticePages}
                             onClick={() => setPracticePage((p) => Math.min(totalPracticePages, p + 1))}
-                            className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                            className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#121217] text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-[#16161d] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
                           >
                             Next
                           </button>
                         </div>
                       </div>
                     )}
-                    {!visibleStudentPractice.length && <div className="p-10 text-center"><p className="text-sm font-semibold text-slate-800">{orderedPracticeProblems.length === 0 ? 'No practice problems are available yet' : 'No matching problems'}</p><p className="mt-1 text-sm text-slate-500">{orderedPracticeProblems.length === 0 ? 'The practice catalogue is empty. Try again later or open an instructor assignment.' : 'Try a different search or clear the selected filters.'}</p>{hasActiveFilters && <button type="button" onClick={handleClearFilters} className="mt-3 text-sm font-semibold text-indigo-700 hover:text-indigo-900">Clear filters</button>}</div>}
+                    {!visibleStudentPractice.length && <div className="p-10 text-center"><p className="text-sm font-semibold text-slate-800 dark:text-zinc-200">{orderedPracticeProblems.length === 0 ? 'No practice problems are available yet' : 'No matching problems'}</p><p className="mt-1 text-sm text-slate-500 dark:text-zinc-400">{orderedPracticeProblems.length === 0 ? 'The practice catalogue is empty. Try again later or open an instructor assignment.' : 'Try a different search or clear the selected filters.'}</p>{hasActiveFilters && <button type="button" onClick={handleClearFilters} className="mt-3 text-sm font-semibold text-indigo-700 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300">Clear filters</button>}</div>}
                   </div>
                 )
               )}
@@ -864,13 +864,13 @@ export const ProblemsListView: React.FC = () => {
   return (
     <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 pb-12 animate-fadeIn">
       {/* Header Aligned to Design System */}
-      <header className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end">
+      <header className="flex flex-col justify-between gap-4 border-b border-slate-200 dark:border-white/10 pb-5 sm:flex-row sm:items-end">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-600">Course Administration</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">Course Administration</p>
+          <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
             Problem Bank &amp; Assessments
           </h1>
-          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-600">
+          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-600 dark:text-zinc-400">
             Create, customize test cases, configure due dates, and inspect multi-agent question diagnostics.
           </p>
         </div>
@@ -880,64 +880,64 @@ export const ProblemsListView: React.FC = () => {
             <button
               type="button"
               onClick={handleOpenCreateModal}
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 text-xs font-semibold text-white shadow-2xs transition hover:bg-emerald-700 cursor-pointer"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 text-xs font-semibold text-white shadow-2xs transition hover:bg-emerald-500 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>+ Add Question</span>
             </button>
           )}
 
-          <span className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 shadow-2xs">
-            {isInstructor ? 'Course Questions' : 'Total Problems'}: <strong className="text-emerald-600 font-mono text-xs ml-0.5">{isInstructor ? instructorProblems.length : problems.length}</strong>
+          <span className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] px-3 text-xs font-semibold text-slate-600 dark:text-zinc-300 shadow-2xs">
+            {isInstructor ? 'Course Questions' : 'Total Problems'}: <strong className="text-emerald-600 dark:text-emerald-400 font-mono text-xs ml-0.5">{isInstructor ? instructorProblems.length : problems.length}</strong>
           </span>
         </div>
       </header>
 
       {/* Queue Intelligence */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
+        <div className="rounded-2xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] p-4 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">Course Questions</span>
+            <span className="text-xs font-bold text-slate-500 dark:text-zinc-400">Course Questions</span>
             <Layers className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-extrabold text-slate-900 font-mono">{instructorProblems.length}</span>
-            <span className="text-xs text-slate-500">questions published</span>
+            <span className="text-2xl font-extrabold text-slate-900 dark:text-zinc-100 font-mono">{instructorProblems.length}</span>
+            <span className="text-xs text-slate-500 dark:text-zinc-400">questions published</span>
           </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-zinc-400">
             Assigned across your active courses with customized tests and due dates.
           </p>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
+        <div className="rounded-2xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] p-4 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">Active Courses</span>
+            <span className="text-xs font-bold text-slate-500 dark:text-zinc-400">Active Courses</span>
             <GraduationCap className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-extrabold text-slate-900 font-mono">{courses.length}</span>
-            <span className="text-xs text-slate-500">linked courses</span>
+            <span className="text-2xl font-extrabold text-slate-900 dark:text-zinc-100 font-mono">{courses.length}</span>
+            <span className="text-xs text-slate-500 dark:text-zinc-400">linked courses</span>
           </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-zinc-400">
             Students enrolled in these courses can view and submit these questions.
           </p>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
+        <div className="rounded-2xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] p-4 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">Assessment Workflow</span>
+            <span className="text-xs font-bold text-slate-500 dark:text-zinc-400">Assessment Workflow</span>
             <ShieldAlert className="w-4 h-4 text-emerald-600" />
           </div>
-          <p className="mt-2 text-sm font-semibold text-slate-800">Automated Evaluation</p>
-          <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+          <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-zinc-200">Automated Evaluation</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-zinc-400">
             Inspect execution accuracy, analyze failures, and monitor student submissions.
           </p>
         </div>
       </div>
 
-      <main className="relative rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <main className="relative rounded-2xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] shadow-sm">
         {/* Filter and Search Bar */}
-        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-3 border-b border-slate-100 dark:border-white/10 p-4 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
             <input
@@ -945,13 +945,13 @@ export const ProblemsListView: React.FC = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search questions, topics, course..."
-              className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50/70 py-1.5 pl-9 pr-3 text-xs text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:ring-1 focus:ring-emerald-100"
+              className="h-9 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/70 dark:bg-[#16161d] py-1.5 pl-9 pr-3 text-xs text-slate-900 dark:text-zinc-100 outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:border-emerald-500 focus:bg-white dark:focus:bg-[#16161d] focus:ring-1 focus:ring-emerald-100 dark:focus:ring-emerald-900/40"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -1032,7 +1032,7 @@ export const ProblemsListView: React.FC = () => {
           <div className="overflow-x-auto rounded-b-2xl">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <tr className="border-b border-slate-200/80 dark:border-white/10 bg-slate-50/75 dark:bg-[#16161d] text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
                   <th className="py-3 px-4 w-12 text-center">#</th>
                   <th className="py-3 px-4">Title &amp; Course</th>
                   <th className="py-3 px-4 hidden md:table-cell">Due Date</th>
@@ -1041,16 +1041,16 @@ export const ProblemsListView: React.FC = () => {
                   <th className="py-3 px-4 w-44 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/10">
                 {filtered.map((prob, idx) => (
                   <tr
                     key={prob.id}
-                    className="group hover:bg-emerald-50/40 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer"
+                    className="group hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 transition-colors cursor-pointer"
                     onClick={() => setSelectedProblemForAnalytics(prob)}
                   >
                     {/* Index */}
                     <td className="py-3.5 px-4 text-center">
-                      <span className="font-mono text-xs font-semibold text-slate-400 group-hover:text-emerald-600 transition-colors">
+                      <span className="font-mono text-xs font-semibold text-slate-400 dark:text-zinc-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                         {idx + 1}
                       </span>
                     </td>
@@ -1059,12 +1059,12 @@ export const ProblemsListView: React.FC = () => {
                     <td className="py-3.5 px-4">
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-slate-900 group-hover:text-emerald-700 transition-colors">
+                          <span className="text-sm font-semibold text-slate-900 dark:text-zinc-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
                             {prob.title}
                           </span>
                           {prob.courseCode && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200 uppercase tracking-wide">
-                              <GraduationCap className="w-3 h-3 text-emerald-600" />
+                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 uppercase tracking-wide">
+                              <GraduationCap className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                               {prob.courseCode}
                             </span>
                           )}
@@ -1073,7 +1073,7 @@ export const ProblemsListView: React.FC = () => {
                           {prob.tags.map((tag, tIdx) => (
                             <span
                               key={tIdx}
-                              className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md font-medium border border-slate-200/60"
+                              className="text-[10px] bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-zinc-300 px-2 py-0.5 rounded-md font-medium border border-slate-200/60 dark:border-white/10"
                             >
                               {tag}
                             </span>
@@ -1083,20 +1083,20 @@ export const ProblemsListView: React.FC = () => {
                     </td>
 
                     {/* Due Date */}
-                    <td className="py-3.5 px-4 hidden md:table-cell text-xs text-slate-500">
+                    <td className="py-3.5 px-4 hidden md:table-cell text-xs text-slate-500 dark:text-zinc-400">
                       {prob.dueDate ? (
-                        <span className="inline-flex items-center gap-1.5 text-slate-700 font-medium">
-                          <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                        <span className="inline-flex items-center gap-1.5 text-slate-700 dark:text-zinc-300 font-medium">
+                          <Calendar className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                           {new Date(prob.dueDate).toLocaleString()}
                         </span>
                       ) : (
-                        <span className="text-slate-400">No due date</span>
+                        <span className="text-slate-400 dark:text-zinc-500">No due date</span>
                       )}
                     </td>
 
                     {/* Test Cases */}
                     <td className="py-3.5 px-4 hidden lg:table-cell text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100/80 dark:bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-slate-700/60">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-zinc-300 bg-slate-100/80 dark:bg-white/10 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-white/10">
                         <FileCheck2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                         <span>{prob.testCases.length} test cases</span>
                       </span>
@@ -1114,9 +1114,9 @@ export const ProblemsListView: React.FC = () => {
                           type="button"
                           onClick={() => setSelectedProblemForAnalytics(prob)}
                           title="View Diagnostics & Analytics"
-                          className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-zinc-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors cursor-pointer"
                         >
-                          <BarChart3 className="w-3.5 h-3.5 text-emerald-600" />
+                          <BarChart3 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                           <span className="hidden sm:inline">Analytics</span>
                         </button>
 
@@ -1124,7 +1124,7 @@ export const ProblemsListView: React.FC = () => {
                           type="button"
                           onClick={() => handleOpenEditModal(prob)}
                           title="Edit question & test cases"
-                          className="rounded-lg p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors cursor-pointer"
+                          className="rounded-lg p-1.5 text-slate-400 dark:text-zinc-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer"
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
@@ -1133,7 +1133,7 @@ export const ProblemsListView: React.FC = () => {
                           type="button"
                           onClick={() => handleDeleteProblem(prob)}
                           title="Delete question"
-                          className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer"
+                          className="rounded-lg p-1.5 text-slate-400 dark:text-zinc-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -1158,24 +1158,24 @@ export const ProblemsListView: React.FC = () => {
         <form onSubmit={handleSaveQuestion} className="space-y-4 text-xs">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2">
-              <label className="block font-bold text-slate-700 mb-1">Question Title</label>
+              <label className="block font-bold text-slate-700 dark:text-zinc-300 mb-1">Question Title</label>
               <input
                 type="text"
                 value={formTitle}
                 onChange={(e) => setFormTitle(e.target.value)}
                 placeholder="e.g. Longest Palindromic Substring"
                 required
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium"
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#16161d] border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500 font-medium"
               />
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Course</label>
+              <label className="block font-bold text-slate-700 dark:text-zinc-300 mb-1">Course</label>
               <select
                 value={formCourseId}
                 onChange={(e) => setFormCourseId(e.target.value)}
                 required
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium cursor-pointer"
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#16161d] border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-emerald-500 font-medium cursor-pointer"
               >
                 <option value="">Select a course</option>
                 {courses.map((c) => (
@@ -1189,21 +1189,21 @@ export const ProblemsListView: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Due Date</label>
+              <label className="block font-bold text-slate-700 dark:text-zinc-300 mb-1">Due Date</label>
               <input
                 type="datetime-local"
                 value={formDueDate}
                 onChange={(e) => setFormDueDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium"
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#16161d] border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-emerald-500 font-medium"
               />
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Difficulty</label>
+              <label className="block font-bold text-slate-700 dark:text-zinc-300 mb-1">Difficulty</label>
               <select
                 value={formDifficulty}
                 onChange={(e) => setFormDifficulty(e.target.value as Difficulty)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium cursor-pointer"
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#16161d] border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-emerald-500 font-medium cursor-pointer"
               >
                 <option value="Easy">Easy</option>
                 <option value="Medium">Medium</option>
@@ -1212,63 +1212,63 @@ export const ProblemsListView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Topic</label>
+              <label className="block font-bold text-slate-700 dark:text-zinc-300 mb-1">Topic</label>
               <input
                 type="text"
                 value={formTags}
                 onChange={(e) => setFormTags(e.target.value)}
                 placeholder="e.g. Arrays"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium"
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#16161d] border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500 font-medium"
               />
             </div>
           </div>
 
           <div>
-            <label className="block font-bold text-slate-700 mb-1">Problem Statement & Complexity Constraints</label>
+            <label className="block font-bold text-slate-700 dark:text-zinc-300 mb-1">Problem Statement & Complexity Constraints</label>
             <textarea
               value={formDescription}
               onChange={(e) => setFormDescription(e.target.value)}
               rows={3}
               placeholder="Describe the algorithmic problem, input formats, constraints, and edge conditions..."
               required
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-sans leading-relaxed"
+              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#16161d] border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500 font-sans leading-relaxed"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Optimal Time Complexity</label>
+              <label className="block font-bold text-slate-700 dark:text-zinc-300 mb-1">Optimal Time Complexity</label>
               <input
                 type="text"
                 value={formTimeComp}
                 onChange={(e) => setFormTimeComp(e.target.value)}
                 placeholder="e.g. O(N log N)"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-mono"
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#16161d] border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500 font-mono"
               />
             </div>
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Optimal Space Complexity</label>
+              <label className="block font-bold text-slate-700 dark:text-zinc-300 mb-1">Optimal Space Complexity</label>
               <input
                 type="text"
                 value={formSpaceComp}
                 onChange={(e) => setFormSpaceComp(e.target.value)}
                 placeholder="e.g. O(N)"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-mono"
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#16161d] border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500 font-mono"
               />
             </div>
           </div>
 
           {/* Dynamic Test Cases Builder */}
           <ScoringWeightsEditor value={formWeights} onChange={setFormWeights} />
-          <div className="space-y-2 pt-2 border-t border-slate-100">
+          <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-white/10">
             <div className="flex items-center justify-between">
-              <span className="font-extrabold text-slate-900 block">
+              <span className="font-extrabold text-slate-900 dark:text-zinc-100 block">
                 Sandbox Test Cases ({formTestCases.length})
               </span>
               <button
                 type="button"
                 onClick={handleAddTestCaseRow}
-                className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg font-bold border border-emerald-200 flex items-center gap-1 transition-colors cursor-pointer"
+                className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded-lg font-bold border border-emerald-200 dark:border-emerald-500/30 flex items-center gap-1 transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Test Case</span>
@@ -1279,14 +1279,14 @@ export const ProblemsListView: React.FC = () => {
               {formTestCases.map((tc, index) => (
                 <div
                   key={tc.id}
-                  className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2"
+                  className="p-3 bg-slate-50 dark:bg-[#16161d] rounded-2xl border border-slate-200/80 dark:border-white/10 space-y-2"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-mono font-bold text-slate-600">
+                    <span className="font-mono font-bold text-slate-600 dark:text-zinc-300">
                       Test Case #{index + 1}
                     </span>
                     <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-1.5 text-[11px] text-slate-600 font-medium cursor-pointer select-none">
+                      <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-zinc-300 font-medium cursor-pointer select-none">
                         <input
                           type="checkbox"
                           checked={tc.isHidden}
@@ -1304,7 +1304,7 @@ export const ProblemsListView: React.FC = () => {
                           type="button"
                           onClick={() => handleRemoveTestCaseRow(tc.id)}
                           disabled={formTestCases.length <= 1}
-                          className="text-slate-400 hover:text-rose-600 p-0.5 transition-colors cursor-pointer"
+                          className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-0.5 transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1314,7 +1314,7 @@ export const ProblemsListView: React.FC = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
-                      <span className="text-[10px] font-mono text-slate-400 block mb-0.5">Input:</span>
+                      <span className="text-[10px] font-mono text-slate-400 dark:text-zinc-500 block mb-0.5">Input:</span>
                       <input
                         type="text"
                         value={tc.input}
@@ -1325,11 +1325,11 @@ export const ProblemsListView: React.FC = () => {
                         }}
                         placeholder="e.g. nums = [2,7,11,15], target = 9"
                         required
-                        className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg font-mono text-xs focus:outline-none focus:border-emerald-500"
+                        className="w-full px-2.5 py-1.5 bg-white dark:bg-[#121217] border border-slate-200 dark:border-white/10 rounded-lg font-mono text-xs text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500"
                       />
                     </div>
                     <div>
-                      <span className="text-[10px] font-mono text-slate-400 block mb-0.5">Expected Output:</span>
+                      <span className="text-[10px] font-mono text-slate-400 dark:text-zinc-500 block mb-0.5">Expected Output:</span>
                       <input
                         type="text"
                         value={tc.output}
@@ -1340,7 +1340,7 @@ export const ProblemsListView: React.FC = () => {
                         }}
                         placeholder="e.g. [0,1]"
                         required
-                        className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg font-mono text-xs focus:outline-none focus:border-emerald-500"
+                        className="w-full px-2.5 py-1.5 bg-white dark:bg-[#121217] border border-slate-200 dark:border-white/10 rounded-lg font-mono text-xs text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500"
                       />
                     </div>
                   </div>
@@ -1349,13 +1349,13 @@ export const ProblemsListView: React.FC = () => {
             </div>
           </div>
 
-          {questionError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">{questionError}</p>}
-          {!courses.length && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Create a course first in Courses before publishing a question.</p>}
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+          {questionError && <p role="alert" className="rounded-xl border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 p-3 text-sm font-semibold text-rose-700 dark:text-rose-400">{questionError}</p>}
+          {!courses.length && <p className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm text-amber-800 dark:text-amber-400">Create a course first in Courses before publishing a question.</p>}
+          <div className="pt-4 border-t border-slate-100 dark:border-white/10 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={() => setIsQuestionModalOpen(false)}
-              className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-bold transition-colors cursor-pointer"
+              className="px-4 py-2 text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl font-bold transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -1396,15 +1396,15 @@ export const ProblemsListView: React.FC = () => {
           maxWidth="2xl"
         >
           <div className="space-y-5 text-sm">
-            <p className="whitespace-pre-wrap text-slate-700">{selectedProblemForAnalytics.description || 'No problem statement saved.'}</p>
+            <p className="whitespace-pre-wrap text-slate-700 dark:text-zinc-300">{selectedProblemForAnalytics.description || 'No problem statement saved.'}</p>
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><span className="block text-xs font-bold uppercase text-slate-500">Difficulty</span><span className="mt-1 block font-semibold">{selectedProblemForAnalytics.difficulty}</span></div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><span className="block text-xs font-bold uppercase text-slate-500">Topic</span><span className="mt-1 block font-semibold">{selectedProblemForAnalytics.tags.join(', ') || '—'}</span></div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><span className="block text-xs font-bold uppercase text-slate-500">Time target</span><span className="mt-1 block font-mono font-semibold">{selectedProblemForAnalytics.optimalComplexity.time}</span></div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><span className="block text-xs font-bold uppercase text-slate-500">Space target</span><span className="mt-1 block font-mono font-semibold">{selectedProblemForAnalytics.optimalComplexity.space}</span></div>
+              <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#16161d] p-4"><span className="block text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Difficulty</span><span className="mt-1 block font-semibold text-slate-900 dark:text-zinc-100">{selectedProblemForAnalytics.difficulty}</span></div>
+              <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#16161d] p-4"><span className="block text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Topic</span><span className="mt-1 block font-semibold text-slate-900 dark:text-zinc-100">{selectedProblemForAnalytics.tags.join(', ') || '—'}</span></div>
+              <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#16161d] p-4"><span className="block text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Time target</span><span className="mt-1 block font-mono font-semibold text-slate-900 dark:text-zinc-100">{selectedProblemForAnalytics.optimalComplexity.time}</span></div>
+              <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#16161d] p-4"><span className="block text-xs font-bold uppercase text-slate-500 dark:text-zinc-400">Space target</span><span className="mt-1 block font-mono font-semibold text-slate-900 dark:text-zinc-100">{selectedProblemForAnalytics.optimalComplexity.space}</span></div>
             </div>
-            <div className="rounded-xl border border-slate-200 p-4"><h3 className="font-bold">Test cases</h3><p className="mt-1 text-slate-600">Run sample cases in the workspace. Submit your solution for the complete assessment.</p></div>
-            <div className="flex justify-end border-t border-slate-100 pt-3"><button onClick={() => setSelectedProblemForAnalytics(null)} className="rounded-xl px-4 py-2 font-bold text-slate-600 hover:bg-slate-100">Close</button></div>
+            <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#16161d] p-4"><h3 className="font-bold text-slate-900 dark:text-zinc-100">Test cases</h3><p className="mt-1 text-slate-600 dark:text-zinc-400">Run sample cases in the workspace. Submit your solution for the complete assessment.</p></div>
+            <div className="flex justify-end border-t border-slate-100 dark:border-white/10 pt-3"><button onClick={() => setSelectedProblemForAnalytics(null)} className="rounded-xl px-4 py-2 font-bold text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer">Close</button></div>
           </div>
         </Modal>
       )}    </div>

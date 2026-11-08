@@ -41,18 +41,59 @@ const SimilarityGroupDetails: React.FC<{
     ? cosinePairs.reduce((total, item) => total + (item.similarityPercentage || 0), 0) / cosinePairs.length
     : null;
 
-  return <section className="overflow-hidden rounded-3xl border border-emerald-200 bg-white shadow-sm">
-    <header className="border-b border-emerald-100 bg-emerald-50 px-5 py-4 sm:px-6"><p className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">Selected group</p><h2 className="mt-1 text-lg font-extrabold text-slate-900">{cluster.problemTitle}</h2><p className="mt-1 text-xs text-slate-600">{cluster.courseTitle} · {cluster.assignmentTitle || `Assignment #${cluster.assignmentId ?? '—'}`} · {cluster.groupLabel || 'Submission group'} · {cluster.members.length} students in this group</p></header>
+  return <section className="overflow-hidden rounded-3xl border border-emerald-200 dark:border-emerald-500/30 bg-white dark:bg-[#121217] shadow-sm">
+    <header className="border-b border-emerald-100 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/40 px-5 py-4 sm:px-6">
+      <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-emerald-700 dark:text-emerald-400">Selected group</p>
+      <h2 className="mt-1 text-lg font-extrabold text-slate-900 dark:text-white">{cluster.problemTitle}</h2>
+      <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{cluster.courseTitle} · {cluster.assignmentTitle || `Assignment #${cluster.assignmentId ?? '—'}`} · {cluster.groupLabel || 'Submission group'} · {cluster.members.length} students in this group</p>
+    </header>
     <div className="space-y-5 p-5 sm:p-6">
-      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center gap-2"><Users className="h-4 w-4 text-emerald-600" /><h3 className="text-sm font-extrabold text-slate-900">Group members ({cluster.members.length})</h3></div><p className="mt-3 font-mono text-sm leading-7 text-slate-700">{cluster.members.map((member) => member.id).join(' · ')}</p></section>
-      {cluster.evidenceSummary && cluster.evidenceSummary.length > 0 && <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4"><h3 className="text-sm font-extrabold text-sky-950">Why this group was formed</h3><ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-relaxed text-sky-900">{cluster.evidenceSummary.map((item) => <li key={item}>{item}</li>)}</ul><p className="mt-3 text-[11px] text-sky-800">Automated evidence is for instructor review only. It is not a grade or a misconduct decision.</p></section>}
-      <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-extrabold text-emerald-950">How similar are the code patterns?</h3><p className="mt-1 max-w-2xl text-xs leading-relaxed text-emerald-800">This comparison highlights similar code structure, even when students use different variable names.</p></div><p className="text-2xl font-extrabold text-emerald-700">{averageCosine === null ? 'Unavailable' : `${averageCosine.toFixed(1)}%`}</p></div>{cosinePairs.length > 0 ? <><p className="mt-3 text-xs text-emerald-900">Pairwise similarity for students in this group:</p><ul className="mt-2 space-y-1 text-xs text-emerald-900">{cosinePairs.map((pair) => <li key={pair.id} className="flex flex-wrap justify-between gap-2"><span>{pair.studentA.id} and {pair.studentB.id}</span><strong>{(pair.similarityPercentage || 0).toFixed(1)}% similar code patterns</strong></li>)}</ul></> : <p className="mt-3 text-xs text-emerald-900">This group was formed from a similar overall approach; there is no direct code-pattern comparison to show.</p>}<p className="mt-2 text-[11px] text-emerald-800">This is a review signal only. Similar patterns can occur when students solve the same problem; it is not a grade or a plagiarism verdict.</p></section>
-      {representative && <article className="overflow-hidden rounded-2xl border border-slate-200"><div className="border-b border-slate-100 bg-slate-50 p-4"><span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-extrabold text-emerald-800">Representative submission</span><p className="mt-3 font-mono text-xs text-slate-600">{representative.submissionId} · {representative.language || 'Unknown language'}</p></div><details className="border-t border-slate-200 bg-slate-950"><summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-bold text-white"><Code2 className="h-4 w-4 text-emerald-400" />View representative code</summary><pre className="max-h-[28rem] overflow-auto whitespace-pre-wrap break-words border-t border-slate-800 p-4 font-mono text-xs leading-relaxed text-slate-300">{cluster.representativeCode || codesBySubmission.get(representative.submissionId) || 'No source code stored.'}</pre></details></article>}
+      <section className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#16161d] p-4">
+        <div className="flex items-center gap-2"><Users className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /><h3 className="text-sm font-extrabold text-slate-900 dark:text-white">Group members ({cluster.members.length})</h3></div>
+        <p className="mt-3 font-mono text-sm leading-7 text-slate-700 dark:text-slate-300">{cluster.members.map((member) => member.id).join(' · ')}</p>
+      </section>
+      {cluster.evidenceSummary && cluster.evidenceSummary.length > 0 && (
+        <section className="rounded-2xl border border-sky-200 dark:border-sky-900/40 bg-sky-50 dark:bg-sky-950/20 p-4">
+          <h3 className="text-sm font-extrabold text-sky-950 dark:text-sky-300">Why this group was formed</h3>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-relaxed text-sky-900 dark:text-sky-200">{cluster.evidenceSummary.map((item) => <li key={item}>{item}</li>)}</ul>
+          <p className="mt-3 text-[11px] text-sky-800 dark:text-sky-400">Automated evidence is for instructor review only. It is not a grade or a misconduct decision.</p>
+        </section>
+      )}
+      <section className="rounded-2xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/20 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-extrabold text-emerald-950 dark:text-emerald-300">How similar are the code patterns?</h3>
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-emerald-800 dark:text-emerald-400">This comparison highlights similar code structure, even when students use different variable names.</p>
+          </div>
+          <p className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-400">{averageCosine === null ? 'Unavailable' : `${averageCosine.toFixed(1)}%`}</p>
+        </div>
+        {cosinePairs.length > 0 ? (
+          <>
+            <p className="mt-3 text-xs text-emerald-900 dark:text-emerald-300">Pairwise similarity for students in this group:</p>
+            <ul className="mt-2 space-y-1 text-xs text-emerald-900 dark:text-emerald-300">{cosinePairs.map((pair) => <li key={pair.id} className="flex flex-wrap justify-between gap-2"><span>{pair.studentA.id} and {pair.studentB.id}</span><strong>{(pair.similarityPercentage || 0).toFixed(1)}% similar code patterns</strong></li>)}</ul>
+          </>
+        ) : (
+          <p className="mt-3 text-xs text-emerald-900 dark:text-emerald-400">This group was formed from a similar overall approach; there is no direct code-pattern comparison to show.</p>
+        )}
+        <p className="mt-2 text-[11px] text-emerald-800 dark:text-emerald-400">This is a review signal only. Similar patterns can occur when students solve the same problem; it is not a grade or a plagiarism verdict.</p>
+      </section>
+      {representative && (
+        <article className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10">
+          <div className="border-b border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-[#16161d] p-4">
+            <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/80 px-2 py-1 text-[10px] font-extrabold text-emerald-800 dark:text-emerald-300">Representative submission</span>
+            <p className="mt-3 font-mono text-xs text-slate-600 dark:text-slate-400">{representative.submissionId} · {representative.language || 'Unknown language'}</p>
+          </div>
+          <details className="border-t border-slate-200 dark:border-white/10 bg-slate-950">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-bold text-white"><Code2 className="h-4 w-4 text-emerald-400" />View representative code</summary>
+            <pre className="max-h-[28rem] overflow-auto whitespace-pre-wrap break-words border-t border-slate-800 p-4 font-mono text-xs leading-relaxed text-slate-300">{cluster.representativeCode || codesBySubmission.get(representative.submissionId) || 'No source code stored.'}</pre>
+          </details>
+        </article>
+      )}
     </div>
   </section>;
 };
 
-const ApproachGroupDetails: React.FC<{ group: ApproachGroup }> = ({ group }) => <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4"><p className="text-sm font-extrabold text-sky-950">{group.problemTitle} · {group.approachLabel}</p><p className="mt-2 text-xs leading-relaxed text-sky-900">{group.explanation}</p><p className="mt-3 font-mono text-xs text-sky-800">Student IDs: {group.members.map((member) => member.id).join(' · ')}</p></section>;
+const ApproachGroupDetails: React.FC<{ group: ApproachGroup }> = ({ group }) => <section className="rounded-2xl border border-sky-200 dark:border-sky-900/40 bg-sky-50 dark:bg-sky-950/20 p-4"><p className="text-sm font-extrabold text-sky-950 dark:text-sky-300">{group.problemTitle} · {group.approachLabel}</p><p className="mt-2 text-xs leading-relaxed text-sky-900 dark:text-sky-200">{group.explanation}</p><p className="mt-3 font-mono text-xs text-sky-800 dark:text-sky-400">Student IDs: {group.members.map((member) => member.id).join(' · ')}</p></section>;
 
 export const SimilarityReviewView: React.FC = () => {
   const { authFetch } = useAuth();
@@ -144,11 +185,12 @@ export const SimilarityReviewView: React.FC = () => {
   }, [courses, courseId]);
 
   return <div className="space-y-6 pb-12 animate-fadeIn">
-    <div className="flex flex-col gap-4 border-b border-slate-200 pb-5">
+    <div className="flex flex-col gap-4 border-b border-slate-200 dark:border-white/10 pb-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Code Similarity Review</h1>
-          <p className="mt-1 text-xs sm:text-sm text-slate-500">Groups are shown only when at least two students share a code pattern or implementation approach. This is instructor-only analysis, not a grade or misconduct finding.</p>
+          <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">Academic Integrity</span>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1">Code Similarity Review</h1>
+          <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">Groups are shown only when at least two students share a code pattern or implementation approach. This is instructor-only analysis, not a grade or misconduct finding.</p>
         </div>
       </div>
 
@@ -166,11 +208,11 @@ export const SimilarityReviewView: React.FC = () => {
       </div>
     </div>
 
-    {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}<button onClick={() => void loadCases()} className="ml-3 font-bold underline">Retry</button></div>}
-    {loading ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-slate-500"><LoaderCircle className="mx-auto mb-3 h-6 w-6 animate-spin" />Loading evaluated submissions…</div>
-      : reviewItems.length === 0 ? <div className="space-y-3 rounded-3xl border border-slate-200 bg-white p-12 text-center"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600"><Check className="h-6 w-6" /></div><h2 className="text-base font-bold text-slate-800">No submission groups found</h2><p className="mx-auto max-w-lg text-sm text-slate-500">There are no evaluated submissions for instructor-assigned problems in this scope.</p>{courseId !== 'all' && <button type="button" onClick={() => setCourseId('all')} className="mt-2 inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 ring-1 ring-rose-200 dark:ring-rose-800/40 transition-all cursor-pointer whitespace-nowrap"><RotateCcw className="w-3 h-3" /><span>Clear all filters</span></button>}</div>
+    {error && <div role="alert" className="rounded-xl border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 p-4 text-sm text-rose-700 dark:text-rose-400">{error}<button onClick={() => void loadCases()} className="ml-3 font-bold underline">Retry</button></div>}
+    {loading ? <div className="rounded-3xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] p-12 text-center text-slate-500 dark:text-slate-400"><LoaderCircle className="mx-auto mb-3 h-6 w-6 animate-spin text-emerald-600 dark:text-emerald-400" />Loading evaluated submissions…</div>
+      : reviewItems.length === 0 ? <div className="space-y-3 rounded-3xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] p-12 text-center"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400"><Check className="h-6 w-6" /></div><h2 className="text-base font-bold text-slate-800 dark:text-slate-100">No submission groups found</h2><p className="mx-auto max-w-lg text-sm text-slate-500 dark:text-slate-400">There are no evaluated submissions for instructor-assigned problems in this scope.</p>{courseId !== 'all' && <button type="button" onClick={() => setCourseId('all')} className="mt-2 inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 ring-1 ring-rose-200 dark:ring-rose-800/40 transition-all cursor-pointer whitespace-nowrap"><RotateCcw className="w-3 h-3" /><span>Clear all filters</span></button>}</div>
       : <>
-        <section className="space-y-6">{problemSections.map((section) => <div key={section.title} className="space-y-3"><div className="flex items-center justify-between"><h2 className="text-base font-extrabold text-slate-900">{section.title}</h2><span className="text-xs font-semibold text-slate-500">{section.items.length} group{section.items.length === 1 ? '' : 's'}</span></div>{section.items.map((item, index) => { const open = item.kind === 'code-overlap' ? selectedClusterId === item.id : selectedApproachId === item.id; const detail = item.detail as SimilarityCluster; return <div key={item.id} className="space-y-2"><button type="button" aria-expanded={open} onClick={() => { if (item.kind === 'code-overlap') { setSelectedClusterId(open ? '' : item.id); setSelectedApproachId(''); } else { setSelectedApproachId(open ? '' : item.id); setSelectedClusterId(''); } }} className={`flex w-full flex-col gap-3 rounded-2xl border p-4 text-left transition sm:flex-row sm:items-center sm:justify-between ${open ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-white hover:border-emerald-300 hover:bg-slate-50'}`}><div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-extrabold uppercase text-emerald-800">Group {index + 1}</span><p className="text-sm font-bold text-slate-900">{detail.groupLabel || 'Submission group'}</p></div><p className="mt-2 flex items-center gap-1.5 text-xs text-slate-600"><Users className="h-3.5 w-3.5" />{item.members.length} student{item.members.length === 1 ? '' : 's'}</p><p className="mt-2 font-mono text-[11px] text-slate-500">{item.members.map((member) => member.id).join(' · ')}</p></div><ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition ${open ? 'rotate-180' : ''}`} /></button>{open && (item.kind === 'code-overlap' ? <SimilarityGroupDetails cluster={detail} cases={cases} codesBySubmission={codesBySubmission} /> : <ApproachGroupDetails group={item.detail as ApproachGroup} />)}</div>; })}</div>)}</section>
+        <section className="space-y-6">{problemSections.map((section) => <div key={section.title} className="space-y-3"><div className="flex items-center justify-between"><h2 className="text-base font-extrabold text-slate-900 dark:text-white">{section.title}</h2><span className="text-xs font-semibold text-slate-500 dark:text-slate-400">{section.items.length} group{section.items.length === 1 ? '' : 's'}</span></div>{section.items.map((item, index) => { const open = item.kind === 'code-overlap' ? selectedClusterId === item.id : selectedApproachId === item.id; const detail = item.detail as SimilarityCluster; return <div key={item.id} className="space-y-2"><button type="button" aria-expanded={open} onClick={() => { if (item.kind === 'code-overlap') { setSelectedClusterId(open ? '' : item.id); setSelectedApproachId(''); } else { setSelectedApproachId(open ? '' : item.id); setSelectedClusterId(''); } }} className={`flex w-full flex-col gap-3 rounded-2xl border p-4 text-left transition-all cursor-pointer sm:flex-row sm:items-center sm:justify-between card-hover ${open ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30' : 'border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] hover:border-emerald-400 dark:hover:border-emerald-500/50 hover:bg-slate-50 dark:hover:bg-white/[0.02]'}`}><div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-emerald-100 dark:bg-emerald-950/80 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">Group {index + 1}</span><p className="text-sm font-bold text-slate-900 dark:text-white">{detail.groupLabel || 'Submission group'}</p></div><p className="mt-2 flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400"><Users className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />{item.members.length} student{item.members.length === 1 ? '' : 's'}</p><p className="mt-2 font-mono text-[11px] text-slate-500 dark:text-slate-400">{item.members.map((member) => member.id).join(' · ')}</p></div><ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} /></button>{open && (item.kind === 'code-overlap' ? <SimilarityGroupDetails cluster={detail} cases={cases} codesBySubmission={codesBySubmission} /> : <ApproachGroupDetails group={item.detail as ApproachGroup} />)}</div>; })}</div>)}</section>
       </>}
   </div>;
 };

@@ -126,7 +126,7 @@ export const SubmissionsList: React.FC = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by problem or language..."
-              className="w-full pl-10 pr-9 py-2 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-xl focus:outline-none focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors font-mono placeholder:font-sans"
+              className="w-full pl-10 pr-9 py-2 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-xl focus:outline-none focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors font-sans"
             />
             {search && (
               <button
@@ -183,10 +183,10 @@ export const SubmissionsList: React.FC = () => {
                 <th className="py-4 px-6 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+            <tbody className="divide-y divide-slate-100 dark:divide-white/10 font-sans">
               {filtered.length > 0 ? (
                 filtered.map((sub) => (
-                  <tr key={sub.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40 group">
+                  <tr key={sub.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.04] group">
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-2.5">
                         <FileCode className="w-4 h-4 text-indigo-500 flex-shrink-0" />

@@ -60,27 +60,28 @@ export const StudentProfileView: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12 animate-fadeIn">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-white/10 pb-5">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+          <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-indigo-500 dark:text-indigo-400">Account Management</span>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1">
             Student Profile
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
             Manage academic profile, institutional enrollment, and verified student credentials.
           </p>
         </div>
 
         <button
           onClick={() => setIsEditOpen(true)}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center gap-1.5 transition-all"
+          className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer ring-1 ring-white/20 self-start sm:self-auto"
         >
-          <Edit3 className="w-3.5 h-3.5" />
+          <Edit3 className="w-4 h-4" />
           <span>Edit Profile</span>
         </button>
       </div>
 
-      {/* Main Profile Card (Matches diagram profile layout) */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+      {/* Main Profile Card */}
+      <div className="bg-white dark:bg-[#121217] rounded-3xl border border-slate-200/80 dark:border-white/12 shadow-sm overflow-hidden">
         {/* Banner */}
         <div className="h-32 bg-gradient-to-r from-[#0c0c0e] via-[#141418] to-[#0c0c0e] border-b border-neutral-800/80 relative">
           <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur text-white text-xs font-semibold border border-white/20">
@@ -94,80 +95,80 @@ export const StudentProfileView: React.FC = () => {
           {/* Avatar */}
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-12 mb-6">
             <div className="flex items-end gap-4">
-              <div className="w-24 h-24 rounded-2xl bg-indigo-600 border-4 border-white shadow-xl flex items-center justify-center text-white text-3xl font-extrabold select-none">
-                V
+              <div className="w-24 h-24 rounded-2xl bg-indigo-600 border-4 border-white dark:border-[#121217] shadow-xl flex items-center justify-center text-white text-3xl font-extrabold select-none">
+                {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}
               </div>
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-bold text-slate-900">{currentUser.name}</h2>
-                  <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md">
+                  <h2 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">{currentUser.name}</h2>
+                  <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 rounded-md">
                     Student
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 font-mono">{currentUser.email}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">{currentUser.email}</p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-mono bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-                Roll: <strong className="text-slate-800">{user?.username || currentUser.rollNumber}</strong>
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-mono bg-slate-50 dark:bg-[#16161d] px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/10">
+                Roll: <strong className="text-slate-800 dark:text-slate-200">{user?.username || currentUser.rollNumber}</strong>
               </span>
             </div>
           </div>
 
-          {/* Institutional details grid (Matching diagram) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-slate-100 text-xs">
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-3">
-              <div className="p-2 bg-indigo-100 text-indigo-700 rounded-xl">
+          {/* Institutional details grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-slate-100 dark:border-white/10 text-xs">
+            <div className="p-4 bg-slate-50 dark:bg-[#16161d] rounded-2xl border border-slate-100 dark:border-white/8 flex items-start gap-3">
+              <div className="p-2 bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-400 rounded-xl">
                 <KeyRound className="w-4 h-4" />
               </div>
               <div>
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
                   Roll Number
                 </span>
-                <span className="text-sm font-extrabold text-slate-800 font-mono mt-0.5 block">
+                <span className="text-sm font-extrabold text-slate-800 dark:text-slate-100 font-mono mt-0.5 block">
                   {user?.username || currentUser.rollNumber}
                 </span>
               </div>
             </div>
 
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-3">
-              <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl">
+            <div className="p-4 bg-slate-50 dark:bg-[#16161d] rounded-2xl border border-slate-100 dark:border-white/8 flex items-start gap-3">
+              <div className="p-2 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 rounded-xl">
                 <School className="w-4 h-4" />
               </div>
               <div>
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
                   Institution
                 </span>
-                <span className="text-sm font-extrabold text-slate-800 mt-0.5 block">
+                <span className="text-sm font-extrabold text-slate-800 dark:text-slate-100 mt-0.5 block">
                   {currentUser.institution}
                 </span>
               </div>
             </div>
 
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-3">
-              <div className="p-2 bg-purple-100 text-purple-700 rounded-xl">
+            <div className="p-4 bg-slate-50 dark:bg-[#16161d] rounded-2xl border border-slate-100 dark:border-white/8 flex items-start gap-3">
+              <div className="p-2 bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-400 rounded-xl">
                 <Building className="w-4 h-4" />
               </div>
               <div>
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
                   Department
                 </span>
-                <span className="text-sm font-extrabold text-slate-800 mt-0.5 block">
+                <span className="text-sm font-extrabold text-slate-800 dark:text-slate-100 mt-0.5 block">
                   {currentUser.department}
                 </span>
               </div>
             </div>
 
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-3">
-              <div className="p-2 bg-amber-100 text-amber-700 rounded-xl">
+            <div className="p-4 bg-slate-50 dark:bg-[#16161d] rounded-2xl border border-slate-100 dark:border-white/8 flex items-start gap-3">
+              <div className="p-2 bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-400 rounded-xl">
                 <Calendar className="w-4 h-4" />
               </div>
               <div>
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
                   Academic Year
                 </span>
-                <span className="text-sm font-extrabold text-slate-800 mt-0.5 block">
+                <span className="text-sm font-extrabold text-slate-800 dark:text-slate-100 mt-0.5 block">
                   {currentUser.year}
                 </span>
               </div>
@@ -185,57 +186,57 @@ export const StudentProfileView: React.FC = () => {
       >
         <form onSubmit={handleSave} className="space-y-4 text-xs">
           <div>
-            <label className="block font-bold text-slate-700 mb-1">Full Name</label>
+            <label className="block font-bold text-slate-700 dark:text-zinc-200 mb-1">Full Name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-[#16161d] border border-slate-200 dark:border-white/10 text-slate-800 dark:text-zinc-100 rounded-xl focus:outline-none focus:border-indigo-500"
             />
           </div>
 
           <div>
-            <label className="block font-bold text-slate-700 mb-1">Institution</label>
+            <label className="block font-bold text-slate-700 dark:text-zinc-200 mb-1">Institution</label>
             <input
               type="text"
               value={institution}
               onChange={(e) => setInstitution(e.target.value)}
               required
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-[#16161d] border border-slate-200 dark:border-white/10 text-slate-800 dark:text-zinc-100 rounded-xl focus:outline-none focus:border-indigo-500"
             />
           </div>
 
-          {saveError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{saveError}</p>}
+          {saveError && <p role="alert" className="rounded-xl border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-950/30 px-3 py-2 text-sm text-rose-700 dark:text-rose-300">{saveError}</p>}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Department</label>
+              <label className="block font-bold text-slate-700 dark:text-zinc-200 mb-1">Department</label>
               <input
                 type="text"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
                 required
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-[#16161d] border border-slate-200 dark:border-white/10 text-slate-800 dark:text-zinc-100 rounded-xl focus:outline-none focus:border-indigo-500"
               />
             </div>
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Academic Year</label>
+              <label className="block font-bold text-slate-700 dark:text-zinc-200 mb-1">Academic Year</label>
               <input
                 type="text"
                 value={year}
                 onChange={(e) => setYear(e.target.value)}
                 required
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-[#16161d] border border-slate-200 dark:border-white/10 text-slate-800 dark:text-zinc-100 rounded-xl focus:outline-none focus:border-indigo-500"
               />
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+          <div className="pt-4 border-t border-slate-100 dark:border-white/10 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={() => setIsEditOpen(false)}
-              className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-bold transition-colors"
+              className="px-4 py-2 text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl font-bold transition-colors cursor-pointer"
             >
               Cancel
             </button>

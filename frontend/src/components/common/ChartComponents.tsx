@@ -87,8 +87,8 @@ export const CategoryDonutChart: React.FC<{ categories: CategoryScore[] }> = ({ 
           })}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-xs text-slate-400 font-medium">Evaluation</span>
-          <span className="text-sm font-bold text-slate-800">Weights</span>
+          <span className="text-xs text-slate-400 dark:text-zinc-500 font-medium">Evaluation</span>
+          <span className="text-sm font-bold text-slate-800 dark:text-white">Weights</span>
         </div>
       </div>
 
@@ -96,8 +96,8 @@ export const CategoryDonutChart: React.FC<{ categories: CategoryScore[] }> = ({ 
         {categories.map((cat, idx) => (
           <div key={idx} className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-            <span className="text-slate-600 font-medium">{cat.name}</span>
-            <span className="text-slate-400 font-mono ml-auto">({cat.scoreDisplay})</span>
+            <span className="text-slate-600 dark:text-zinc-300 font-medium">{cat.name}</span>
+            <span className="text-slate-400 dark:text-zinc-500 font-mono ml-auto">({cat.scoreDisplay})</span>
           </div>
         ))}
       </div>
@@ -111,18 +111,18 @@ interface ScoreDistProps {
 
 export const ScoreDistributionBarChart: React.FC<ScoreDistProps> = ({ distribution }) => {
   if (!Array.isArray(distribution) || distribution.length === 0) {
-    return <p className="py-10 text-center text-sm text-slate-500">No graded submissions yet.</p>;
+    return <p className="py-10 text-center text-sm text-slate-500 dark:text-zinc-400">No graded submissions yet.</p>;
   }
 
   return (
     <div className="space-y-2">
-      <div className="flex items-end justify-between gap-3 h-36 pt-4 px-2 border-b border-slate-200">
+      <div className="flex items-end justify-between gap-3 h-36 pt-4 px-2 border-b border-slate-200 dark:border-white/10">
         {distribution.map((item, idx) => (
           <div key={idx} className="flex-1 flex flex-col items-center gap-2 group h-full justify-end">
-            <div className="text-xs font-mono font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">
+            <div className="text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
               {item.count}
             </div>
-            <div className="w-full max-w-[42px] bg-slate-100 rounded-t-md overflow-hidden flex items-end h-full">
+            <div className="w-full max-w-[42px] bg-slate-100 dark:bg-white/10 rounded-t-md overflow-hidden flex items-end h-full">
               <div
                 className="w-full bg-emerald-500 hover:bg-emerald-600 rounded-t-md transition-all duration-500 ease-out group-hover:brightness-95"
                 style={{
@@ -134,7 +134,7 @@ export const ScoreDistributionBarChart: React.FC<ScoreDistProps> = ({ distributi
           </div>
         ))}
       </div>
-      <div className="flex justify-between gap-3 px-2 text-[11px] font-mono text-slate-500">
+      <div className="flex justify-between gap-3 px-2 text-[11px] font-mono text-slate-500 dark:text-zinc-400">
         {distribution.map((item, idx) => (
           <span key={idx} className="flex-1 text-center font-medium">
             {item.range}

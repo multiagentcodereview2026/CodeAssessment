@@ -114,105 +114,125 @@ export const FeedbackRecommendationsView: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-7 pb-12">
+    <div className="mx-auto max-w-7xl space-y-7 pb-12 animate-fadeIn">
       {/* Unified Header */}
-      <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 border-b border-slate-200 dark:border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-indigo-700">Learning workspace</p>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+          <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-indigo-500 dark:text-indigo-400">Learning workspace</span>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white mt-1">
             Feedback &amp; learning
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+          <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
             Choose targeted practice or follow the optional self-learning DSA roadmap.
           </p>
         </div>
 
-        <div className="inline-flex items-center gap-2 self-start rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 sm:self-auto">
+        <div className="inline-flex items-center gap-2 self-start rounded-xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] px-3.5 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 shadow-2xs sm:self-auto">
           <span>Assessments</span>
-          <strong className="font-semibold tabular-nums text-slate-900">{evaluatedSubmissions.length}</strong>
+          <strong className="font-extrabold font-mono text-indigo-600 dark:text-indigo-400 ml-1">{evaluatedSubmissions.length}</strong>
         </div>
       </div>
 
-      <div className="flex gap-2 border-b border-slate-200"><button onClick={() => setWorkspaceTab('practice')} className={`border-b-2 px-4 py-3 text-sm font-semibold ${!roadmapTab ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>Practice &amp; topics</button><button onClick={() => setWorkspaceTab('roadmap')} className={`border-b-2 px-4 py-3 text-sm font-semibold ${roadmapTab ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>DSA Roadmap</button></div>
+      <div className="flex gap-6 border-b border-slate-200 dark:border-white/10">
+        <button
+          onClick={() => setWorkspaceTab('practice')}
+          className={`border-b-2 px-1 pb-3 text-xs sm:text-sm font-bold transition-colors cursor-pointer ${
+            !roadmapTab
+              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+          }`}
+        >
+          Practice &amp; topics
+        </button>
+        <button
+          onClick={() => setWorkspaceTab('roadmap')}
+          className={`border-b-2 px-1 pb-3 text-xs sm:text-sm font-bold transition-colors cursor-pointer ${
+            roadmapTab
+              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+          }`}
+        >
+          DSA Roadmap
+        </button>
+      </div>
 
       {roadmapTab ? <DsaRoadmapView embedded /> : <div className="space-y-6">
-          {recommendationError && <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{recommendationError} Your saved assessment history is still available below.</p>}
+          {recommendationError && <p className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-xs text-amber-800 dark:text-amber-300 font-semibold">{recommendationError} Your saved assessment history is still available below.</p>}
           {/* Recommended Topic Clusters */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {recommendedTopics.map((topic) => (
-              <button key={topic.name} onClick={() => setSelectedTopic(topic.name)} className={`rounded-xl border bg-white p-4 text-left transition-colors ${selectedTopic === topic.name ? 'border-indigo-400 bg-indigo-50/40' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/60'}`}>
+              <button key={topic.name} onClick={() => setSelectedTopic(topic.name)} className={`rounded-2xl border p-5 text-left transition-all cursor-pointer card-hover ${selectedTopic === topic.name ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/40' : 'border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] hover:border-indigo-300 dark:hover:border-white/20'}`}>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-slate-800">{topic.name}</span>
-                  <span className={`text-xs font-semibold tabular-nums ${topic.averageScore == null ? 'text-slate-500' : topic.averageScore < 70 ? 'text-amber-700' : 'text-emerald-700'}`}>{topic.averageScore == null ? 'Not tried' : `${topic.averageScore}% avg.`}</span>
+                  <span className="text-sm font-bold text-slate-800 dark:text-white">{topic.name}</span>
+                  <span className={`text-xs font-mono font-bold ${topic.averageScore == null ? 'text-slate-500' : topic.averageScore < 70 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{topic.averageScore == null ? 'Not tried' : `${topic.averageScore}% avg.`}</span>
                 </div>
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
                   {topic.averageScore != null && <div className="h-full rounded-full" style={{ width: `${topic.averageScore}%`, backgroundColor: topic.color }} />}
                 </div>
-                <p className="mt-3 text-xs leading-relaxed text-slate-600">{topic.attempts ? `${topic.attempts} problem${topic.attempts === 1 ? '' : 's'} attempted. ` : ''}{topic.nextAction}</p>
+                <p className="mt-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400">{topic.attempts ? `${topic.attempts} problem${topic.attempts === 1 ? '' : 's'} attempted. ` : ''}{topic.nextAction}</p>
               </button>
             ))}
           </div>
 
-          {/* Recommended Topic Clusters */}
-          <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          {/* All topics */}
+          <div className="space-y-4 rounded-2xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] p-5 sm:p-6 shadow-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/10">
               <div className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-indigo-600" />
-                <h3 className="text-base font-semibold text-slate-900">All topics</h3>
+                <BookOpen className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">All topics</h3>
               </div>
-              <button onClick={() => setSelectedTopic('')} className="text-xs text-indigo-600 font-medium hover:underline">Show all topics</button>
+              <button onClick={() => setSelectedTopic('')} className="text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer">Show all topics</button>
             </div>
 
             <div className="flex flex-wrap gap-2">
               {topicProgress.map((topic) => (
-                <button key={topic.name} onClick={() => setSelectedTopic(topic.name)} className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${selectedTopic === topic.name ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'}`}>
-                  {topic.name}<span className="ml-2 text-slate-400">{topic.averageScore == null ? 'New' : `Avg ${topic.averageScore}%`}</span>
+                <button key={topic.name} onClick={() => setSelectedTopic(topic.name)} className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-all cursor-pointer ${selectedTopic === topic.name ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300' : 'border-slate-200 dark:border-white/10 bg-white dark:bg-[#16161d] text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-white/20'}`}>
+                  {topic.name}<span className="ml-2 font-mono text-[11px] text-slate-400">{topic.averageScore == null ? 'New' : `Avg ${topic.averageScore}%`}</span>
                 </button>
               ))}
-              {!catalogueLoading && topicProgress.length === 0 && <p className="text-sm text-slate-500">No topics are available yet.</p>}
+              {!catalogueLoading && topicProgress.length === 0 && <p className="text-xs text-slate-500 dark:text-slate-400">No topics are available yet.</p>}
             </div>
           </div>
 
           {/* Targeted Practice Problems */}
-          <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="space-y-4 rounded-2xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] p-5 sm:p-6 shadow-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/10">
               <div className="flex items-center gap-2">
-                <Target className="w-5 h-5 text-indigo-600" />
-                <h3 className="text-base font-semibold text-slate-900">Suggested problems</h3>
+                <Target className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Suggested problems</h3>
               </div>
-                <span className="text-xs text-slate-500">{selectedTopic || 'All topics'}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">{selectedTopic || 'All topics'}</span>
             </div>
 
-            {catalogueLoading ? <p className="py-6 text-center text-sm text-slate-500">Loading practice problems…</p>
-              : catalogueError ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{catalogueError}<button onClick={() => setCatalogueRetry(value => value + 1)} className="ml-2 font-bold underline">Retry</button></div>
-              : practiceProblems.length === 0 ? <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center">
-                <p className="text-sm font-semibold text-slate-700">No practice problems found for this topic.</p>
-                <button onClick={() => setSelectedTopic('')} className="mt-2 text-xs font-bold text-indigo-600 hover:underline">Show recommended problems</button>
+            {catalogueLoading ? <p className="py-6 text-center text-xs text-slate-500 dark:text-slate-400">Loading practice problems…</p>
+              : catalogueError ? <div className="rounded-xl border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 p-4 text-xs text-rose-700 dark:text-rose-400 font-semibold">{catalogueError}<button onClick={() => setCatalogueRetry(value => value + 1)} className="ml-2 font-bold underline cursor-pointer">Retry</button></div>
+              : practiceProblems.length === 0 ? <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#16161d] p-6 text-center">
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">No practice problems found for this topic.</p>
+                <button onClick={() => setSelectedTopic('')} className="mt-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">Show recommended problems</button>
               </div>
-              : <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{practiceProblems.map((prob, idx) => (
+              : <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{practiceProblems.map((prob) => (
                 <div
                   key={prob.id}
-                  className="group flex flex-col justify-between space-y-4 rounded-lg border border-slate-200 bg-white p-4 transition-colors hover:border-indigo-300 hover:bg-slate-50/50"
+                  className="group flex flex-col justify-between space-y-4 rounded-2xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#16161d] p-5 shadow-xs card-hover"
                 >
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-slate-500">Problem #{prob.id.match(/(\d+)$/)?.[1] || prob.id}</span>
+                      <span className="text-xs font-mono text-slate-500 dark:text-slate-400">#{prob.id.match(/(\d+)$/)?.[1] || prob.id}</span>
                       <DifficultyBadge difficulty={(['Easy', 'Medium', 'Hard'].includes(prob.difficulty) ? prob.difficulty : 'Medium') as Difficulty} />
                     </div>
-                    <h4 className="text-sm font-semibold text-slate-900 group-hover:text-indigo-700">
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                       {prob.title}
                     </h4>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      <span className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">{prob.topic || prob.category}</span>
-                      <span className="rounded bg-indigo-50 px-2 py-1 text-xs text-indigo-700">Problem bank</span>
-                      <span className="font-mono text-[11px] text-slate-400">ID: {prob.id}</span>
+                    <div className="flex flex-wrap gap-1.5 mt-2.5">
+                      <span className="rounded-md bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">{prob.topic || prob.category}</span>
+                      <span className="rounded-md bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300">Problem bank</span>
                     </div>
-                    {prob.reason && <p className="mt-2 text-[11px] text-slate-500">{prob.reason}</p>}
+                    {prob.reason && <p className="mt-2.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{prob.reason}</p>}
                   </div>
 
                   <button
                     onClick={() => handleStartPractice(prob.id)}
-                    className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-indigo-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+                    className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-600/20 transition-all active:scale-95 ring-1 ring-white/20"
                   >
                     <Code2 className="w-3.5 h-3.5" />
                     <span>Start Practice</span>

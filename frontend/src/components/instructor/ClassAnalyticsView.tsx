@@ -130,11 +130,12 @@ export const ClassAnalyticsView: React.FC = () => {
   };
 
   return <div className="space-y-6 pb-12 animate-fadeIn">
-    <div className="flex flex-col gap-4 border-b border-slate-200 pb-5">
+    <div className="flex flex-col gap-4 border-b border-slate-200 dark:border-white/10 pb-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Class Performance Analytics</h1>
-          <p className="text-xs text-slate-500 mt-1">Evaluated submission results for {scopeTitle}.</p>
+          <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">Class Diagnostics</span>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1">Class Performance Analytics</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Evaluated submission results for {scopeTitle}.</p>
         </div>
       </div>
 
@@ -151,23 +152,50 @@ export const ClassAnalyticsView: React.FC = () => {
         />
       </div>
     </div>
-    {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}<button onClick={() => setSearchParams(new URLSearchParams(searchParams))} className="ml-3 font-bold underline">Retry</button></div>}
-    {loading ? <div className="rounded-2xl border bg-white p-12 text-center text-slate-500">Loading analytics…</div> : <div className="space-y-6">
+    {error && <div role="alert" className="rounded-xl border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 p-4 text-sm text-rose-700 dark:text-rose-400">{error}<button onClick={() => setSearchParams(new URLSearchParams(searchParams))} className="ml-3 font-bold underline">Retry</button></div>}
+    {loading ? <div className="rounded-2xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] p-12 text-center text-slate-500 dark:text-slate-400">Loading analytics…</div> : <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-rose-200 p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4"><div><span className="text-xs font-extrabold uppercase text-rose-700">Remediation Focus</span><h2 className="mt-1 text-lg font-extrabold text-slate-900">{weakest?.topic ?? 'No assessed topics yet'}</h2><p className="mt-1 text-xs text-slate-500">{weakest ? `Average ${weakest.average_score ?? 'N/A'}% across ${weakest.students_assessed ?? 0} assessed students; ${weakest.students_below_60 ?? 0} scored below 60%.` : 'Topic performance appears after student submissions have been evaluated.'}</p></div>{weakest && <button onClick={() => openRoster(weakest.topic)} className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center justify-center gap-2"><Send className="w-3.5 h-3.5" />View affected students</button>}</div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs"><span className="text-xs font-extrabold uppercase text-slate-500">At-Risk Watchlist</span><div className="mt-2 flex items-baseline gap-2"><span className="text-3xl font-extrabold text-rose-700 font-mono">{atRiskCount}</span><span className="text-xs text-slate-500">students need attention</span></div><button onClick={() => openRoster()} className="mt-3 text-xs font-semibold text-emerald-600 hover:underline">Open scoped roster</button></div>
+        <div className="lg:col-span-2 bg-white dark:bg-[#121217] rounded-2xl border border-rose-200 dark:border-rose-500/25 p-5 shadow-xs card-hover flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-rose-700 dark:text-rose-400">Remediation Focus</span>
+            <h2 className="mt-1 text-lg font-extrabold text-slate-900 dark:text-white">{weakest?.topic ?? 'No assessed topics yet'}</h2>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{weakest ? `Average ${weakest.average_score ?? 'N/A'}% across ${weakest.students_assessed ?? 0} assessed students; ${weakest.students_below_60 ?? 0} scored below 60%.` : 'Topic performance appears after student submissions have been evaluated.'}</p>
+          </div>
+          {weakest && <button onClick={() => openRoster(weakest.topic)} className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-rose-600/20 transition-all hover:scale-105 active:scale-95"><Send className="w-3.5 h-3.5" />View affected students</button>}
+        </div>
+        <div className="bg-white dark:bg-[#121217] rounded-2xl border border-slate-200 dark:border-white/12 p-5 shadow-xs card-hover">
+          <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">At-Risk Watchlist</span>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-rose-700 dark:text-rose-400 font-mono">{atRiskCount}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">students need attention</span>
+          </div>
+          <button onClick={() => openRoster()} className="mt-3 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer">Open scoped roster</button>
+        </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Metric label="Average Score" value={average == null ? 'N/A' : `${average}%`} detail={average == null ? 'No evaluated submissions' : 'Across latest assessed work'} />
-        <Metric label="Highest Score" value={analytics?.highest_score == null ? 'N/A' : `${analytics.highest_score}%`} detail={highest?.name ?? 'No evaluated submissions'} color="text-emerald-700" labelColor="text-emerald-600" />
-        <Metric label="Lowest Score" value={analytics?.lowest_score == null ? 'N/A' : `${analytics.lowest_score}%`} detail={lowest?.name ?? 'No evaluated submissions'} color="text-rose-700" labelColor="text-rose-600" />
+        <Metric label="Highest Score" value={analytics?.highest_score == null ? 'N/A' : `${analytics.highest_score}%`} detail={highest?.name ?? 'No evaluated submissions'} color="text-emerald-700 dark:text-emerald-400" labelColor="text-emerald-600 dark:text-emerald-400" />
+        <Metric label="Lowest Score" value={analytics?.lowest_score == null ? 'N/A' : `${analytics.lowest_score}%`} detail={lowest?.name ?? 'No evaluated submissions'} color="text-rose-700 dark:text-rose-400" labelColor="text-rose-600 dark:text-rose-400" />
       </div>
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8 space-y-4"><div className="flex items-center justify-between pb-3 border-b border-slate-100"><div className="flex items-center gap-2"><BarChart3 className="w-5 h-5 text-emerald-600" /><h3 className="text-base font-bold text-slate-900">Score Distribution (0–100)</h3></div><span className="text-xs font-mono text-slate-400">{analytics?.total_submissions ?? 0} submissions</span></div><ScoreDistributionBarChart distribution={analytics?.score_distribution ?? []} /></div>
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8 space-y-4"><div className="flex items-center gap-2 pb-3 border-b border-slate-100"><AlertTriangle className="w-5 h-5 text-amber-500" /><h3 className="text-base font-bold text-slate-900">Observed Topic Performance</h3></div>
-        {topics.length ? <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b text-slate-400 text-[11px] uppercase"><th className="pb-3">Topic</th><th className="pb-3">Average score</th><th className="pb-3">Below 60%</th><th className="pb-3">Assessed students</th><th className="pb-3 text-right">Action</th></tr></thead><tbody className="divide-y">{topics.map((item) => <tr key={item.topic}><td className="py-3 font-bold text-slate-800">{item.topic}</td><td className="py-3 font-mono">{item.average_score ?? 'N/A'}%</td><td className="py-3 font-mono">{item.students_below_60 ?? 0}</td><td className="py-3 font-mono">{item.students_assessed ?? 0}</td><td className="py-3 text-right"><button onClick={() => openRoster(item.topic)} className="px-2.5 py-1 text-xs font-bold text-emerald-600 hover:bg-emerald-50 rounded-lg">View roster</button></td></tr>)}</tbody></table></div> : <p className="py-8 text-center text-sm text-slate-500">No assessed topic data yet.</p>}
+      <div className="bg-white dark:bg-[#121217] rounded-3xl border border-slate-200 dark:border-white/12 shadow-xs p-6 sm:p-8 space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/10">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">Score Distribution (0–100)</h3>
+          </div>
+          <span className="text-xs font-mono text-slate-400 dark:text-slate-500">{analytics?.total_submissions ?? 0} submissions</span>
+        </div>
+        <ScoreDistributionBarChart distribution={analytics?.score_distribution ?? []} />
+      </div>
+      <div className="bg-white dark:bg-[#121217] rounded-3xl border border-slate-200 dark:border-white/12 shadow-xs p-6 sm:p-8 space-y-4">
+        <div className="flex items-center gap-2 pb-3 border-b border-slate-100 dark:border-white/10">
+          <AlertTriangle className="w-5 h-5 text-amber-500" />
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">Observed Topic Performance</h3>
+        </div>
+        {topics.length ? <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b border-slate-100 dark:border-white/10 text-slate-400 text-[11px] uppercase tracking-wider"><th className="pb-3">Topic</th><th className="pb-3">Average score</th><th className="pb-3">Below 60%</th><th className="pb-3">Assessed students</th><th className="pb-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-white/5">{topics.map((item) => <tr key={item.topic} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors"><td className="py-3 font-bold text-slate-800 dark:text-slate-200">{item.topic}</td><td className="py-3 font-mono text-slate-700 dark:text-slate-300">{item.average_score ?? 'N/A'}%</td><td className="py-3 font-mono text-rose-600 dark:text-rose-400">{item.students_below_60 ?? 0}</td><td className="py-3 font-mono text-slate-700 dark:text-slate-300">{item.students_assessed ?? 0}</td><td className="py-3 text-right"><button onClick={() => openRoster(item.topic)} className="px-2.5 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-lg cursor-pointer transition-colors">View roster</button></td></tr>)}</tbody></table></div> : <p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">No assessed topic data yet.</p>}
       </div>
     </div>}
   </div>;
 };
 
-const Metric: React.FC<{ label: string; value: string; detail: string; color?: string; labelColor?: string }> = ({ label, value, detail, color = 'text-slate-900', labelColor = 'text-slate-400' }) => <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-1"><span className={`text-xs font-bold uppercase tracking-wider ${labelColor}`}>{label}</span><div className={`text-3xl font-extrabold font-mono ${color}`}>{value}</div><span className="text-xs text-slate-500">{detail}</span></div>;
+const Metric: React.FC<{ label: string; value: string; detail: string; color?: string; labelColor?: string }> = ({ label, value, detail, color = 'text-slate-900 dark:text-white', labelColor = 'text-slate-400' }) => <div className="bg-white dark:bg-[#121217] p-6 rounded-2xl border border-slate-200 dark:border-white/12 shadow-xs card-hover space-y-1"><span className={`text-xs font-extrabold uppercase tracking-[0.14em] ${labelColor}`}>{label}</span><div className={`text-3xl font-extrabold font-mono ${color}`}>{value}</div><span className="text-xs text-slate-500 dark:text-slate-400">{detail}</span></div>;

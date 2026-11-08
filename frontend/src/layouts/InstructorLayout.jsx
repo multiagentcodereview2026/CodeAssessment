@@ -145,7 +145,7 @@ const InstructorLayout = () => {
 
       {/* Main Content Area */}
       <div className="flex min-w-0 flex-1 flex-col min-h-screen">
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between border-b border-slate-200 dark:border-neutral-800/80 bg-white/95 dark:bg-black/95 backdrop-blur px-4 md:px-8">
+        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between border-b border-slate-200/80 dark:border-white/10 bg-white/95 dark:bg-black/90 backdrop-blur-md px-4 md:px-8">
           <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -161,7 +161,7 @@ const InstructorLayout = () => {
               onClick={toggleTheme}
               title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
               aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
-              className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+              className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-all cursor-pointer"
             >
               {resolvedTheme === 'dark' ? (
                 <Sun className="w-5 h-5 text-amber-400" />
@@ -174,7 +174,7 @@ const InstructorLayout = () => {
             <div className="relative" ref={notifRef}>
               <button 
                 onClick={() => setNotifOpen(!notifOpen)}
-                className="relative p-2 rounded-xl text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+                className="relative p-2 rounded-xl text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 transition-all cursor-pointer"
               >
                 <Bell className="w-5 h-5" />
                 {unreadCount > 0 && (
@@ -189,9 +189,9 @@ const InstructorLayout = () => {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-neutral-950 rounded-3xl shadow-2xl border border-slate-200/90 dark:border-neutral-800 p-4 z-50 space-y-3"
+                    className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-[#121217] rounded-3xl shadow-2xl border border-slate-200/90 dark:border-white/12 p-4 z-50 space-y-3"
                   >
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-neutral-800">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/10">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-extrabold text-slate-900 dark:text-white">Alerts & Notifications</span>
                         <span className="px-2 py-0.2 rounded-full bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 font-mono text-[10px] font-bold">
@@ -222,8 +222,8 @@ const InstructorLayout = () => {
                             }}
                             className={`w-full p-3 rounded-2xl border text-left transition-colors cursor-pointer ${
                               n.is_read
-                                ? 'bg-white dark:bg-neutral-900 border-slate-200 dark:border-neutral-800 hover:bg-slate-50 dark:hover:bg-neutral-800'
-                                : 'bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-100 dark:border-emerald-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/60'
+                                ? 'bg-white dark:bg-[#16161d] border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5'
+                                : 'bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-100 dark:border-emerald-900/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/60'
                             }`}
                           >
                             <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -264,7 +264,7 @@ const InstructorLayout = () => {
       </div>
 
       {/* Mobile quick bottom navigation */}
-      <nav aria-label="Instructor navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-black/95 backdrop-blur border-t border-slate-200 dark:border-neutral-800/80 px-2 py-2 grid grid-cols-5 gap-1">
+      <nav aria-label="Instructor navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-black/95 backdrop-blur border-t border-slate-200 dark:border-white/10 px-2 py-2 grid grid-cols-5 gap-1">
         {navItems.slice(0, 5).map((item) => {
           const isActive = location.pathname === item.path || (item.path !== '/instructor/dashboard' && location.pathname.startsWith(item.path));
           return (
@@ -272,7 +272,7 @@ const InstructorLayout = () => {
               key={item.name}
               to={item.path}
               className={`flex flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold transition-colors ${
-                isActive ? 'bg-emerald-600 text-white' : 'text-slate-500 dark:text-neutral-400 hover:bg-slate-100 dark:hover:bg-neutral-800'
+                isActive ? 'bg-emerald-600 text-white' : 'text-slate-500 dark:text-neutral-400 hover:bg-slate-100 dark:hover:bg-white/10'
               }`}
             >
               <item.icon className="w-4 h-4" />

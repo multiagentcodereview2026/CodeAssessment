@@ -86,9 +86,9 @@ export const StudentRosterView: React.FC = () => {
 
   const topicOptions = useMemo(() => {
     const list = allTopics.slice();
-    if (filterTopic !== 'all' && !list.includes(filterTopic)) {
-      list.push(filterTopic);
-    }
+    filterTopics.forEach((t) => {
+      if (!list.includes(t)) list.push(t);
+    });
     return [
       { value: 'all', label: 'All Topics' },
       ...list.map((topic) => ({
@@ -110,27 +110,27 @@ export const StudentRosterView: React.FC = () => {
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
       {/* Header */}
-      <header className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end">
+      <header className="flex flex-col justify-between gap-4 border-b border-slate-200 dark:border-white/10 pb-5 sm:flex-row sm:items-end">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-600">Course Rosters</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">Course Rosters</p>
+          <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
             Student Performance Roster
           </h1>
-          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-600">
+          <p className="mt-1.5 max-w-2xl text-xs sm:text-sm leading-6 text-slate-600 dark:text-slate-400">
             Live enrollment, assessment results, score trends, and weak-topic alerts across your courses. Refreshes automatically after new evaluations.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 sm:shrink-0">
-          <span className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 shadow-2xs whitespace-nowrap">
-            Total Enrolled: <strong className="text-emerald-600 font-mono text-xs ml-0.5">{studentRoster.length}</strong>
+          <span className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] px-3 text-xs font-semibold text-slate-600 dark:text-slate-300 shadow-2xs whitespace-nowrap">
+            Total Enrolled: <strong className="text-emerald-600 dark:text-emerald-400 font-mono text-xs ml-0.5">{studentRoster.length}</strong>
           </span>
 
           <button
             type="button"
             onClick={() => void loadRoster()}
             disabled={loading}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition disabled:opacity-50 cursor-pointer whitespace-nowrap"
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] px-3 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-neutral-800 shadow-2xs transition disabled:opacity-50 cursor-pointer whitespace-nowrap"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
@@ -149,28 +149,28 @@ export const StudentRosterView: React.FC = () => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <button onClick={() => setFilterStatuses(['at risk'])} className="text-left bg-white rounded-2xl border border-rose-200/80 p-4 shadow-2xs hover:border-rose-400 transition-all cursor-pointer">
-          <div className="flex justify-between items-center"><span className="text-xs font-bold uppercase text-rose-700">At Risk</span><AlertTriangle className="w-4 h-4 text-rose-500" /></div>
-          <div className="mt-2 flex items-baseline gap-2"><span className="text-2xl font-extrabold text-rose-700 font-mono">{atRiskCount}</span><span className="text-xs text-slate-500">students</span></div>
-          <p className="mt-1 text-[11px] text-slate-500">Average score below 50%.</p>
+        <button onClick={() => setFilterStatuses(['at risk'])} className="text-left bg-white dark:bg-[#121217] rounded-2xl border border-rose-200/80 dark:border-rose-500/30 p-4 shadow-2xs hover:border-rose-400 card-hover transition-all cursor-pointer">
+          <div className="flex justify-between items-center"><span className="text-xs font-extrabold uppercase tracking-[0.14em] text-rose-700 dark:text-rose-400">At Risk</span><AlertTriangle className="w-4 h-4 text-rose-500" /></div>
+          <div className="mt-2 flex items-baseline gap-2"><span className="text-2xl font-extrabold text-rose-700 dark:text-rose-400 font-mono">{atRiskCount}</span><span className="text-xs text-slate-500 dark:text-slate-400">students</span></div>
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Average score below 50%.</p>
         </button>
 
-        <button onClick={() => setFilterStatuses(['needs attention'])} className="text-left bg-white rounded-2xl border border-amber-200/80 p-4 shadow-2xs hover:border-amber-400 transition-all cursor-pointer">
-          <div className="flex justify-between items-center"><span className="text-xs font-bold uppercase text-amber-700">Needs Attention</span><Target className="w-4 h-4 text-amber-500" /></div>
-          <div className="mt-2 flex items-baseline gap-2"><span className="text-2xl font-extrabold text-amber-700 font-mono">{needsAttentionCount}</span><span className="text-xs text-slate-500">students</span></div>
-          <p className="mt-1 text-[11px] text-slate-500">Low scores, weak topics, or no coursework submissions.</p>
+        <button onClick={() => setFilterStatuses(['needs attention'])} className="text-left bg-white dark:bg-[#121217] rounded-2xl border border-amber-200/80 dark:border-amber-500/30 p-4 shadow-2xs hover:border-amber-400 card-hover transition-all cursor-pointer">
+          <div className="flex justify-between items-center"><span className="text-xs font-extrabold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-400">Needs Attention</span><Target className="w-4 h-4 text-amber-500" /></div>
+          <div className="mt-2 flex items-baseline gap-2"><span className="text-2xl font-extrabold text-amber-700 dark:text-amber-400 font-mono">{needsAttentionCount}</span><span className="text-xs text-slate-500 dark:text-slate-400">students</span></div>
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Low scores, weak topics, or no coursework submissions.</p>
         </button>
 
-        <button onClick={() => mostCommonWeakTopic && setFilterTopics([mostCommonWeakTopic.topic])} className="text-left bg-white rounded-2xl border border-emerald-200/80 p-4 shadow-2xs hover:border-emerald-400 transition-all cursor-pointer">
-          <div className="flex justify-between items-center"><span className="text-xs font-bold uppercase text-emerald-700">Common Gap</span><ClipboardList className="w-4 h-4 text-emerald-500" /></div>
-          <div className="mt-2 text-sm font-extrabold text-slate-900">{mostCommonWeakTopic?.topic || 'No assessed weak topics'}</div>
-          <p className="mt-1 text-[11px] text-slate-500">{mostCommonWeakTopic ? `${mostCommonWeakTopic.count} students show this gap.` : 'Appears after evaluated submissions.'}</p>
+        <button onClick={() => mostCommonWeakTopic && setFilterTopics([mostCommonWeakTopic.topic])} className="text-left bg-white dark:bg-[#121217] rounded-2xl border border-emerald-200/80 dark:border-emerald-500/30 p-4 shadow-2xs hover:border-emerald-400 card-hover transition-all cursor-pointer">
+          <div className="flex justify-between items-center"><span className="text-xs font-extrabold uppercase tracking-[0.14em] text-emerald-700 dark:text-emerald-400">Common Gap</span><ClipboardList className="w-4 h-4 text-emerald-500" /></div>
+          <div className="mt-2 text-sm font-extrabold text-slate-900 dark:text-white">{mostCommonWeakTopic?.topic || 'No assessed weak topics'}</div>
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{mostCommonWeakTopic ? `${mostCommonWeakTopic.count} students show this gap.` : 'Appears after evaluated submissions.'}</p>
         </button>
       </div>
 
       {/* Main Table Container */}
-      <main className="relative rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 border-b border-slate-100 p-4">
+      <main className="relative rounded-2xl border border-slate-200 dark:border-white/12 bg-white dark:bg-[#121217] shadow-sm">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 border-b border-slate-100 dark:border-white/10 p-4">
           <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
@@ -178,14 +178,14 @@ export const StudentRosterView: React.FC = () => {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search by student name or ID..."
-                className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50/70 py-1.5 pl-9 pr-8 text-xs text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:ring-1 focus:ring-emerald-100"
+                className="h-9 w-full rounded-xl border border-slate-200 dark:border-white/12 bg-slate-50/70 dark:bg-[#16161d] py-1.5 pl-9 pr-8 text-xs text-slate-900 dark:text-white outline-none transition-all placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white dark:focus:bg-[#1c1c24] focus:ring-1 focus:ring-emerald-100 dark:focus:ring-emerald-950 font-sans"
               />
               {search && (
                 <button
                   type="button"
                   onClick={() => setSearch('')}
                   aria-label="Clear search"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -218,7 +218,7 @@ export const StudentRosterView: React.FC = () => {
         <div className="overflow-x-auto rounded-b-2xl">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <tr className="border-b border-slate-200/80 dark:border-white/10 bg-slate-50/75 dark:bg-[#16161d] text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 <th className="py-3 px-4">Student</th>
                 <th className="py-3 px-4">Submissions</th>
                 <th className="py-3 px-4">Avg Score</th>
@@ -227,14 +227,14 @@ export const StudentRosterView: React.FC = () => {
                 <th className="py-3 px-4 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-              {loading && <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-500">Loading the live roster…</td></tr>}
-              {!loading && loadError && <tr><td colSpan={6} className="px-6 py-12 text-center text-rose-600">{loadError}<button onClick={() => void loadRoster()} className="ml-3 font-bold underline cursor-pointer">Retry</button></td></tr>}
+            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+              {loading && <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">Loading the live roster…</td></tr>}
+              {!loading && loadError && <tr><td colSpan={6} className="px-6 py-12 text-center text-rose-600 dark:text-rose-400">{loadError}<button onClick={() => void loadRoster()} className="ml-3 font-bold underline cursor-pointer">Retry</button></td></tr>}
               {!loading && !loadError && filtered.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center">
-                    <p className="font-bold text-slate-700">{emptyMessage}</p>
-                    <p className="mt-1 text-slate-500">{studentRoster.length ? 'Clear a filter or search term to view the roster.' : 'Open a course, choose Manage Class, then enroll a registered student account.'}</p>
+                    <p className="font-bold text-slate-700 dark:text-slate-200">{emptyMessage}</p>
+                    <p className="mt-1 text-slate-500 dark:text-slate-400">{studentRoster.length ? 'Clear a filter or search term to view the roster.' : 'Open a course, choose Manage Class, then enroll a registered student account.'}</p>
                     {studentRoster.length > 0 && hasActiveFilters && (
                       <button
                         type="button"
@@ -246,7 +246,7 @@ export const StudentRosterView: React.FC = () => {
                       </button>
                     )}
                     {!studentRoster.length && (
-                      <button onClick={() => navigate('/instructor/courses')} className="mt-4 text-emerald-600 font-bold hover:underline cursor-pointer">
+                      <button onClick={() => navigate('/instructor/courses')} className="mt-4 text-emerald-600 dark:text-emerald-400 font-bold hover:underline cursor-pointer">
                         Go to Courses
                       </button>
                     )}
@@ -254,24 +254,24 @@ export const StudentRosterView: React.FC = () => {
                 </tr>
               )}
               {!loading && !loadError && filtered.map((student) => (
-                <tr key={student.id} onClick={() => setSelectedStudent(student)} className="hover:bg-emerald-50/30 transition-colors cursor-pointer group">
+                <tr key={student.id} onClick={() => setSelectedStudent(student)} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors cursor-pointer group">
                   <td className="py-3.5 px-4">
                     <div>
-                      <span className="font-bold text-slate-900 block group-hover:text-emerald-700">{student.name}</span>
+                      <span className="font-bold text-slate-900 dark:text-white block group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{student.name}</span>
                       <span className="text-[11px] text-slate-400 font-mono">{student.rollNumber} • {student.department}</span>
                     </div>
                   </td>
-                  <td className="py-3.5 px-4 font-mono font-bold text-slate-700">{student.submissionsCount}</td>
+                  <td className="py-3.5 px-4 font-mono font-bold text-slate-700 dark:text-slate-300">{student.submissionsCount}</td>
                   <td className="py-3.5 px-4 font-mono font-extrabold text-sm">
-                    <span className={student.avgScore >= 75 ? 'text-emerald-600' : student.avgScore >= 60 ? 'text-teal-700' : student.avgScore ? 'text-rose-600' : 'text-slate-400'}>
+                    <span className={student.avgScore >= 75 ? 'text-emerald-600 dark:text-emerald-400' : student.avgScore >= 60 ? 'text-teal-600 dark:text-teal-400' : student.avgScore ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400'}>
                       {student.avgScore ? `${student.avgScore}%` : 'N/A'}
                     </span>
                   </td>
                   <td className="py-3.5 px-4">
                     {student.trend === 'up' ? (
-                      <span className="inline-flex items-center gap-1 font-bold text-emerald-600"><ArrowUpRight className="w-4 h-4" />Improving</span>
+                      <span className="inline-flex items-center gap-1 font-bold text-emerald-600 dark:text-emerald-400"><ArrowUpRight className="w-4 h-4" />Improving</span>
                     ) : student.trend === 'down' ? (
-                      <span className="inline-flex items-center gap-1 font-bold text-rose-600"><ArrowDownRight className="w-4 h-4" />Declining</span>
+                      <span className="inline-flex items-center gap-1 font-bold text-rose-600 dark:text-rose-400"><ArrowDownRight className="w-4 h-4" />Declining</span>
                     ) : (
                       <span className="text-slate-400 font-mono font-bold">No change</span>
                     )}
@@ -279,18 +279,18 @@ export const StudentRosterView: React.FC = () => {
                   <td className="py-3.5 px-4">
                     <div className="flex flex-wrap gap-1.5">
                       {student.weakTopics.length ? student.weakTopics.map((topic) => (
-                        <span key={topic} className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                        <span key={topic} className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40 font-sans">
                           {topic}
                         </span>
                       )) : (
-                        <span className="text-slate-400">No assessed gaps</span>
+                        <span className="text-slate-400 dark:text-slate-500">No assessed gaps</span>
                       )}
                     </div>
                   </td>
                   <td className="py-3.5 px-4 text-right">
                     <button
                       onClick={(event) => { event.stopPropagation(); setSelectedStudent(student); }}
-                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-emerald-600 hover:text-white rounded-lg font-bold text-xs text-slate-700 transition-colors cursor-pointer"
+                      className="px-2.5 py-1.5 bg-slate-100 dark:bg-white/10 hover:bg-emerald-600 dark:hover:bg-emerald-600 hover:text-white dark:hover:text-white rounded-lg font-bold text-xs text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
                     >
                       Inspect Profile
                     </button>
@@ -305,23 +305,23 @@ export const StudentRosterView: React.FC = () => {
       {/* Student Diagnostic Modal */}
       {selectedStudent && (
         <Modal isOpen onClose={() => setSelectedStudent(null)} title={`Student Diagnostic: ${selectedStudent.name}`} subtitle={`Student ID: ${selectedStudent.rollNumber} • ${selectedStudent.department}`} maxWidth="2xl">
-          <div className="space-y-6 text-xs">
+          <div className="space-y-6 text-xs font-sans">
             <div className="grid grid-cols-3 gap-4 text-center">
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+              <div className="p-4 bg-slate-50 dark:bg-[#16161d] rounded-2xl border border-slate-200 dark:border-white/10">
                 <span className="text-slate-400 block font-semibold">Submissions</span>
-                <span className="text-2xl font-mono font-extrabold text-slate-800 mt-1 block">{selectedStudent.submissionsCount}</span>
+                <span className="text-2xl font-mono font-extrabold text-slate-800 dark:text-white mt-1 block">{selectedStudent.submissionsCount}</span>
               </div>
-              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200">
-                <span className="text-emerald-700 block font-semibold">Average Grade</span>
-                <span className="text-2xl font-mono font-extrabold text-emerald-700 mt-1 block">{selectedStudent.avgScore ? `${selectedStudent.avgScore}%` : 'N/A'}</span>
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200 dark:border-emerald-800/40">
+                <span className="text-emerald-700 dark:text-emerald-400 block font-semibold">Average Grade</span>
+                <span className="text-2xl font-mono font-extrabold text-emerald-700 dark:text-emerald-400 mt-1 block">{selectedStudent.avgScore ? `${selectedStudent.avgScore}%` : 'N/A'}</span>
               </div>
-              <div className="p-4 bg-purple-50 rounded-2xl border border-purple-200">
-                <span className="text-purple-700 block font-semibold">Cohort Status</span>
-                <span className="text-xs font-extrabold text-purple-800 mt-2 block">{selectedStudent.status}</span>
+              <div className="p-4 bg-purple-50 dark:bg-purple-950/30 rounded-2xl border border-purple-200 dark:border-purple-800/40">
+                <span className="text-purple-700 dark:text-purple-400 block font-semibold">Cohort Status</span>
+                <span className="text-xs font-extrabold text-purple-800 dark:text-purple-300 mt-2 block">{selectedStudent.status}</span>
               </div>
             </div>
 
-            <div className="p-5 bg-slate-900 text-white rounded-3xl space-y-2">
+            <div className="p-5 bg-slate-900 dark:bg-[#16161d] text-white rounded-3xl border border-transparent dark:border-white/10 space-y-2">
               <div className="flex items-center gap-2 text-emerald-400 font-bold">
                 <Sparkles className="w-4 h-4" />
                 <span>Performance Summary</span>
@@ -334,28 +334,28 @@ export const StudentRosterView: React.FC = () => {
             </div>
 
             <div>
-              <span className="font-bold text-slate-800 mb-2 block">Identified Concept Gaps</span>
+              <span className="font-bold text-slate-800 dark:text-white mb-2 block">Identified Concept Gaps</span>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.weakTopics.length ? selectedStudent.weakTopics.map((topic) => (
-                  <span key={topic} className="px-3.5 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 font-bold">
+                  <span key={topic} className="px-3.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40 font-bold font-sans">
                     ⚠️ {topic}
                   </span>
                 )) : (
-                  <span className="text-slate-500">No gaps detected from evaluated work.</span>
+                  <span className="text-slate-500 dark:text-slate-400">No gaps detected from evaluated work.</span>
                 )}
               </div>
             </div>
 
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+            <div className="pt-4 border-t border-slate-100 dark:border-white/10 flex items-center justify-between">
               {selectedStudent.email ? (
-                <a href={`mailto:${selectedStudent.email}`} className="inline-flex items-center gap-1.5 text-emerald-600 font-bold hover:underline">
+                <a href={`mailto:${selectedStudent.email}`} className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold hover:underline">
                   <Send className="w-4 h-4" />
                   Send Direct Feedback Email
                 </a>
               ) : (
                 <span className="text-slate-400">No email available</span>
               )}
-              <button onClick={() => setSelectedStudent(null)} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 cursor-pointer">
+              <button onClick={() => setSelectedStudent(null)} className="px-5 py-2.5 bg-slate-900 dark:bg-[#1c1c24] text-white rounded-xl font-bold hover:bg-slate-800 dark:hover:bg-neutral-800 border border-transparent dark:border-white/10 cursor-pointer">
                 Close Report
               </button>
             </div>
