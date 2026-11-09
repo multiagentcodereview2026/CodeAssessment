@@ -10,6 +10,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      'lucide-react': path.resolve(__dirname, './src/components/icons/hugeicons-adapter.tsx'),
       'next/link': path.resolve(__dirname, './src/lib/next-shim.tsx'),
       'next/image': path.resolve(__dirname, './src/lib/next-shim.tsx'),
     },
