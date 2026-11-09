@@ -8,8 +8,9 @@
     <script>
       (function() {
         try {
-          var stored = localStorage.getItem('codevedha_theme') || 'system';
-          var isDark = stored === 'dark' || (stored === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var stored = localStorage.getItem('codevedha_theme');
+          // Default to obsidian black dark theme unless explicitly set to light
+          var isDark = stored !== 'light';
           if (isDark) {
             document.documentElement.classList.add('dark');
             document.documentElement.setAttribute('data-theme', 'dark');
@@ -19,7 +20,7 @@
           }
           var meta = document.querySelector('meta[name="color-scheme"]');
           if (meta) {
-            meta.content = stored === 'system' ? 'light dark' : stored;
+            meta.content = isDark ? 'dark' : 'light';
           }
         } catch (e) {}
       })();

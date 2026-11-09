@@ -59,7 +59,7 @@ import {
   Message01Icon,
   Minimize01Icon,
   MonitorIcon,
-  Moon01Icon,
+  Moon02Icon,
   MoreHorizontalIcon,
   Mortarboard01Icon,
   Notification01Icon,
@@ -77,7 +77,7 @@ import {
   Settings02Icon,
   Shield01Icon,
   ShieldAlertIcon,
-  Sun01Icon,
+  Sun02Icon,
   Target01Icon,
   Task01Icon,
   TerminalIcon,
@@ -190,7 +190,7 @@ export const Menu = createHugeIcon(Menu01Icon, 'Menu');
 export const MessageSquareText = createHugeIcon(Message01Icon, 'MessageSquareText');
 export const Minimize2 = createHugeIcon(Minimize01Icon, 'Minimize2');
 export const Monitor = createHugeIcon(MonitorIcon, 'Monitor');
-export const Moon = createHugeIcon(Moon01Icon, 'Moon');
+export const Moon = createHugeIcon(Moon02Icon, 'Moon');
 export const MoreHorizontal = createHugeIcon(MoreHorizontalIcon, 'MoreHorizontal');
 export const Pencil = createHugeIcon(PencilEdit01Icon, 'Pencil');
 export const PieChart = createHugeIcon(PieChartIcon, 'PieChart');
@@ -208,7 +208,7 @@ export const Shield = createHugeIcon(Shield01Icon, 'Shield');
 export const ShieldAlert = createHugeIcon(ShieldAlertIcon, 'ShieldAlert');
 export const ShieldCheck = createHugeIcon(Shield01Icon, 'ShieldCheck');
 export const Sparkles = createHugeIcon(AiMagicIcon, 'Sparkles');
-export const Sun = createHugeIcon(Sun01Icon, 'Sun');
+export const Sun = createHugeIcon(Sun02Icon, 'Sun');
 export const Target = createHugeIcon(Target01Icon, 'Target');
 export const Terminal = createHugeIcon(TerminalIcon, 'Terminal');
 export const Trash2 = createHugeIcon(Delete02Icon, 'Trash2');

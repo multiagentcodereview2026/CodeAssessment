@@ -14,19 +14,19 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const THEME_STORAGE_KEY = 'codevedha_theme';
 
 const getSystemTheme = (): 'light' | 'dark' => {
-  if (typeof window === 'undefined' || !window.matchMedia) return 'light';
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  if (typeof window === 'undefined' || !window.matchMedia) return 'dark';
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 };
 
 const getStoredTheme = (): ThemeMode => {
-  if (typeof window === 'undefined') return 'system';
+  if (typeof window === 'undefined') return 'dark';
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
     if (stored === 'light' || stored === 'dark' || stored === 'system') {
       return stored;
     }
   } catch {}
-  return 'system';
+  return 'dark';
 };
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

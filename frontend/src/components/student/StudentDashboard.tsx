@@ -165,18 +165,18 @@ export const StudentDashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <button
           onClick={() => handleResumeChallenge(activeProblem?.id)}
-          className="text-left bg-gradient-to-b from-[#131420] to-[#0e0f18] rounded-2xl border border-indigo-500/35 hover:border-indigo-400 p-5 shadow-sm hover:shadow-lg hover:shadow-indigo-500/10 transition-all cursor-pointer group"
+          className="text-left bg-white dark:bg-gradient-to-b dark:from-[#131420] dark:to-[#0e0f18] rounded-2xl border border-indigo-200/90 dark:border-indigo-500/35 hover:border-indigo-400 p-5 shadow-xs dark:shadow-sm hover:shadow-lg hover:shadow-indigo-500/10 transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold text-indigo-400 uppercase tracking-wider">1. Continue</span>
-            <div className="p-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/25">
-              <Zap className="w-4 h-4 text-indigo-400" />
+            <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">1. Continue</span>
+            <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-200/80 dark:border-indigo-500/25">
+              <Zap className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             </div>
           </div>
-          <h3 className="mt-2 text-sm font-bold text-white truncate">
+          <h3 className="mt-2 text-sm font-bold text-slate-900 dark:text-white truncate">
             {activeProblem ? activeProblem.title : 'Explore Problem Bank'}
           </h3>
-          <p className="mt-1 text-xs text-zinc-400 leading-relaxed line-clamp-2">
+          <p className="mt-1 text-xs text-slate-600 dark:text-zinc-400 leading-relaxed line-clamp-2">
             {activeProblem
               ? `Target ${activeProblem.optimalComplexity?.time && activeProblem.optimalComplexity.time !== '—' ? activeProblem.optimalComplexity.time : 'optimal'} time and ${activeProblem.optimalComplexity?.space && activeProblem.optimalComplexity.space !== '—' ? activeProblem.optimalComplexity.space : 'optimal'} space.`
               : 'Choose a problem from the algorithmic repository to start your session.'}
@@ -185,18 +185,18 @@ export const StudentDashboard: React.FC = () => {
 
         <button
           onClick={() => latestSubmission ? handleInspectReport(latestSubmission.id) : navigate('/problems')}
-          className="text-left bg-gradient-to-b from-[#111815] to-[#0d1310] rounded-2xl border border-emerald-500/35 hover:border-emerald-400 p-5 shadow-sm hover:shadow-lg hover:shadow-emerald-500/10 transition-all cursor-pointer group"
+          className="text-left bg-white dark:bg-gradient-to-b dark:from-[#111815] dark:to-[#0d1310] rounded-2xl border border-emerald-200/90 dark:border-emerald-500/35 hover:border-emerald-400 p-5 shadow-xs dark:shadow-sm hover:shadow-lg hover:shadow-emerald-500/10 transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold text-emerald-400 uppercase tracking-wider">2. Revise</span>
-            <div className="p-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/25">
-              <FileText className="w-4 h-4 text-emerald-400" />
+            <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">2. Revise</span>
+            <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200/80 dark:border-emerald-500/25">
+              <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             </div>
           </div>
-          <h3 className="mt-2 text-sm font-bold text-white truncate">
+          <h3 className="mt-2 text-sm font-bold text-slate-900 dark:text-white truncate">
             {latestSubmission ? latestSubmission.problemTitle : 'No Submissions Yet'}
           </h3>
-          <p className="mt-1 text-xs text-zinc-400 leading-relaxed line-clamp-2">
+          <p className="mt-1 text-xs text-slate-600 dark:text-zinc-400 leading-relaxed line-clamp-2">
             {latestSubmission
               ? `Review your recent score (${latestSubmission.score}/100) and inspect AI revision feedback.`
               : 'Submit your first challenge to unlock AI rubric feedback and score boost recommendations.'}
@@ -205,18 +205,18 @@ export const StudentDashboard: React.FC = () => {
 
         <button
           onClick={() => navigate(hasWeakTopics ? '/feedback' : '/problems')}
-          className="text-left bg-gradient-to-b from-[#18150f] to-[#13100a] rounded-2xl border border-amber-500/40 hover:border-amber-400 p-5 shadow-sm hover:shadow-lg hover:shadow-amber-500/10 transition-all cursor-pointer group"
+          className="text-left bg-white dark:bg-gradient-to-b dark:from-[#18150f] dark:to-[#13100a] rounded-2xl border border-amber-200/90 dark:border-amber-500/40 hover:border-amber-400 p-5 shadow-xs dark:shadow-sm hover:shadow-lg hover:shadow-amber-500/10 transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold text-amber-400 uppercase tracking-wider">3. Practice</span>
-            <div className="p-1.5 rounded-lg bg-amber-500/15 border border-amber-500/25">
-              <BookOpen className="w-4 h-4 text-amber-400" />
+            <span className="text-xs font-extrabold text-amber-600 dark:text-amber-400 uppercase tracking-wider">3. Practice</span>
+            <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/15 border border-amber-200/80 dark:border-amber-500/25">
+              <BookOpen className="w-4 h-4 text-amber-600 dark:text-amber-400" />
             </div>
           </div>
-          <h3 className="mt-2 text-sm font-bold text-white truncate">
+          <h3 className="mt-2 text-sm font-bold text-slate-900 dark:text-white truncate">
             {hasWeakTopics ? weakTopic : 'Core Algorithms'}
           </h3>
-          <p className="mt-1 text-xs text-zinc-400 leading-relaxed line-clamp-2">
+          <p className="mt-1 text-xs text-slate-600 dark:text-zinc-400 leading-relaxed line-clamp-2">
             {hasWeakTopics
               ? 'Practice is routed from weak-topic detection to close real rubric gaps.'
               : 'Build problem-solving foundations across Arrays, Strings, and core patterns.'}
@@ -229,30 +229,30 @@ export const StudentDashboard: React.FC = () => {
         {/* Overall Score */}
         <div
           onClick={() => navigate('/analytics')}
-          className="bg-[#121217] p-5 sm:p-6 rounded-3xl border border-white/12 shadow-[0_4px_20px_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.06)] hover:border-indigo-400/50 card-hover cursor-pointer transition-all"
+          className="bg-white dark:bg-[#121217] p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-white/12 shadow-xs dark:shadow-[0_4px_20px_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.06)] hover:border-indigo-400/50 card-hover cursor-pointer transition-all"
         >
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold text-zinc-400">Overall Score</span>
-            <div className="p-2 bg-indigo-500/15 border border-indigo-500/25 text-indigo-400 rounded-xl">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-slate-500 dark:text-zinc-400">Overall Score</span>
+            <div className="p-2 bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-200/80 dark:border-indigo-500/25 text-indigo-600 dark:text-indigo-400 rounded-xl">
               <Award className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl sm:text-3xl font-extrabold text-white font-mono">
+            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-mono">
               {hasOverallScore ? overallScore : '—'}
             </span>
-            {hasOverallScore && <span className="text-xs text-zinc-500 font-mono">/ 100</span>}
+            {hasOverallScore && <span className="text-xs text-slate-400 dark:text-zinc-500 font-mono">/ 100</span>}
           </div>
           {hasOverallScore ? (
-            <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-400 font-semibold">
+            <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               <span>
                 {Number(overallScore) >= 80 ? 'Excellent' : Number(overallScore) >= 70 ? 'Good' : Number(overallScore) >= 60 ? 'Passing' : 'Needs Practice'}
               </span>
             </div>
           ) : (
-            <div className="mt-2 flex items-center gap-1.5 text-xs text-zinc-500 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+            <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-400 dark:text-zinc-500 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-zinc-600" />
               <span>Not assessed yet</span>
             </div>
           )}
@@ -261,55 +261,55 @@ export const StudentDashboard: React.FC = () => {
         {/* Problems Solved */}
         <div
           onClick={() => navigate('/problems')}
-          className="bg-[#121217] p-5 sm:p-6 rounded-3xl border border-white/12 shadow-[0_4px_20px_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.06)] hover:border-emerald-400/50 card-hover cursor-pointer transition-all"
+          className="bg-white dark:bg-[#121217] p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-white/12 shadow-xs dark:shadow-[0_4px_20px_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.06)] hover:border-emerald-400/50 card-hover cursor-pointer transition-all"
         >
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold text-zinc-400">Problems Solved</span>
-            <div className="p-2 bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 rounded-xl">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-slate-500 dark:text-zinc-400">Problems Solved</span>
+            <div className="p-2 bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200/80 dark:border-emerald-500/25 text-emerald-600 dark:text-emerald-400 rounded-xl">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl sm:text-3xl font-extrabold text-white font-mono">
+            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-mono">
               {problemsSolved}
             </span>
-            <span className="text-xs text-zinc-500 font-mono">/ {totalProblems}</span>
+            <span className="text-xs text-slate-400 dark:text-zinc-500 font-mono">/ {totalProblems}</span>
           </div>
           <div className="mt-2 text-xs text-slate-500 flex items-center justify-between">
-            <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden mr-2">
+            <div className="w-full bg-slate-100 dark:bg-white/10 h-1.5 rounded-full overflow-hidden mr-2">
               <div
                 className="bg-emerald-500 h-full rounded-full transition-all"
                 style={{ width: `${solvedPercent}%` }}
               />
             </div>
-            <span className="font-mono text-[11px] font-semibold text-zinc-400">{solvedPercent}%</span>
+            <span className="font-mono text-[11px] font-semibold text-slate-600 dark:text-zinc-400">{solvedPercent}%</span>
           </div>
         </div>
 
         {/* Current Streak */}
         <div
           onClick={() => navigate('/analytics')}
-          className="bg-[#121217] p-5 sm:p-6 rounded-3xl border border-white/12 shadow-[0_4px_20px_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.06)] hover:border-amber-400/50 card-hover cursor-pointer transition-all"
+          className="bg-white dark:bg-[#121217] p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-white/12 shadow-xs dark:shadow-[0_4px_20px_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.06)] hover:border-amber-400/50 card-hover cursor-pointer transition-all"
         >
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold text-zinc-400">Current Streak</span>
-            <div className="p-2 bg-amber-500/15 border border-amber-500/25 text-amber-400 rounded-xl">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-slate-500 dark:text-zinc-400">Current Streak</span>
+            <div className="p-2 bg-amber-50 dark:bg-amber-500/15 border border-amber-200/80 dark:border-amber-500/25 text-amber-600 dark:text-amber-400 rounded-xl">
               <Flame className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl sm:text-3xl font-extrabold text-white font-mono">
+            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-mono">
               {currentStreak}
             </span>
-            <span className="text-xs text-zinc-400 font-semibold">Days</span>
+            <span className="text-xs text-slate-500 dark:text-zinc-400 font-semibold">Days</span>
           </div>
           {currentStreak > 0 ? (
-            <div className="mt-2 text-xs text-amber-400 font-semibold flex items-center gap-1">
+            <div className="mt-2 text-xs text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
               <Flame className="w-3.5 h-3.5 fill-amber-500" />
               <span>Active learning streak 🔥</span>
             </div>
           ) : (
-            <div className="mt-2 text-xs text-zinc-500 font-medium flex items-center gap-1">
+            <div className="mt-2 text-xs text-slate-400 dark:text-zinc-500 font-medium flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" />
               <span>Start your streak today</span>
             </div>
@@ -319,22 +319,22 @@ export const StudentDashboard: React.FC = () => {
         {/* Rank */}
         <div
           onClick={() => navigate('/analytics')}
-          className="bg-[#121217] p-5 sm:p-6 rounded-3xl border border-white/12 shadow-[0_4px_20px_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.06)] hover:border-purple-400/50 card-hover cursor-pointer transition-all"
+          className="bg-white dark:bg-[#121217] p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-white/12 shadow-xs dark:shadow-[0_4px_20px_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.06)] hover:border-purple-400/50 card-hover cursor-pointer transition-all"
         >
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold text-zinc-400">Cohort Rank</span>
-            <div className="p-2 bg-purple-500/15 border border-purple-500/25 text-purple-400 rounded-xl">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-slate-500 dark:text-zinc-400">Cohort Rank</span>
+            <div className="p-2 bg-purple-50 dark:bg-purple-500/15 border border-purple-200/80 dark:border-purple-500/25 text-purple-600 dark:text-purple-400 rounded-xl">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl sm:text-3xl font-extrabold text-white font-mono">
+            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-mono">
               {studentProgress?.rankPercentile && studentProgress.rankPercentile !== 'N/A'
                 ? studentProgress.rankPercentile
                 : '—'}
             </span>
           </div>
-          <div className="mt-2 text-xs text-zinc-500 font-medium truncate">
+          <div className="mt-2 text-xs text-slate-400 dark:text-zinc-500 font-medium truncate">
             {studentProgress?.rankPercentile && studentProgress.rankPercentile !== 'N/A'
               ? 'Cohort percentile'
               : problemsSolved > 0
@@ -346,22 +346,22 @@ export const StudentDashboard: React.FC = () => {
 
       {/* AI Projected Score Action Card / First-Challenge Action Card */}
       {latestSubmission && projection && projection.improvementDelta > 0 ? (
-        <div className="p-6 rounded-3xl bg-[#121217] border border-purple-500/30 shadow-[0_4px_24px_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.06)] flex flex-col md:flex-row items-start md:items-center justify-between gap-4 hover:border-purple-500/50 transition-all">
+        <div className="p-6 rounded-3xl bg-white dark:bg-[#121217] border border-purple-200/90 dark:border-purple-500/30 shadow-xs dark:shadow-[0_4px_24px_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.06)] flex flex-col md:flex-row items-start md:items-center justify-between gap-4 hover:border-purple-500/50 transition-all">
           <div className="flex items-start gap-3.5">
             <div className="p-3 bg-purple-600 text-white rounded-2xl shadow-md shadow-purple-600/30 border border-purple-400/30">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-white">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                   Projected Score After Revision Available
                 </h3>
-                <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase bg-purple-500/15 border border-purple-500/30 text-purple-300 rounded-full">
+                <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase bg-purple-50 dark:bg-purple-500/15 border border-purple-200 dark:border-purple-500/30 text-purple-700 dark:text-purple-300 rounded-full">
                   +{projection.improvementDelta} pts Gain
                 </span>
               </div>
-              <p className="text-xs text-zinc-400 mt-1">
-                Applying AI recommendations on <strong className="text-zinc-200">{activeAssessment?.problemTitle || latestSubmission.problemTitle}</strong> can boost your score from <span className="font-mono font-bold text-white">{projection.currentScore}</span> to <span className="font-mono font-bold text-emerald-400">{projection.projectedScore}/100</span>.
+              <p className="text-xs text-slate-600 dark:text-zinc-400 mt-1">
+                Applying AI recommendations on <strong className="text-slate-900 dark:text-zinc-200">{activeAssessment?.problemTitle || latestSubmission.problemTitle}</strong> can boost your score from <span className="font-mono font-bold text-slate-900 dark:text-white">{projection.currentScore}</span> to <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{projection.projectedScore}/100</span>.
               </p>
             </div>
           </div>
@@ -375,21 +375,21 @@ export const StudentDashboard: React.FC = () => {
           </button>
         </div>
       ) : (
-        <div className="p-6 rounded-3xl bg-[#121217] border border-indigo-500/30 shadow-[0_4px_24px_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.06)] flex flex-col md:flex-row items-start md:items-center justify-between gap-4 hover:border-indigo-500/50 transition-all">
+        <div className="p-6 rounded-3xl bg-white dark:bg-[#121217] border border-indigo-200/90 dark:border-indigo-500/30 shadow-xs dark:shadow-[0_4px_24px_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.06)] flex flex-col md:flex-row items-start md:items-center justify-between gap-4 hover:border-indigo-500/50 transition-all">
           <div className="flex items-start gap-3.5">
             <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-md shadow-indigo-600/30 border border-indigo-400/30">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-white">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                   Interactive AI Code Evaluation Ready
                 </h3>
-                <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 rounded-full">
+                <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-200 dark:border-indigo-500/30 text-indigo-700 dark:text-indigo-300 rounded-full">
                   Sandbox Active
                 </span>
               </div>
-              <p className="text-xs text-zinc-400 mt-1">
+              <p className="text-xs text-slate-600 dark:text-zinc-400 mt-1">
                 Solve challenges in our sandbox to receive instant multi-agent grading on correctness, time/space complexity, and code quality.
               </p>
             </div>

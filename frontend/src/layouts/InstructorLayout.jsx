@@ -161,7 +161,7 @@ const InstructorLayout = () => {
               onClick={toggleTheme}
               title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
               aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
-              className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-all cursor-pointer"
+              className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
             >
               {resolvedTheme === 'dark' ? (
                 <Sun className="w-5 h-5 text-amber-400" />
