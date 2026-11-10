@@ -6,6 +6,8 @@ import {
   Search,
   UserPlus,
   UserRoundMinus,
+  Download,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
 import { Modal } from '../common/Modal';
@@ -46,6 +48,55 @@ type StudentHit = {
 type CourseJoinRequest = { id: number; student_id: string; student_name: string; course_id: number; course_code: string; course_title: string; status: string; requested_at: string };
 
 type Tab = 'students' | 'assignments' | 'requests';
+type CsvEnrollmentResult = { studentId: string; status: 'enrolled' | 'already_enrolled' | 'failed'; message?: string };
+
+const parseStudentIdCsv = (text: string): string[] => {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '"') {
+      if (quoted && text[index + 1] === '"') {
+        cell += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === ',' && !quoted) {
+      row.push(cell.trim());
+      cell = '';
+    } else if ((character === '\n' || character === '\r') && !quoted) {
+      if (character === '\r' && text[index + 1] === '\n') index += 1;
+      row.push(cell.trim());
+      if (row.some(Boolean)) rows.push(row);
+      row = [];
+      cell = '';
+    } else {
+      cell += character;
+    }
+  }
+
+  if (quoted) throw new Error('The CSV contains an unfinished quoted value.');
+  row.push(cell.trim());
+  if (row.some(Boolean)) rows.push(row);
+  if (rows.length < 2) throw new Error('Add a header and at least one student ID to the CSV.');
+
+  const headers = rows[0].map((header) => header.replace(/^\uFEFF/, '').trim().toLowerCase().replace(/[\s-]+/g, '_'));
+  const idIndex = headers.findIndex((header) => ['student_id', 'studentid', 'id', 'username'].includes(header));
+  if (idIndex < 0) throw new Error('The CSV must include a Student ID column. Download the template for the correct format.');
+
+  const uniqueIds = new Set<string>();
+  for (const dataRow of rows.slice(1)) {
+    const studentId = (dataRow[idIndex] || '').trim();
+    if (studentId) uniqueIds.add(studentId);
+  }
+  if (!uniqueIds.size) throw new Error('No student IDs were found in the CSV.');
+  if (uniqueIds.size > 500) throw new Error('Upload up to 500 unique student IDs at a time.');
+  return [...uniqueIds];
+};
 
 export const CourseDetailsView: React.FC = () => {
   const { courseId } = useParams();
@@ -83,9 +134,19 @@ export const CourseDetailsView: React.FC = () => {
   // Enroll an existing student account by its login/student ID.
   const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
   const [newStudentId, setNewStudentId] = useState('');
+  const [addStudentMode, setAddStudentMode] = useState<'single' | 'csv'>('single');
+  const [csvFileName, setCsvFileName] = useState('');
+  const [csvStudentIds, setCsvStudentIds] = useState<string[]>([]);
+  const [csvResults, setCsvResults] = useState<CsvEnrollmentResult[]>([]);
+  const [csvError, setCsvError] = useState('');
 
   const resetAddStudentForm = () => {
     setNewStudentId('');
+    setAddStudentMode('single');
+    setCsvFileName('');
+    setCsvStudentIds([]);
+    setCsvResults([]);
+    setCsvError('');
   };
 
   const openAddStudentModal = () => {
@@ -348,6 +409,68 @@ export const CourseDetailsView: React.FC = () => {
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleCsvFile = async (file?: File) => {
+    setCsvResults([]);
+    setCsvError('');
+    setCsvStudentIds([]);
+    setCsvFileName(file?.name || '');
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.csv') && file.type !== 'text/csv') {
+      setCsvError('Choose a .csv file.');
+      return;
+    }
+    try {
+      setCsvStudentIds(parseStudentIdCsv(await file.text()));
+    } catch (parseError) {
+      setCsvError(parseError instanceof Error ? parseError.message : 'The CSV file could not be read.');
+    }
+  };
+
+  const downloadCsvTemplate = () => {
+    const template = new Blob(['student_id\n'], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(template);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'student-enrollment-template.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const enrollStudentsFromCsv = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!courseId || !csvStudentIds.length) return;
+
+    setBusy(true);
+    setCsvError('');
+    const existingIds = new Set(students.map((student) => student.student_id.trim().toLowerCase()));
+    const results: CsvEnrollmentResult[] = [];
+    for (const studentId of csvStudentIds) {
+      if (existingIds.has(studentId.toLowerCase())) {
+        results.push({ studentId, status: 'already_enrolled', message: 'Already enrolled' });
+        continue;
+      }
+      try {
+        const response = await authFetch('/api/instructor/enrollments', {
+          method: 'POST',
+          body: JSON.stringify({ course_id: Number(courseId), student_id: studentId }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          results.push({ studentId, status: 'failed', message: body.detail || 'Could not enroll' });
+        } else {
+          existingIds.add(studentId.toLowerCase());
+          results.push({ studentId, status: 'enrolled' });
+        }
+      } catch {
+        results.push({ studentId, status: 'failed', message: 'Network error' });
+      }
+      setCsvResults([...results]);
+    }
+    setCsvResults(results);
+    if (results.some((result) => result.status === 'enrolled')) await loadCourseData();
+    setBusy(false);
   };
 
   // ---------------------------------------------------------
@@ -894,69 +1017,76 @@ export const CourseDetailsView: React.FC = () => {
             : 'Enroll a registered student account'
         }
       >
-        <form
-          onSubmit={enrollStudentById}
-          className="space-y-4"
-        >
-          {/* Student ID */}
-          <div>
-            <label
-              htmlFor="new-student-id"
-              className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-zinc-300"
-            >
-              Student ID
-            </label>
-
-            <input
-              id="new-student-id"
-              type="text"
-              value={newStudentId}
-              onChange={(e) =>
-                setNewStudentId(e.target.value)
-              }
-              placeholder="e.g. 22BD1A0501"
-              disabled={busy}
-              autoFocus
-              className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#16161d] text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 px-3.5 py-2.5 text-sm outline-none transition focus:border-emerald-500 focus:bg-white dark:focus:bg-[#16161d]"
-            />
-
-            <p className="mt-1 text-xs text-slate-400 dark:text-zinc-500">
-              Enter the Student ID used to sign in. Only active, registered student accounts can be enrolled.
-            </p>
-          </div>
-
-          {/* Information */}
-          <div className="rounded-xl border border-emerald-100 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-950/20 px-4 py-3">
-            <p className="text-xs leading-5 text-emerald-800 dark:text-emerald-300">
-              The student must register first. Once enrolled, this course appears in their My Courses section the next time they sign in or refresh it.
-            </p>
-          </div>
-
-          {/* Buttons */}
-          <div className="flex items-center justify-end gap-3 border-t border-slate-100 dark:border-white/10 pt-4">
-            <button
-              type="button"
-              onClick={closeAddStudentModal}
-              disabled={busy}
-              className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-50 cursor-pointer"
-            >
-              Cancel
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1 dark:bg-white/5" role="tablist" aria-label="Add students">
+            <button type="button" role="tab" aria-selected={addStudentMode === 'single'} onClick={() => setAddStudentMode('single')} disabled={busy} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${addStudentMode === 'single' ? 'bg-white text-slate-900 shadow-sm dark:bg-white/10 dark:text-white' : 'text-slate-500 dark:text-zinc-400'}`}>
+              Add one student
             </button>
-
-            <button
-              type="submit"
-              disabled={
-                busy ||
-                !newStudentId.trim()
-              }
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-emerald-600/20 transition-all hover:bg-emerald-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <UserPlus className="h-4 w-4" />
-
-              {busy ? 'Enrolling...' : 'Enroll Student'}
+            <button type="button" role="tab" aria-selected={addStudentMode === 'csv'} onClick={() => setAddStudentMode('csv')} disabled={busy} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${addStudentMode === 'csv' ? 'bg-white text-slate-900 shadow-sm dark:bg-white/10 dark:text-white' : 'text-slate-500 dark:text-zinc-400'}`}>
+              Upload CSV
             </button>
           </div>
-        </form>
+
+          {addStudentMode === 'single' ? (
+            <form onSubmit={enrollStudentById} className="space-y-4">
+              <div>
+                <label htmlFor="new-student-id" className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-zinc-300">Student ID</label>
+                <input id="new-student-id" type="text" value={newStudentId} onChange={(event) => setNewStudentId(event.target.value)} placeholder="e.g. 22BD1A0501" disabled={busy} autoFocus className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white dark:border-white/10 dark:bg-[#16161d] dark:text-zinc-100 dark:placeholder:text-zinc-500" />
+                <p className="mt-1 text-xs text-slate-400 dark:text-zinc-500">Enter the Student ID used to sign in. Only active, registered student accounts can be enrolled.</p>
+              </div>
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 dark:border-emerald-500/20 dark:bg-emerald-950/20">
+                <p className="text-xs leading-5 text-emerald-800 dark:text-emerald-300">The student must register first. Once enrolled, this course appears in their My Courses section the next time they sign in or refresh it.</p>
+              </div>
+              <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4 dark:border-white/10">
+                <button type="button" onClick={closeAddStudentModal} disabled={busy} className="cursor-pointer rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/10">Cancel</button>
+                <button type="submit" disabled={busy || !newStudentId.trim()} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-emerald-600/20 transition-all hover:bg-emerald-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50">
+                  <UserPlus className="h-4 w-4" />{busy ? 'Enrolling...' : 'Enroll Student'}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={enrollStudentsFromCsv} className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-zinc-100">Upload your class list</p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">Add one ID per row under <code>student_id</code>. Students need active registered accounts.</p>
+                  </div>
+                  <button type="button" onClick={downloadCsvTemplate} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:bg-white/10">
+                    <Download className="h-4 w-4" />Download template
+                  </button>
+                </div>
+                <label htmlFor="student-csv" className="mt-4 flex cursor-pointer flex-col items-center rounded-xl border-2 border-dashed border-slate-300 bg-white px-4 py-6 text-center hover:border-emerald-500 dark:border-white/15 dark:bg-[#16161d]">
+                  <FileSpreadsheet className="mb-2 h-5 w-5 text-emerald-600" />
+                  <span className="text-sm font-semibold text-slate-700 dark:text-zinc-200">{csvFileName || 'Choose a CSV file'}</span>
+                  <span className="mt-1 text-xs text-slate-400">Up to 500 unique student IDs</span>
+                  <input id="student-csv" type="file" accept=".csv,text/csv" disabled={busy} className="sr-only" onChange={(event) => void handleCsvFile(event.target.files?.[0])} />
+                </label>
+              </div>
+
+              {csvError && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-950/30 dark:text-rose-300">{csvError}</p>}
+              {csvStudentIds.length > 0 && csvResults.length === 0 && <p className="text-sm text-slate-600 dark:text-zinc-300">Ready to enroll <strong>{csvStudentIds.length}</strong> student{csvStudentIds.length === 1 ? '' : 's'} from this file.</p>}
+
+              {csvResults.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-slate-800 dark:text-zinc-100">
+                    {csvResults.filter((result) => result.status === 'enrolled').length} enrolled · {csvResults.filter((result) => result.status === 'already_enrolled').length} already enrolled · {csvResults.filter((result) => result.status === 'failed').length} failed
+                  </p>
+                  <ul className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 text-xs dark:border-white/10">
+                    {csvResults.map((result) => <li key={result.studentId} className="flex justify-between gap-3 py-1"><span className="font-mono text-slate-700 dark:text-zinc-200">{result.studentId}</span><span className={result.status === 'failed' ? 'text-rose-600 dark:text-rose-300' : result.status === 'enrolled' ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500'}>{result.message || (result.status === 'enrolled' ? 'Enrolled' : 'Already enrolled')}</span></li>)}
+                  </ul>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4 dark:border-white/10">
+                <button type="button" onClick={closeAddStudentModal} disabled={busy} className="cursor-pointer rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-white/10">{csvResults.length ? 'Done' : 'Cancel'}</button>
+                <button type="submit" disabled={busy || !csvStudentIds.length || csvResults.length > 0} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-emerald-600/20 transition-all hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  <FileSpreadsheet className="h-4 w-4" />{busy ? 'Enrolling students...' : 'Enroll all students'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
       </Modal>
     </main>
   );

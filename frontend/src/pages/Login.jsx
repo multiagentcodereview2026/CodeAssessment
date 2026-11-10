@@ -5,27 +5,6 @@ import { useTheme } from '../context/ThemeContext';
 import { SignInPage } from '@/components/ui/sign-in';
 import { Code2, Sun, Moon } from 'lucide-react';
 
-const codeVedhaTestimonials = [
-  {
-    avatarSrc: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=160&auto=format&fit=crop&q=80",
-    name: "Aarav Sharma",
-    handle: "@aarav_codes · Student",
-    text: "The instant complexity analysis and AST verification helped me optimize my graph traversal algorithms from O(2^N) to O(V+E)."
-  },
-  {
-    avatarSrc: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160&auto=format&fit=crop&q=80",
-    name: "Dr. K. Srinivas",
-    handle: "@prof_srinivas · Faculty",
-    text: "Kodacharya automated our weekly lab evaluations with explainable rubrics and pinpointed student misconceptions in real time."
-  },
-  {
-    avatarSrc: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160&auto=format&fit=crop&q=80",
-    name: "Meera Patel",
-    handle: "@meerap · Algo Scholar",
-    text: "The 10-agent multi-dimensional feedback gave me deeper insights on edge cases and memory safety than any traditional judge."
-  },
-];
-
 const Login = () => {
   const [role, setRole] = useState('student'); // 'student' | 'instructor'
   const [mode, setMode] = useState('login'); // 'login' | 'register'
@@ -194,7 +173,6 @@ const Login = () => {
       title={getTitle()}
       description={getDescription()}
       heroImageSrc="https://cdn.21st.dev/assets/mirror/ec/ecff1664e7fc3185d0e947571f984ea5fa3de9580fb0e73a03cd9c9b3461cb09.jpg"
-      testimonials={codeVedhaTestimonials}
       onSignIn={handleSignIn}
       onResetPassword={handleResetPassword}
       mode={mode}
