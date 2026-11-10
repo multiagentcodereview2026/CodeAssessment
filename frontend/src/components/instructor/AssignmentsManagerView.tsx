@@ -22,7 +22,7 @@ export const AssignmentsManagerView: React.FC = () => {
   const [dueDate, setDueDate] = useState('');
   const [revisionPolicy, setRevisionPolicy] = useState<'HINTS_ONLY' | 'EXPLAIN_CHANGES' | 'VERIFIED_REFERENCE' | 'GUIDED_STEPS'>('GUIDED_STEPS');
   const [selectedProblemIds, setSelectedProblemIds] = useState<string[]>([]);
-  const [problemWeights, setProblemWeights] = useState<Record<string, ScoringWeights>>({});
+  const [assignmentWeights, setAssignmentWeights] = useState<ScoringWeights>();
   const [problemOptions, setProblemOptions] = useState<ProblemOption[]>([]);
   const [problemsLoading, setProblemsLoading] = useState(true);
   const [problemLoadError, setProblemLoadError] = useState('');
@@ -67,7 +67,9 @@ export const AssignmentsManagerView: React.FC = () => {
       course: `${course.code} ${course.title}`,
       problemsCount: selectedProblemIds.length,
       problemIds: selectedProblemIds,
-      problemWeights: Object.fromEntries(Object.entries(problemWeights).filter(([id]) => selectedProblemIds.includes(id))),
+      problemWeights: assignmentWeights
+        ? Object.fromEntries(selectedProblemIds.map((id) => [id, assignmentWeights]))
+        : {},
       submittedCount: 0,
       totalCount: 0,
       avgScore: 0,
@@ -85,7 +87,7 @@ export const AssignmentsManagerView: React.FC = () => {
       setDueDate('');
       setRevisionPolicy('GUIDED_STEPS');
       setSelectedProblemIds([]);
-      setProblemWeights({});
+      setAssignmentWeights(undefined);
     } catch {
       // AppContext displays the API error and leaves the draft available to retry.
     } finally {
@@ -318,6 +320,13 @@ export const AssignmentsManagerView: React.FC = () => {
               <input type="datetime-local" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#16161d] text-slate-900 dark:text-zinc-100 px-3 py-2.5" />
             </label>
           </div>
+          <section className="space-y-2">
+            <div>
+              <h3 className="font-semibold text-slate-800 dark:text-zinc-100">Scoring weights <span className="font-normal text-slate-500 dark:text-zinc-400">· Optional</span></h3>
+              <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">Customize the rubric for every problem in this assignment. Leave it off to use the default weights.</p>
+            </div>
+            <ScoringWeightsEditor value={assignmentWeights} onChange={setAssignmentWeights} />
+          </section>
           <fieldset>
             <legend className="mb-2 font-semibold text-slate-700 dark:text-zinc-300">Problem Bank</legend>
             <div className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-[#16161d]/50 p-2">
@@ -335,7 +344,6 @@ export const AssignmentsManagerView: React.FC = () => {
               })}
             </div>
           </fieldset>
-          {selectedProblemIds.map((id) => <div key={id}><p className="mb-1 text-sm font-semibold text-slate-800 dark:text-zinc-200">{problemOptions.find((p) => p.id === id)?.title || id}</p><ScoringWeightsEditor value={problemWeights[id]} onChange={(weights) => setProblemWeights((current) => { const next = { ...current }; if (weights) next[id] = weights; else delete next[id]; return next; })} /></div>)}
           <footer className="flex justify-end gap-2 border-t border-slate-200 dark:border-white/10 pt-4">
             <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#121217] px-4 py-2 font-semibold text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer">Cancel</button>
             <button type="submit" disabled={saving || !courses.length || !selectedProblemIds.length || problemsLoading || Boolean(problemLoadError)} className="rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 font-semibold text-white disabled:opacity-50 cursor-pointer">{saving ? 'Saving…' : 'Publish assignment'}</button>
