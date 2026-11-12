@@ -4,7 +4,8 @@ services:
     environment:
       POSTGRES_USER: codeassessment
       POSTGRES_DB: codeassessment
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the root .env file}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-codeassessment_password}
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "work_mem=4MB", "-c", "max_connections=30"]
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -19,12 +20,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "8080:5173"
-    environment:
-      - VITE_API_PROXY_TARGET=http://backend:8000
+      - "${FRONTEND_HOST_PORT:-80}:80"
     depends_on:
       backend:
         condition: service_healthy
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -38,12 +39,15 @@ services:
         required: false
     environment:
       - DATABASE_URL=${DATABASE_URL:-}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the root .env file}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-codeassessment_password}
       - POSTGRES_USER=codeassessment
       - POSTGRES_DB=codeassessment
       - DOCKER_ENGINE_URL=http://execution-engine:8001/execute
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in the root .env file}
-      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173}
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-*}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-120b}
+      - DEBUG=${DEBUG:-false}
       - EXECUTION_CPU_LIMIT=1.0
       - EXECUTION_MEMORY_LIMIT=256m
       - EXECUTION_TIMEOUT_SECONDS=5
@@ -167,18 +171,11 @@ services:
       - EXECUTION_CPU_LIMIT=1.0
       - EXECUTION_MEMORY_LIMIT=256m
       - EXECUTION_TIMEOUT_SECONDS=5
-      # Submit runs can include 60–200 hidden cases. Eight isolated runners
-      # are allowed per submission; each runner still retains its own limits.
-      - EXECUTION_MAX_CONCURRENT_JOBS=8
+      # Limit concurrent runner jobs to 2 on Free Tier to avoid RAM starvation.
+      - EXECUTION_MAX_CONCURRENT_JOBS=${EXECUTION_MAX_CONCURRENT_JOBS:-2}
       - EXECUTION_DOCKER_SCHEDULING_GRACE_SECONDS=3
-      # This grace covers Docker Desktop's container creation only. The
-      # program itself is still stopped by its own 2-second judge limit.
       - EXECUTION_DOCKER_STARTUP_GRACE_SECONDS=20
-      # Off by default: when enabled for local diagnosis, public test-case
-      # stdin/stdout/stderr is logged while hidden case data stays redacted.
       - EXECUTION_DEBUG_LOGS=${EXECUTION_DEBUG_LOGS:-0}
-      # This must be the Docker daemon volume name (not Compose's YAML alias),
-      # because the engine invokes nested `docker run` commands via the socket.
       - SANDBOX_VOLUME=${EXECUTION_SANDBOX_VOLUME:-codeassessment_execution-work}
       - SANDBOX_WORKSPACE_ROOT=/sandbox
     volumes:
@@ -189,32 +186,33 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    restart: unless-stopped
 
   runner-python:
     build:
-      context: .
-      dockerfile: docker/python.Dockerfile
+      context: ./docker
+      dockerfile: python.Dockerfile
     image: codeassessment-python:latest
     profiles: ["tools"]
 
   runner-c:
     build:
-      context: .
-      dockerfile: docker/c.Dockerfile
+      context: ./docker
+      dockerfile: c.Dockerfile
     image: codeassessment-c:latest
     profiles: ["tools"]
 
   runner-cpp:
     build:
-      context: .
-      dockerfile: docker/cpp.Dockerfile
+      context: ./docker
+      dockerfile: cpp.Dockerfile
     image: codeassessment-cpp:latest
     profiles: ["tools"]
 
   runner-java:
     build:
-      context: .
-      dockerfile: docker/java.Dockerfile
+      context: ./docker
+      dockerfile: java.Dockerfile
     image: codeassessment-java:latest
     profiles: ["tools"]
 
