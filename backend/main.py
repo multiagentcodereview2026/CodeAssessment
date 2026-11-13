@@ -28,7 +28,7 @@ from similarity_clustering import build_approach_groups, build_similarity_cluste
 from recommendation_engine import build_recommendations, build_roadmap, normalize_topics
 
 import models
-from revision_jobs import day_start, failure_policy, safe_unverified_guide, utcnow, remember_supported_guide, retained_revision_guide, guide_request_limit_reason
+from revision_jobs import day_start, failure_policy, safe_unverified_guide, utcnow, remember_supported_guide, retained_revision_guide, guide_request_limit_reason, projection_attempt_limit_message
 from auth import (
     create_access_token,
     get_current_user,
@@ -537,11 +537,14 @@ def redact_hidden_execution(execution_result, *, student_view=False):
     return safe_result
 
 
-def public_guided_revision(revision):
+def public_guided_revision(revision, attempt_history=None):
     """A failed projection must not hide a valid standalone revision guide."""
     if not isinstance(revision, dict) or revision.get("revision_policy") != "GUIDED_STEPS":
         return None
     projection = dict(revision.get("score_projection") or {})
+    if projection.get("status") == "attempt_limit" and attempt_history:
+        projection["message"] = projection_attempt_limit_message(attempt_history, projection.get("attempts") or 2)
+        revision = {**revision, "score_projection": projection}
     if (projection.get("failure_type") == "component_regression" and not projection.get("pending")
             and int((projection.get("release_policy") or {}).get("version") or 0) < RELEASE_POLICY_VERSION
             and settings.SCORE_PROJECTION_STYLE_TOLERANCE > 0):
@@ -574,11 +577,11 @@ def public_guided_revision(revision):
     }
 
 
-def revision_job_response(revision):
+def revision_job_response(revision, attempt_history=None):
     projection = (revision or {}).get("score_projection") or {}
     return {"job_id": (revision or {}).get("projection_request_id"),
             "status": projection.get("job_status", "unavailable"),
-            "improved_code": public_guided_revision(revision)}
+            "improved_code": public_guided_revision(revision, attempt_history)}
 
 
 def revision_prompt_feedback(submission):
@@ -608,7 +611,8 @@ def student_submission_details(submission):
         payload["improved_code"] = None
         payload["projected_score"] = None
     else:
-        payload["improved_code"] = public_guided_revision(revision)
+        payload["improved_code"] = public_guided_revision(
+            revision, (submission.private_projection or {}).get("attempt_history"))
         if isinstance(payload["improved_code"], dict):
             payload["projected_score"] = payload["improved_code"].get("score_projection")
     return SubmissionDetails(**payload)
@@ -1048,7 +1052,7 @@ async def _verify_projection_job(submission_id: str, stage: str) -> None:
                         if error == "invalid_response":
                             failure_kind = "precheck_failed"
                             history.append({"attempt": attempt_number, "failure": "response_schema_invalid"})
-                            checked_guide["last_candidate_result"] = {"reason": "The combined JSON response did not match the required schema. Correct the structured response."}
+                            checked_guide["last_candidate_result"] = {"reason": "Return the required guide, source_hash and patches JSON structure.", "errors": ["response_schema_invalid"]}
                         public_projection = (projection_pending(current_score) if retry_projection else
                             projection_unavailable(current_score, "AI generation failed. No repeated requests were made; retry after the provider issue is resolved."))
                         if error == "rate_limit" and policy == "cooldown":
@@ -1221,7 +1225,7 @@ async def _verify_projection_job(submission_id: str, stage: str) -> None:
                     checked_guide["last_candidate_result"] = {
                         "projected_score": projection.get("projected_score"),
                         "stage_components": projection.get("stage_components"),
-                        "reason": "This stage did not produce a verified score increase. Choose another focused improvement supported by the source and rubric.",
+                        "reason": "Choose a different improvement within the same stage. If a measured gain was too small, avoid constant-factor changes that leave the weighted complexity unchanged.",
                         "gate_failure": decision,
                     }
                     public_projection = projection_pending(current_score)
@@ -1268,16 +1272,10 @@ async def _verify_projection_job(submission_id: str, stage: str) -> None:
             checked_guide = retained_revision_guide(checked_guide, last_valid_guide)
         revision.update({key: value for key, value in checked_guide.items()
                          if key not in {"score_projection", "projection_request_id"}})
-        if retry_projection and attempt_number >= total_limit:
+        if attempt_number >= total_limit and public_projection.get("job_status") != "passed" and (retry_projection or failure_kind in {"precheck_failed", "no_improvement"}):
             retry_projection = False
-            reason = {"precheck_failed": "The candidate edits failed local validation.",
-                "alignment_failed": "The private candidate did not match the guided step.",
-                "component_regression": "A component decreased beyond the permitted tolerance.",
-                "no_improvement": "The tested candidate did not meet the minimum overall score gain.",
-                "complexity_claim_unconfirmed": "The measured complexity did not support the claimed improvement."}.get(failure_kind,
-                    "The candidate could not be verified.")
             public_projection = {**projection_unavailable(submission.overall_score,
-                "Verification stopped after two attempts. " + reason + " Your valid revision guidance remains available."),
+                projection_attempt_limit_message(history, attempt_number)),
                 "retry_allowed": False, "status": "attempt_limit"}
             _projection_retry_counts.pop(submission_id, None)
         if public_projection.get("job_status") != "passed" and safe_unverified_guide(checked_guide):
@@ -2689,7 +2687,10 @@ def get_revision_job(submission_id: str, job_id: str, db: Session = Depends(get_
     revision = job.revision_snapshot if job and job.submission_id == submission_id and job.student_id == student.student_id else (submission.improved_code if submission else None)
     if not isinstance(revision, dict) or revision.get("projection_request_id") != job_id:
         raise HTTPException(status_code=404, detail="Revision job not found")
-    return revision_job_response(revision)
+    history = ((job.private_snapshot or {}).get("attempt_history")
+               if job and revision is job.revision_snapshot
+               else (submission.private_projection or {}).get("attempt_history"))
+    return revision_job_response(revision, history)
 
 
 @app.post("/api/submissions/{submission_id}/revision/jobs/{job_id}/cancel")

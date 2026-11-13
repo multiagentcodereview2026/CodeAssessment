@@ -53,6 +53,25 @@ def retained_revision_guide(current, previous):
     return current
 
 
+def projection_attempt_limit_message(history, attempts):
+    """Summarize saved failures without exposing candidate code or scores."""
+    labels = {
+        "no_improvement": "No qualifying score gain was measured.",
+        "invalid_response": "The AI response did not match the required format.",
+        "response_schema_invalid": "The AI response did not match the required format.",
+        "precheck_failed": "The candidate edits failed local validation.",
+        "alignment_failed": "The candidate did not match the guided step.",
+        "correctness_not_complete": "The candidate did not pass test verification.",
+        "component_regression": "A score component decreased beyond the allowed tolerance.",
+        "complexity_claim_unconfirmed": "The claimed complexity improvement could not be confirmed.",
+    }
+    reasons = list(dict.fromkeys(labels[item["failure"]] for item in history if item.get("failure") in labels))
+    if not reasons:
+        reasons = ["The candidate could not be verified."]
+    unit = "attempt" if attempts == 1 else "attempts"
+    return f"Verification stopped after {attempts} {unit}. " + " ".join(reasons)
+
+
 def projection_retry_delay(projection, now=None):
     """Do not wake before the persisted deadline and silently lose the retry."""
     now = now or datetime.now(timezone.utc)

@@ -38,6 +38,12 @@ algorithm. Never remove a read because it looks redundant or unused.
 Analyze core work and auxiliary space only; exclude supplied input and required
 output storage. Parsing cleanup cannot earn algorithm-complexity gains.
 Do not promise a score increase for a constant-factor memory improvement.
+All guide.steps must use one area. Use correctness for FOUNDATION, ALGORITHM,
+and STRUCTURE; time for OPTIMIZE_MANUAL_WORK, OPTIMIZE_LOCAL, and
+OPTIMIZE_DATA_STRUCTURE; space for OPTIMIZE_SPACE.
+On retry, use previous_candidate_result to correct the specific failure.
+For a low measured gain, choose a different supported change in the same area.
+If no such change is supported, return the empty result described below.
 Never invent scores. The backend compiles, tests and scores the assembled code.
 If no supported change exists, use empty patches, empty guide.steps and
 guided_steps, and explain the limitation. Do not fabricate a target or action.

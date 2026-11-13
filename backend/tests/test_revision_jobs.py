@@ -13,6 +13,25 @@ from database import Base
 from scoring.rubric import student_rubric_score
 
 
+def test_saved_projection_reports_low_gain_and_invalid_response_without_scores():
+    revision = {
+        "revision_policy": "GUIDED_STEPS",
+        "score_projection": {"status": "attempt_limit", "job_status": "failed",
+                             "attempts": 2, "message": "Old generic warning"},
+    }
+    history = [
+        {"failure": "no_improvement", "candidate_score": 82.7},
+        {"failure": "invalid_response"},
+        {"failure": "response_schema_invalid"},
+    ]
+    message = app.revision_job_response(revision, history)["improved_code"]["score_projection"]["message"]
+    assert message == (
+        "Verification stopped after 2 attempts. No qualifying score gain was measured. "
+        "The AI response did not match the required format."
+    )
+    assert revision["score_projection"]["message"] == "Old generic warning"
+
+
 @pytest.fixture
 def db_session():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
