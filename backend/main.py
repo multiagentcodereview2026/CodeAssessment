@@ -1,7 +1,7 @@
 import asyncio
 import copy
 from collections import Counter
-from math import sqrt
+from math import sqrt, floor
 import re
 from itertools import combinations
 import hashlib
@@ -616,6 +616,8 @@ def student_submission_details(submission):
         payload["improved_code"] = None
         payload["projected_score"] = None
     else:
+        if isinstance(revision, dict) and "evidence_links" in revision:
+            revision = {**revision, "evidence_links": guided_revision_evidence_links(submission)}
         payload["improved_code"] = public_guided_revision(
             revision, (submission.private_projection or {}).get("attempt_history"))
         if isinstance(payload["improved_code"], dict):
@@ -1614,14 +1616,14 @@ def guided_revision_evidence_links(submission: models.Submission) -> list[str]:
     style_component = breakdown.get("style") or {}
     try:
         time_max = float(time_component["weight"]) * 100
-        time_mark = round(float(time_component["weighted"]), 1)
+        time_mark = floor(float(time_component["weighted"]) * 10 + 0.5) / 10
         links.append(f"Time complexity: {time or 'recorded analysis'} earned {time_mark}/{time_max:g}.")
     except (KeyError, TypeError, ValueError, ZeroDivisionError):
         if time:
             links.append(f"Time complexity evidence: {time}.")
     try:
         style_max = float(style_component["weight"]) * 100
-        style_mark = round(float(style_component["weighted"]), 1)
+        style_mark = floor(float(style_component["weighted"]) * 10 + 0.5) / 10
         if style_mark < style_max:
             links.append(f"Style evidence: earned {style_mark}/{style_max:g}.")
     except (KeyError, TypeError, ValueError):
@@ -2695,6 +2697,8 @@ def get_revision_job(submission_id: str, job_id: str, db: Session = Depends(get_
     history = ((job.private_snapshot or {}).get("attempt_history")
                if job and revision is job.revision_snapshot
                else (submission.private_projection or {}).get("attempt_history"))
+    if "evidence_links" in revision:
+        revision = {**revision, "evidence_links": guided_revision_evidence_links(submission)}
     return revision_job_response(revision, history)
 
 

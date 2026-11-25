@@ -47,6 +47,16 @@ def test_recovered_format_error_does_not_mask_final_no_gain(monkeypatch):
     assert public["score_projection"]["projected_score"] is None
 
 
+def test_guidance_evidence_uses_same_display_rounding_as_report():
+    from types import SimpleNamespace
+    evidence = app.guided_revision_evidence_links(SimpleNamespace(
+        complexity_details={"time_complexity": "O(n)"}, feedback={},
+        score_breakdown={"time": {"weight": 0.35, "weighted": 26.25},
+                         "style": {"weight": 0.1, "weighted": 9.65}},
+    ))
+    assert evidence == ["Time complexity: O(n) earned 26.3/35.", "Style evidence: earned 9.7/10."]
+
+
 @pytest.fixture
 def db_session():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
