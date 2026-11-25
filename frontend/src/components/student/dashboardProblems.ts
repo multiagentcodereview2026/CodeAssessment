@@ -1,11 +1,10 @@
 import type { Problem } from '../../types';
+import { deadlineTime } from '../../lib/assignmentStatus';
+export { deadlineTime } from '../../lib/assignmentStatus';
 
 type Course = { id: number; course_code: string };
 type Assignment = { id: number; course_id: number; status: string; due_date: string | null; problems: string[]; problem_titles: string[] };
 type CatalogueProblem = { id: string; title: string; difficulty: string; topic_tags?: string[]; category?: string };
-
-// Assignment timestamps from older API versions are UTC even without a suffix.
-export const deadlineTime = (value: string) => Date.parse(/[zZ]$|[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`);
 
 export function dashboardProblems(courses: Course[], assignments: Assignment[], catalogue: CatalogueProblem[], now = Date.now()): Problem[] {
   const problem = (id: string, title: string, record?: CatalogueProblem): Problem => ({

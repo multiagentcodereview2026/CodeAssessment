@@ -29,7 +29,7 @@ export const InstructorDashboard: React.FC = () => {
     similarityAlerts
   } = useApp();
 
-  const urgentAssignment = [...assignments].sort((a, b) => {
+  const urgentAssignment = assignments.filter(assignment => assignment.status === 'Active').sort((a, b) => {
     const aRatio = a.totalCount ? a.submittedCount / a.totalCount : 1;
     const bRatio = b.totalCount ? b.submittedCount / b.totalCount : 1;
     return aRatio - bRatio;
@@ -281,7 +281,7 @@ export const InstructorDashboard: React.FC = () => {
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Active Course Problems</h3>
+                <h3 className="text-base font-bold text-slate-900">Course Problems</h3>
                 <p className="text-xs text-slate-400 mt-0.5">Real-time submission & grading progress</p>
               </div>
               <button

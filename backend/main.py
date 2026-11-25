@@ -3225,7 +3225,7 @@ def get_instructor_overview(
     latest = latest_assessed_attempts(relevant_submissions)
     class_avg_score = average_score(latest)
     scores = [submission.overall_score for submission in latest if submission.overall_score is not None]
-    active_assignments = sum(assignment.status == "ACTIVE" for assignment in assignments)
+    active_assignments = sum(not assignment_is_closed(assignment) for assignment in assignments)
 
     student_list = []
     for student_id in unique_student_ids:

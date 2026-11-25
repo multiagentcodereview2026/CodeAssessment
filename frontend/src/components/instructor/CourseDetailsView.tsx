@@ -10,6 +10,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
+import { assignmentDisplayStatus } from '../../lib/assignmentStatus';
 import { Modal } from '../common/Modal';
 import { DoubleConfirmDialog } from '../common/DoubleConfirmDialog';
 
@@ -865,7 +866,7 @@ export const CourseDetailsView: React.FC = () => {
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                     {assignment.problem_titles.join(' · ') ||
                       'No problems attached'}{' '}
-                    · {assignment.status}
+                    · {assignmentDisplayStatus(assignment.status, assignment.due_date)}
                   </p>
                 </div>
 

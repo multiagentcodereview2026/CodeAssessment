@@ -4,6 +4,7 @@ import { createServer } from 'vite';
 
 const server = await createServer({ configFile: false, server: { middlewareMode: true }, appType: 'custom' });
 const { dashboardProblems, dashboardProblemUrl, deadlineTime } = await server.ssrLoadModule('/src/components/student/dashboardProblems.ts');
+const { assignmentDisplayStatus } = await server.ssrLoadModule('/src/lib/assignmentStatus.ts');
 after(() => server.close());
 const courses = [{ id: 1, course_code: 'REAL101' }];
 const catalogue = [{ id: 'leetcode-7', title: 'Reverse Integer', difficulty: 'Medium', category: 'Math' }];
@@ -40,4 +41,12 @@ test('private course questions work without appearing in the public catalogue', 
 test('legacy UTC deadlines and explicit offsets are interpreted consistently', () => {
   assert.equal(deadlineTime('2026-11-25T00:00:00'), now);
   assert.equal(deadlineTime('2026-11-25T05:30:00+05:30'), now);
+});
+
+test('instructor and student deadline displays agree at the closing boundary', () => {
+  assert.equal(assignmentDisplayStatus('ACTIVE', '2026-11-25T00:00:00', now), 'Closed');
+  assert.equal(assignmentDisplayStatus('ACTIVE', '2026-11-25T05:30:00+05:30', now - 1), 'Active');
+  assert.equal(assignmentDisplayStatus('ACTIVE', null, now), 'Active');
+  assert.equal(assignmentDisplayStatus('CLOSED', null, now), 'Closed');
+  assert.equal(assignmentDisplayStatus('UPCOMING', null, now), 'Upcoming');
 });

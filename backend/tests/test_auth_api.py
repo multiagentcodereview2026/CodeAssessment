@@ -705,6 +705,24 @@ def test_assignment_create_persists_ordered_links_and_rejects_partial_invalid_cr
     assert [(link.position, link.problem_id) for link in links] == [(1, "p-2"), (2, "p-1")]
 
 
+def test_instructor_active_assignment_count_uses_submission_deadline_rule(db_session):
+    teacher = add_account(db_session, username="deadline-count", role="instructor", password="test-password-123").instructor_profile
+    course = models.Course(course_code="DEADLINE", title="Deadlines", instructor_id=teacher.id)
+    db_session.add(course)
+    db_session.flush()
+    now = datetime.now(timezone.utc)
+    db_session.add_all([
+        models.Assignment(title="Expired", course_id=course.id, status="ACTIVE", due_date=now - timedelta(seconds=1)),
+        models.Assignment(title="Future", course_id=course.id, status="ACTIVE", due_date=now + timedelta(days=1)),
+        models.Assignment(title="No deadline", course_id=course.id, status="ACTIVE"),
+        models.Assignment(title="Upcoming", course_id=course.id, status="UPCOMING"),
+        models.Assignment(title="Closed", course_id=course.id, status="CLOSED"),
+    ])
+    db_session.commit()
+    assert get_instructor_overview(db_session, teacher)["active_assignments"] == 2
+    assert db_session.query(models.Assignment).filter_by(title="Expired").one().status == "ACTIVE"
+
+
 def test_student_problem_response_keeps_private_targets_private(db_session):
     problem = models.Problem(id="private-targets", title="Private targets", description="Test", examples=[], constraints=[], starter_codes={}, test_cases=[], is_public_practice=True, target_time_complexity="O(n)", target_space_complexity="O(1)")
     db_session.add(problem)

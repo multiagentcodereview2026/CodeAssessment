@@ -19,6 +19,7 @@ import {
 } from '../mock/data';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 import { useAuth } from './useAuth';
+import { assignmentDisplayStatus } from '../lib/assignmentStatus';
 
 // Bump this whenever the server-side practice corpus changes. Problem metadata
 // may be invalidated, but editor drafts must remain independent of catalogue
@@ -236,7 +237,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 totalCount: Number(assignment.total_students ?? 0),
                 avgScore: assignment.avg_score == null ? null : Number(assignment.avg_score),
                 dueDate: assignment.due_date || '',
-                status: assignment.status === 'ACTIVE' ? 'Active' : assignment.status === 'UPCOMING' ? 'Upcoming' : 'Closed'
+                status: assignmentDisplayStatus(assignment.status, assignment.due_date)
                 ,revisionPolicy: assignment.revision_policy || 'GUIDED_STEPS'
               })));
             }
