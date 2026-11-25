@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { StatusBadge } from '../common/Badge';
+import { useDashboardProblems } from './useDashboardProblems';
+import { dashboardProblemUrl, deadlineTime } from './dashboardProblems';
 
 export const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -25,7 +27,6 @@ export const StudentDashboard: React.FC = () => {
     currentUser,
     studentProgress,
     submissions,
-    problems,
     activeAssessment,
     announcements,
     dismissAnnouncement,
@@ -33,6 +34,7 @@ export const StudentDashboard: React.FC = () => {
     openAssessmentResult
   } = useApp();
 
+  const { problems, loading: problemsLoading, error: problemsError } = useDashboardProblems();
   const assignedProblems = problems.filter((problem) => problem.isInstructorAssigned);
   const activeProblem = assignedProblems[0] || problems[0] || null;
   const latestSubmission = submissions[0];
@@ -55,11 +57,16 @@ export const StudentDashboard: React.FC = () => {
 
   const displayName = currentUser?.name?.trim() || 'Student';
 
-  const handleResumeChallenge = (probId?: string) => {
+  const handleResumeChallenge = (probId?: string, assignmentId?: number) => {
     const targetId = probId || activeProblem?.id;
     if (targetId) {
       openProblemWorkspace(targetId);
-      navigate(`/problems/${encodeURIComponent(targetId)}`);
+      const problem = problems.find(item => item.id === targetId && (assignmentId != null ? item.assignmentId === assignmentId : item === activeProblem)) || problems.find(item => item.id === targetId);
+      if (problem?.dueDate && deadlineTime(problem.dueDate) <= Date.now()) {
+        navigate('/courses');
+      } else {
+        navigate(problem ? dashboardProblemUrl(problem) : `/problems/${encodeURIComponent(targetId)}`);
+      }
     } else {
       navigate('/problems');
     }
@@ -93,7 +100,7 @@ export const StudentDashboard: React.FC = () => {
         <div className="flex items-center gap-3 relative z-10">
           {activeProblem ? (
             <button
-              onClick={() => handleResumeChallenge(activeProblem.id)}
+              onClick={() => handleResumeChallenge(activeProblem.id, activeProblem.assignmentId)}
               className="px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer ring-1 ring-white/20"
             >
               <Zap className="w-4 h-4 text-amber-300" />
@@ -164,7 +171,7 @@ export const StudentDashboard: React.FC = () => {
       {/* Personalized Learning Path: 1. CONTINUE / 2. REVISE / 3. PRACTICE */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <button
-          onClick={() => handleResumeChallenge(activeProblem?.id)}
+          onClick={() => handleResumeChallenge(activeProblem?.id, activeProblem?.assignmentId)}
           className="text-left bg-white dark:bg-gradient-to-b dark:from-[#131420] dark:to-[#0e0f18] rounded-2xl border border-indigo-200/90 dark:border-indigo-500/35 hover:border-indigo-400 p-5 shadow-xs dark:shadow-sm hover:shadow-lg hover:shadow-indigo-500/10 transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between">
@@ -178,7 +185,7 @@ export const StudentDashboard: React.FC = () => {
           </h3>
           <p className="mt-1 text-xs text-slate-600 dark:text-zinc-400 leading-relaxed line-clamp-2">
             {activeProblem
-              ? `Target ${activeProblem.optimalComplexity?.time && activeProblem.optimalComplexity.time !== '—' ? activeProblem.optimalComplexity.time : 'optimal'} time and ${activeProblem.optimalComplexity?.space && activeProblem.optimalComplexity.space !== '—' ? activeProblem.optimalComplexity.space : 'optimal'} space.`
+              ? (activeProblem.assignmentId != null ? 'Continue your assigned coursework before its deadline.' : 'Write your solution and run the public examples.')
               : 'Choose a problem from the algorithmic repository to start your session.'}
           </p>
         </button>
@@ -198,7 +205,7 @@ export const StudentDashboard: React.FC = () => {
           </h3>
           <p className="mt-1 text-xs text-slate-600 dark:text-zinc-400 leading-relaxed line-clamp-2">
             {latestSubmission
-              ? `Review your recent score (${latestSubmission.score}/100) and inspect AI revision feedback.`
+              ? (latestSubmission.score == null ? 'Your latest assessment is pending. Open its report for status.' : `Review your recent score (${latestSubmission.score}/100) and inspect AI revision feedback.`)
               : 'Submit your first challenge to unlock AI rubric feedback and score boost recommendations.'}
           </p>
         </button>
@@ -396,7 +403,7 @@ export const StudentDashboard: React.FC = () => {
           </div>
 
           <button
-            onClick={() => handleResumeChallenge(activeProblem?.id)}
+            onClick={() => handleResumeChallenge(activeProblem?.id, activeProblem?.assignmentId)}
             className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-2xl shadow-md shadow-indigo-600/30 transition-all flex items-center gap-2 flex-shrink-0 cursor-pointer active:scale-95"
           >
             <span>Start Practice</span>
@@ -547,18 +554,20 @@ export const StudentDashboard: React.FC = () => {
             </p>
           </div>
           <button
-            onClick={() => navigate('/problems')}
+            onClick={() => navigate(assignedProblems.length > 0 ? '/courses' : '/problems')}
             className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
           >
-            See All Problems ({problems.length})
+            {assignedProblems.length > 0 ? 'View My Courses' : 'View Problem Bank'}
           </button>
         </div>
 
+        {problemsLoading && <p role="status" className="text-sm text-slate-500">Loading your assignments and practice problems…</p>}
+        {problemsError && <p role="alert" className="text-sm text-rose-600">{problemsError}</p>}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {(assignedProblems.length > 0 ? assignedProblems : problems).slice(0, 3).map((prob) => (
             <div
-              key={prob.id}
-              onClick={() => handleResumeChallenge(prob.id)}
+              key={`${prob.assignmentId ?? "practice"}-${prob.id}`}
+              onClick={() => handleResumeChallenge(prob.id, prob.assignmentId)}
               className="p-5 rounded-2xl border border-slate-200 dark:border-white/10 hover:border-indigo-400 dark:hover:border-indigo-500/60 hover:shadow-md card-hover transition-all cursor-pointer bg-slate-50/50 dark:bg-[#16161d] hover:bg-white dark:hover:bg-[#1b1b24] flex flex-col justify-between group"
             >
               <div>
@@ -578,7 +587,7 @@ export const StudentDashboard: React.FC = () => {
                   )}
                   {assignedProblems.length > 0 && prob.dueDate ? (
                     <span className="text-[11px] text-slate-400 dark:text-zinc-500 font-mono">
-                      Due: {prob.dueDate}
+                      Due: {new Date(deadlineTime(prob.dueDate)).toLocaleString()}
                     </span>
                   ) : (
                     <span className="text-[11px] text-slate-400 dark:text-zinc-500 font-mono">
@@ -598,7 +607,7 @@ export const StudentDashboard: React.FC = () => {
                 </div>
                 <div className="mt-3 flex items-center gap-2 text-[11px] font-mono text-slate-500 dark:text-zinc-400">
                   <Clock className="w-3 h-3" />
-                  <span>Opt: {prob.optimalComplexity?.time && prob.optimalComplexity.time !== '—' ? prob.optimalComplexity.time : 'O(N)'} / {prob.optimalComplexity?.space && prob.optimalComplexity.space !== '—' ? prob.optimalComplexity.space : 'O(1)'}</span>
+                  <span>Complexity assessed after submission</span>
                 </div>
               </div>
 

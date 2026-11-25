@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BookOpen, Calendar, ChevronRight } from 'lucide-react';
+import { deadlineTime } from './dashboardProblems';
 import { useAuth } from '../../context/useAuth';
 import { DoubleConfirmDialog } from '../common/DoubleConfirmDialog';
 
@@ -27,6 +28,8 @@ export const MyCoursesView: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
+    setCoursesLoading(true);
+    setError('');
     Promise.all([
       authFetch('/api/student/courses', { cache: 'no-store' }),
       authFetch('/api/submissions', { cache: 'no-store' }),
@@ -37,7 +40,7 @@ export const MyCoursesView: React.FC = () => {
       if (cancelled) return;
       const nextCourses = Array.isArray(courseData) ? courseData : [];
       setCourses(nextCourses);
-      setSelectedCourseId(nextCourses[0]?.id ?? null);
+      setSelectedCourseId(previous => nextCourses.some((course: Course) => course.id === previous) ? previous : nextCourses[0]?.id ?? null);
       setSubmissions(Array.isArray(submissionData) ? submissionData : []);
       setAvailableCourses(Array.isArray(availableData) ? availableData : []);
     }).catch((loadError: unknown) => {
@@ -91,6 +94,7 @@ export const MyCoursesView: React.FC = () => {
       return;
     }
     let cancelled = false;
+    setAssignments([]);
     setAssignmentsLoading(true);
     authFetch(`/api/student/courses/${selectedCourseId}/assignments`, { cache: 'no-store' })
       .then(async (response) => {
@@ -145,7 +149,7 @@ export const MyCoursesView: React.FC = () => {
           </p>
         </div>
 
-        {availableCourses.length === 0 ? (
+        {coursesLoading ? <p role="status" className="text-sm text-slate-500">Loading available courses…</p> : availableCourses.filter(course => course.enrollment_status !== 'ENROLLED').length === 0 ? (
           <p className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#121217] p-5 text-sm text-slate-500 dark:text-zinc-400">
             No active courses are available to request right now.
           </p>
@@ -228,7 +232,7 @@ export const MyCoursesView: React.FC = () => {
               return (
                 <button
                   key={course.id}
-                  onClick={() => setSelectedCourseId(course.id)}
+                  onClick={() => { if (course.id !== selectedCourseId) { setAssignments([]); setAssignmentsLoading(true); setSelectedCourseId(course.id); } }}
                   className={`w-full rounded-2xl border p-4 text-left transition-all cursor-pointer ${
                     isSelected
                       ? 'border-indigo-500/60 bg-indigo-50 dark:bg-indigo-950/20 shadow-sm ring-1 ring-indigo-500/40'
@@ -324,9 +328,9 @@ export const MyCoursesView: React.FC = () => {
                         <div className="text-left text-xs text-slate-500 dark:text-zinc-400 sm:text-right shrink-0">
                           <span className="inline-flex items-center gap-1 font-semibold text-slate-700 dark:text-zinc-300">
                             <Calendar className="h-3.5 w-3.5 text-indigo-400" />
-                            {assignment.due_date ? new Date(assignment.due_date).toLocaleString() : 'No due date'}
+                            {assignment.due_date ? new Date(deadlineTime(assignment.due_date)).toLocaleString() : 'No due date'}
                           </span>
-                          {(assignment.status === 'CLOSED' || (assignment.due_date && Date.now() >= Date.parse(assignment.due_date))) && (
+                          {(assignment.status === 'CLOSED' || (assignment.due_date && Date.now() >= deadlineTime(assignment.due_date))) && (
                             <p className="font-bold text-amber-400 mt-0.5">Closed · View only</p>
                           )}
                           <p className="mt-1 text-slate-500 dark:text-zinc-400">
