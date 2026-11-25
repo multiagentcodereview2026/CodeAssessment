@@ -58,6 +58,14 @@ test('attempt limit removes retry controls', () => {
   assert.match(html, /Verification stopped after two unsuccessful attempts/);
   assert.doesNotMatch(html, /<button|animate-spin/);
 });
+
+test('assessed candidates with no qualifying gain are distinct from service failures', () => {
+  const html = render({ available: false, verified: false, job_status: 'no_improvement',
+    retry_allowed: false, message: 'No qualifying score gain was measured.' });
+  assert.match(html, /No qualifying score gain/);
+  assert.match(html, /projection-neutral/);
+  assert.doesNotMatch(html, /Score projection unavailable|Verified|\/100|<button/);
+});
 test('paused polling offers checking status instead of creating another candidate', () => {
   const html = render({ pending: true }, { paused: true });
   assert.match(html, /Automatic checking paused/);

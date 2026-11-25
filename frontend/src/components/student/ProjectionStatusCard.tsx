@@ -31,9 +31,10 @@ export const ProjectionStatusCard: React.FC<Props> = ({ projection, slow, paused
   const pending = projection.pending === true;
   const measured = projection.available === true && projection.verified === true && number(projection.projected_score) != null;
   const noGain = projection.verified === true && (projection.status === 'no_gain' || number(projection.expected_improvement) === 0 || projection.available === false);
+  const noQualifyingGain = !pending && !measured && projection.job_status === 'no_improvement';
   const message = text(projection.message);
   if (!pending && !measured && !noGain && !message) return null;
-  const theme = pending ? 'projection-pending' : measured && !noGain ? 'projection-measured' : noGain ? 'projection-neutral' : 'projection-warning';
+  const theme = pending ? 'projection-pending' : measured && !noGain ? 'projection-measured' : noGain || noQualifyingGain ? 'projection-neutral' : 'projection-warning';
   const comparisons = record(projection.comparison);
   const components = record(projection.stage_components);
   const breakdown = record(projection.score_breakdown);
@@ -43,7 +44,7 @@ export const ProjectionStatusCard: React.FC<Props> = ({ projection, slow, paused
   return <section className={`projection-card rounded-xl border p-4 ${theme}`} aria-busy={pending && !paused}>
     <div role="status" aria-live="polite" className="flex items-center gap-2 text-sm font-bold">
       {pending && !paused && <LoaderCircle aria-hidden="true" className="h-4 w-4 shrink-0 animate-spin motion-reduce:animate-none" />}
-      {pending ? paused ? 'Automatic checking paused' : phaseTitle : noGain ? 'Verified — no score increase' : measured ? 'Measured candidate score' : 'Score projection unavailable'}
+      {pending ? paused ? 'Automatic checking paused' : phaseTitle : noQualifyingGain ? 'No qualifying score gain' : noGain ? 'Verified — no score increase' : measured ? 'Measured candidate score' : 'Score projection unavailable'}
     </div>
     {pending ? <>
       <p className="mt-2 text-sm">{paused ? 'The result has not been confirmed on this page. Check again for the latest saved status.' : connectionLost ? 'The connection was interrupted. We’re checking again; your saved assessment is safe.' : message || 'Your guide and measured candidate score appear together after the improvement checks pass.'}</p>

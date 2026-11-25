@@ -174,6 +174,13 @@ async def invoke_agent(
         logger.info("Using deterministic fallback logic (No GROQ_API_KEY provided)")
         return {**fallback_dict, "analysis_source": "fallback"}
 
+    if capability == "score_projection":
+        system_prompt += (
+            "\nResponse contract: return one JSON object matching the following JSON Schema. "
+            "This schema is authoritative for the response shape; examples above are explanatory. "
+            "Keep all source, target, alignment and safety requirements. Do not add wrapper keys.\n"
+            + json.dumps(schema.model_json_schema(), separators=(",", ":"))
+        )
     messages = [
         SystemMessage(content=system_prompt),
         HumanMessage(content=json.dumps(user_payload))

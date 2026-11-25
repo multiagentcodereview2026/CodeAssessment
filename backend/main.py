@@ -562,7 +562,12 @@ def public_guided_revision(revision, attempt_history=None):
         public = {key: value for key, value in revision.items() if key in keys}
         if unverified:
             public["verification"] = {"status": "guided_step", "verified": False,
-                "message": "Not verified: revision guidance is available, but its score projection could not be verified. Apply the steps in your own code and submit it for assessment."}
+                "message": (
+                    "A private candidate was assessed, but no qualifying score gain was found. "
+                    "The guidance may still be useful; submit your own revision for assessment."
+                    if projection.get("job_status") == "no_improvement" else
+                    "Not verified: revision guidance is available, but its score projection could not be verified. Apply the steps in your own code and submit it for assessment."
+                )}
             public["score_projection"] = {**projection, "available": False, "verified": False,
                 "projected_score": None, "expected_improvement": None}
         return public

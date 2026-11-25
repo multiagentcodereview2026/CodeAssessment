@@ -60,6 +60,28 @@ def test_projection_bad_request_is_not_retried(monkeypatch):
     assert result["provider_error"] == "bad_request"
 
 
+def test_projection_receives_exact_schema_and_rejects_nonconforming_output(monkeypatch):
+    from agents.revision import CombinedStageOutput
+    calls = []
+    async def respond(messages):
+        calls.append(messages)
+        return _Response('{"candidate_code":"not a valid contract"}')
+    monkeypatch.setattr(base, "_request_groq", respond)
+    monkeypatch.setattr(base, "llm", object())
+    monkeypatch.setattr(base.settings, "AI_ALLOWED_CAPABILITIES", "score_projection")
+    monkeypatch.setattr(base.settings, "GROQ_API_KEY", "test-only")
+    result = asyncio.run(base.invoke_agent("Guidance instructions", {"source_code": "private"},
+        CombinedStageOutput, {}, capability="score_projection"))
+    assert len(calls) == 1
+    import json
+    prompt = calls[0][0].content
+    sent_schema = json.loads(prompt.split("Do not add wrapper keys.\n", 1)[1])
+    assert sent_schema == CombinedStageOutput.model_json_schema()
+    assert "private" not in prompt
+    assert result["provider_error"] == "invalid_response"
+    assert "candidate_code" not in result
+
+
 def test_rate_limit_cooldown_prevents_second_provider_call(monkeypatch):
     class RateLimit(Exception):
         status_code = 429

@@ -64,8 +64,15 @@ def projection_attempt_limit_message(history, attempts):
         "correctness_not_complete": "The candidate did not pass test verification.",
         "component_regression": "A score component decreased beyond the allowed tolerance.",
         "complexity_claim_unconfirmed": "The claimed complexity improvement could not be confirmed.",
+        "assessment_incomplete": "The candidate assessment was incomplete, so no reliable score could be calculated.",
+        "judge_unavailable": "The execution service could not complete verification.",
+        "rate_limit": "The AI service reached its request limit.",
+        "provider_timeout": "The AI service did not respond in time.",
     }
-    reasons = list(dict.fromkeys(labels[item["failure"]] for item in history if item.get("failure") in labels))
+    failures = [item["failure"] for item in history if item.get("failure")]
+    # Earlier generation errors may have been repaired by a later judged draft.
+    # Do not present a recovered format failure as the final outcome.
+    reasons = [labels.get(failures[-1], "The candidate could not be verified.")] if failures else []
     if not reasons:
         reasons = ["The candidate could not be verified."]
     unit = "attempt" if attempts == 1 else "attempts"

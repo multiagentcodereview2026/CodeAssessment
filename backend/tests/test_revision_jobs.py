@@ -13,7 +13,7 @@ from database import Base
 from scoring.rubric import student_rubric_score
 
 
-def test_saved_projection_reports_low_gain_and_invalid_response_without_scores():
+def test_saved_projection_reports_final_failure_without_scores():
     revision = {
         "revision_policy": "GUIDED_STEPS",
         "score_projection": {"status": "attempt_limit", "job_status": "failed",
@@ -26,10 +26,25 @@ def test_saved_projection_reports_low_gain_and_invalid_response_without_scores()
     ]
     message = app.revision_job_response(revision, history)["improved_code"]["score_projection"]["message"]
     assert message == (
-        "Verification stopped after 2 attempts. No qualifying score gain was measured. "
-        "The AI response did not match the required format."
+        "Verification stopped after 2 attempts. The AI response did not match the required format."
     )
     assert revision["score_projection"]["message"] == "Old generic warning"
+
+
+def test_recovered_format_error_does_not_mask_final_no_gain(monkeypatch):
+    from revision_jobs import projection_attempt_limit_message
+    assert projection_attempt_limit_message([
+        {"failure": "invalid_response"}, {"failure": "response_schema_invalid"},
+        {"failure": "no_improvement", "candidate_score": 82.6},
+    ], 2) == "Verification stopped after 2 attempts. No qualifying score gain was measured."
+    monkeypatch.setattr(app.settings, "SCORE_PROJECTION_ENABLED", True)
+    public = app.public_guided_revision({
+        "revision_policy": "GUIDED_STEPS", "guidance_version": app.CONTRACT_VERSION,
+        "guide_validated": True, "guidance_supported": True, "steps": [{"id": "one"}],
+        "score_projection": {"job_status": "no_improvement", "projected_score": 82.6},
+    })
+    assert "no qualifying score gain" in public["verification"]["message"]
+    assert public["score_projection"]["projected_score"] is None
 
 
 @pytest.fixture
