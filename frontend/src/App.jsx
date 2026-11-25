@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/useAuth';
 import { AppProvider } from './context/AppContext';
@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import StudentLayout from './layouts/StudentLayout';
 import SolverLayout from './layouts/SolverLayout';
 import InstructorLayout from './layouts/InstructorLayout';
+import { RouteFailureScreen } from './components/common/RouteFailureScreen';
 
 const lazyNamed = (load, name) => lazy(() => load().then((module) => ({ default: module[name] })));
 
@@ -57,14 +58,7 @@ class RouteErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
-      return <main className="min-h-screen grid place-items-center bg-slate-50 dark:bg-black p-6">
-        <section className="max-w-md rounded-2xl border border-rose-200 dark:border-rose-900/40 bg-white dark:bg-[#121217] p-6 text-center shadow-sm">
-          <h1 className="text-lg font-bold text-slate-900 dark:text-zinc-100">We could not display this page</h1>
-          <p className="mt-2 text-sm text-slate-600 dark:text-zinc-400">Your submission was saved. Return to the submissions list and open it again.</p>
-          {this.state.message && <pre className="mt-3 overflow-auto rounded-lg bg-slate-100 dark:bg-[#16161d] p-3 text-left text-xs text-rose-700 dark:text-rose-400">{this.state.message}</pre>}
-          <Link className="mt-5 inline-block rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-sm font-semibold text-white" to="/submissions">View submissions</Link>
-        </section>
-      </main>;
+      return <RouteFailureScreen onReload={() => window.location.reload()} />;
     }
     return this.props.children;
   }
