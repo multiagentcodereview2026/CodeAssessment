@@ -37,6 +37,10 @@ services:
     env_file:
       - path: ./backend/.env
         required: false
+      # Root settings override backend settings only when explicitly present.
+      # Do not inject empty Groq defaults via environment: they hide valid keys.
+      - path: ./.env
+        required: false
     environment:
       - DATABASE_URL=${DATABASE_URL:-}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-codeassessment_password}
@@ -45,8 +49,6 @@ services:
       - DOCKER_ENGINE_URL=http://execution-engine:8001/execute
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in the root .env file}
       - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-*}
-      - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-120b}
       - DEBUG=${DEBUG:-false}
       - EXECUTION_CPU_LIMIT=1.0
       - EXECUTION_MEMORY_LIMIT=256m

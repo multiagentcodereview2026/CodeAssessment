@@ -198,6 +198,8 @@ export const SimilarityReviewView: React.FC = () => {
         <FilterDropdown
           label="Course"
           placeholder="All courses"
+          align="left"
+          dropdownWidth="w-[min(360px,calc(100vw-4rem))]"
           searchable={courseOptions.length > 5}
           searchPlaceholder="Search courses..."
           variant="emerald"
