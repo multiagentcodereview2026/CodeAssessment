@@ -198,6 +198,10 @@ Detailed complexity analysis is returned on initial submission but is not stored
 
 ## Quick start
 
+For a no-cold-start deployment within Oracle's Always Free limits, follow
+[the Oracle deployment runbook](docs/ORACLE_ALWAYS_FREE_DEPLOYMENT.md).
+An [AWS EC2 runbook](docs/AWS_EC2_DEPLOYMENT.md) is also available.
+
 ### Requirements
 
 Git, Docker with Docker Compose, and an optional Groq API key for model-generated feedback.
@@ -238,7 +242,7 @@ docker pull node:20-slim
 
 | Service | Address |
 | --- | --- |
-| Application | http://localhost:8080 |
+| Application | http://localhost |
 | Backend | http://localhost:8000 |
 | API documentation | http://localhost:8000/docs |
 | Health check | http://localhost:8000/health |
