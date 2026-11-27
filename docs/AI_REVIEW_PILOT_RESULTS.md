@@ -6,9 +6,9 @@ expert validation or a measured application-wide accuracy result.
 ## Inputs and provenance
 
 The submitted files each contain all 20 solution IDs from the original pack.
-They self-report reviewer IDs `gemini-3-flash` and `claude-sonnet-5-5` and
-correctly retain `ai_assisted_unverified` provenance. These model identities,
-prompts, review independence and model settings have not been verified.
+They self-report external model reviewer IDs and correctly retain
+`ai_assisted_unverified` provenance. The model identities, prompts, review
+independence and model settings have not been verified.
 No instructor grades or executed correctness evidence were supplied.
 
 Canonical source bytes and problem IDs come from the original pilot pack.
