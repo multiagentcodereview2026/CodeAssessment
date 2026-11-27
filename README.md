@@ -12,6 +12,7 @@ The interface also uses the name **CodeVedha**. The project combines persisted b
 - [Assessment workflow and scoring](#assessment-workflow)
 - [Data and frontend structure](#data-and-frontend-structure)
 - [Setup and configuration](#quick-start)
+- [AWS EC2 and Supabase](#aws-ec2-and-supabase)
 - [API reference](#api-reference)
 - [Repository map](#repository-map)
 - [Tests and datasets](#tests-and-datasets)
@@ -24,7 +25,7 @@ The interface also uses the name **CodeVedha**. The project combines persisted b
 - **Assessment:** correctness, complexity, style, and similarity analysis, followed by explanations, recommendations, revised code, and score projections.
 - **Instructor interface:** problems, courses, roster, analytics, similarity review, and reports. Feature coverage and data sources are summarized in [implementation status](docs/IMPLEMENTATION_STATUS.md).
 - **Execution:** Python, C, C++, Java, and JavaScript through a separate isolated execution service. Code is never run in the backend process.
-- **Storage:** PostgreSQL with Docker Compose; SQLite for local backend development.
+- **Storage:** Supabase PostgreSQL for the hosted deployment, bundled PostgreSQL for local Compose, and SQLite for backend development.
 - **Datasets:** import and normalization tools for APPS, CodeContests, and NewFacade.
 
 ## Technology and architecture
@@ -37,16 +38,36 @@ The interface also uses the name **CodeVedha**. The project combines persisted b
 | Execution service | FastAPI, Docker | Compile programs and judge test cases |
 | Database | PostgreSQL 16 / SQLite | Problems, students, cases, submissions |
 
-```text
-React frontend :5173
-        |
-        | /api through Vite proxy
-        v
-FastAPI backend :8000 ──── PostgreSQL
-        |
-        ├── Execution service :8001 ─── Language containers
-        └── LangGraph workflow ──────── Groq / fallback responses
+```mermaid
+flowchart TD
+    Browser["Student or instructor browser"] -->|"HTTP on port 80"| Web
+    subgraph EC2["Docker Compose on EC2"]
+        Web["Nginx serves the React app"] -->|"/api and /health"| API
+        subgraph Backend["Backend container — port 8000"]
+            API["FastAPI authentication and application APIs"] --> Graph["LangGraph assessment and scoring"]
+            API --> Jobs["Revision job dispatcher"]
+        end
+        API -->|"Judge submitted code"| Engine["Execution service — port 8001"]
+        Jobs -->|"Verify candidate revisions"| Engine
+        Engine -->|"Host Docker socket"| Runner["Temporary Python, C, C++, Java and JavaScript containers"]
+    end
+    API -->|"SQLAlchemy over TLS"| DB["Supabase PostgreSQL"]
+    Jobs -->|"Durable job records"| DB
+    Graph -.-> AI["Groq for enabled AI features"]
+    Jobs -.-> AI
 ```
+
+The diagram shows the EC2 deployment. For local use, Compose also starts PostgreSQL and the backend selects it when the root `.env` has no external `DATABASE_URL`. Only the backend needs database credentials.
+
+Nginx serves the built frontend and forwards API requests across the Compose network. The backend obtains judge results before calculating assessment scores. The execution service launches resource-limited containers using a shared workspace volume. Optional AI calls provide feedback and revision guidance. The revision dispatcher lives inside the backend process and persists its jobs in PostgreSQL.
+
+| Connection | Exposure in the root Compose stack |
+| --- | --- |
+| Browser → Nginx | Host port 80 |
+| Host diagnostics → backend | `127.0.0.1:8000` |
+| Backend → execution service | Internal port 8001 |
+| Backend → bundled PostgreSQL | Internal port 5432, when selected |
+| Backend → Supabase | Outbound database connection from the configured URL |
 
 ## Complete project workflow
 
@@ -56,7 +77,7 @@ For current implementation coverage and environment-specific verification status
 
 Docker Compose starts PostgreSQL, the execution service, the backend, and the frontend. The backend creates missing database tables and inserts missing built-in instructor problems and their judge cases. Additional practice problems come from dataset imports or an existing database. Restarting does not overwrite existing instructor assignments.
 
-The frontend sends `/api` requests through Vite to FastAPI. FastAPI owns problem retrieval, execution requests, assessment orchestration, and database writes; the browser does not directly access PostgreSQL or Groq.
+Nginx forwards browser requests under `/api` to FastAPI. When running `npm run dev` locally, Vite handles the same route. FastAPI loads the problems, requests execution and saves assessments.
 
 ### 2. Sign in and select a problem
 
@@ -90,7 +111,7 @@ The shared agent helper loads prompts, calls Groq, parses JSON, and validates th
 
 After the graph finishes, the backend removes hidden-case input, expected output, actual output, and stderr from per-case execution records before persistence and response. It generates a `SUB-XXXXXXXX` ID and saves source, component scores, execution results, feedback, recommendations, and score projection. Revised code is generated on demand from the saved submission and is explicitly labeled unverified until the judge checks it.
 
-The frontend receives the assessment and shows the result. `EVALUATED` means the pipeline finished; it does not mean every case passed or every agent successfully called the model. Suggested revised code is not re-executed by this workflow.
+The frontend receives the assessment and shows the result. `EVALUATED` records completion of the assessment pipeline. Acceptance and AI availability are reported separately. On-demand revisions use a separate verification path that can judge candidate code and measure its score.
 
 Submission processing completes within the original HTTP request. There is no durable background submission job or polling API in this path.
 
@@ -165,17 +186,16 @@ Prompts live in `backend/prompts/`, implementations in `backend/agents/`, and gr
 
 | Component | Base weight |
 | --- | ---: |
-| Student correctness | 20% |
-| Student time complexity | 30% |
-| Student space complexity | 30% |
-| Student style | 20% |
+| Correctness | 30% |
+| Time complexity | 35% |
+| Space complexity | 25% |
+| Style | 10% |
 
 - **Correctness:** accepted cases ÷ evaluated cases × 100; a confirmed compilation failure gives zero. No tests or an infrastructure failure means correctness evidence is unavailable, not zero.
-- **Complexity:** the analyzer estimates time and space separately against problem metadata. Unavailable dimensions are excluded and available weights are renormalized.
-- **Overall student score:** the declared 20/30/30/20 weights are applied once, then the total is rounded to one decimal. A confirmed non-accepted solution is capped at 79; correctness is not multiplied a second time. Missing components are excluded and remaining weights are renormalized.
-- **Instructor rubric:** code defines separate weights of correctness 20%, time 25%, space 25%, style 20%, and originality 10%. The current instructor review screens do not yet use this helper to produce a separate persisted instructor grade; similarity is shown as review evidence, not as a verified plagiarism finding.
-
-For correctness 80, time 80, space 60, and style 90, the student score is **76.0/100**. Correctness and overall scores are calculated in Python; model output supplies supporting assessment and explanations but cannot override numeric scores.
+- **Weights.** An assignment can override a problem's weights. The table gives the defaults when neither supplies a rubric.
+- **Final score.** The backend takes the smaller of the weighted score and the percentage of cases passed. For example, passing 8 of 10 cases gives 80% correctness. With 100 on each other component, the weighted score is 94, so the saved mark is **80/100**.
+- **Missing evidence.** The rubric keeps the configured weights and reports bounds when a required component is missing. Confirmed zero correctness gives a final mark of zero.
+- **Instructor review.** Instructors see the same numerical mark. Similarity findings are separate review evidence. See the [scoring implementation](backend/scoring/rubric.py).
 
 ## Data and frontend structure
 
@@ -198,9 +218,7 @@ Detailed complexity analysis is returned on initial submission but is not stored
 
 ## Quick start
 
-For a no-cold-start deployment within Oracle's Always Free limits, follow
-[the Oracle deployment runbook](docs/ORACLE_ALWAYS_FREE_DEPLOYMENT.md).
-An [AWS EC2 runbook](docs/AWS_EC2_DEPLOYMENT.md) is also available.
+Use this section for a local installation. For the hosted application, see [AWS EC2 and Supabase](#aws-ec2-and-supabase). An [Oracle deployment guide](docs/ORACLE_ALWAYS_FREE_DEPLOYMENT.md) is also available.
 
 ### Requirements
 
@@ -211,7 +229,14 @@ git clone https://github.com/multiagentcodereview2026/CodeAssessment.git
 cd CodeAssessment
 ```
 
-Create the root Compose environment file and backend AI configuration:
+On a fresh clone, create the configuration files. On macOS or Linux run:
+
+```bash
+cp -n .env.example .env
+cp -n backend/.env.example backend/.env
+```
+
+On Windows PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
@@ -227,18 +252,16 @@ GROQ_MODEL=openai/gpt-oss-120b
 
 Pull the images used by the active execution service, then start the application and check health:
 
-```powershell
-docker compose up --build -d
-docker compose ps
-Invoke-RestMethod http://localhost:8000/health
-```
-
 ```bash
 docker pull python:3.11-slim
 docker pull gcc:13
 docker pull eclipse-temurin:17-jdk
 docker pull node:20-slim
+docker compose up --build -d
+docker compose ps
 ```
+
+Open the application and the health endpoint below. A healthy backend returns `{"status":"healthy","database":"connected"}`.
 
 | Service | Address |
 | --- | --- |
@@ -303,10 +326,37 @@ On Windows, activate with `.venv\Scripts\activate`. A host-run backend needs a r
 | `VITE_API_PROXY_TARGET` | Frontend development proxy; defaults to `http://127.0.0.1:8000` |
 | `EXECUTION_CPU_LIMIT`, `EXECUTION_MEMORY_LIMIT` | Runner defaults: 1 CPU and 256 MB |
 | `EXECUTION_TIMEOUT_SECONDS` | Default 5 seconds; cases can specify limits and runner grace adds time |
-| `EXECUTION_MAX_CONCURRENT_JOBS` | Root Compose sets 8 |
+| `EXECUTION_MAX_CONCURRENT_JOBS` | Root Compose defaults to 2 concurrent runner jobs |
 | `EXECUTION_SANDBOX_VOLUME` | Root Compose shared volume name; defaults to `codeassessment_execution-work` |
 
 Compose supplies the database/engine connection settings. The built frontend requires deployment API routing; Vite's development proxy is not included in the bundle.
+
+Set the external `DATABASE_URL` in the **root `.env`** when using Compose. Its explicit environment mapping takes precedence over `backend/.env`. If that root value is empty, the entrypoint builds a connection to the bundled PostgreSQL service. Use the `postgresql+psycopg://` prefix with the installed Psycopg 3 driver. Environment files contain private settings and must be provisioned separately when cloning the repository.
+
+## AWS EC2 and Supabase
+
+The hosted setup uses an Ubuntu EC2 instance for the application and the existing Supabase database for the practice catalogue, users and submissions. Follow the [EC2 deployment runbook](docs/AWS_EC2_DEPLOYMENT.md) for instance sizing, SSH access, Docker installation and the live execution smoke test.
+
+1. On EC2, clone the repository and prepare the root `.env` as described in Quick start. Keep database credentials on the server. Set optional Groq credentials in `backend/.env`.
+2. In the Supabase project that holds the catalogue, open **Connect → Session pooler**. Copy its exact username and hostname. Set the root `DATABASE_URL` using the format below, replacing every placeholder and percent-encoding reserved characters in the password. The session pooler supports an IPv4 connection. [Supabase connection guide](https://supabase.com/docs/guides/database/connecting-to-postgres)
+3. Back up the existing Supabase database before the first connection or an upgrade. Backend startup runs `alembic upgrade head` against the configured database. A dump of the bundled Compose database only covers that local database.
+4. From the project directory on EC2, run `bash scripts/setup_aws_free_tier.sh`. For an existing deployment after editing the environment, run `sudo docker compose up -d --force-recreate backend`, wait for backend health, then run `sudo docker compose restart frontend` to refresh Nginx's backend connection.
+
+```dotenv
+DATABASE_URL=postgresql+psycopg://postgres.PROJECT_REF:ENCODED_PASSWORD@POOLER_HOST:5432/postgres?sslmode=require
+```
+
+Verify both the connection and the catalogue from the EC2 shell:
+
+```bash
+sudo docker compose ps
+curl -fsS http://127.0.0.1/health
+curl -fsS http://127.0.0.1/api/problems | python3 -c 'import json,sys; print("Public practice problems:", len(json.load(sys.stdin)))'
+```
+
+Compare the count with the expected public practice catalogue. A successful health check only confirms that the backend can query its configured database. The local PostgreSQL container also starts when Supabase is selected because Compose declares it as a startup dependency.
+
+The containers run in the background after SSH disconnects. For student sign-ins over the internet, configure HTTPS at the web entry point. Opening port 443 alone does not configure a certificate. Keep SSH restricted to your administrative IP and the database and execution ports private.
 
 ## API reference
 
@@ -364,7 +414,7 @@ docker-execution-engine/    Execution API, language configs, sandbox, tests
 docker/                     Additional runner Dockerfiles
 database/                   Backup instructions
 docs/                       Architecture documentation
-docker-compose.yml          Development stack and dataset tools
+docker-compose.yml          Application services and optional dataset tools
 ```
 
 Assessment logic lives in `backend/workflow`, `backend/agents`, and `backend/analysis`. Active engine language settings reference the standard images listed above, rather than custom `codeassessment-*` runner images.
@@ -384,7 +434,7 @@ python -m pip install -r requirements.txt
 python -m pytest tests/test_sandbox.py -q
 ```
 
-Live execution tests require Docker and language images. The engine CI job pulls all configured runtime images and asserts accepted and wrong-answer behavior for every supported language, along with compile, runtime, and timeout failures. Local checks skip those live tests when Docker is unavailable.
+From the same directory, run `python -m pytest -q tests/test_live_execution.py -rs` to test the real Docker runners. Pull the runtime images listed in Quick start first. Check the skip summary as well as the pass count.
 
 Dataset tools are available under `backend/dataset/` and the Compose `tools` profile. Their mounts expect external dataset directories; prepare data and check paths before importing. Database dumps can contain hidden cases and should stay outside Git. See [backup and restore instructions](database/README.md).
 
@@ -396,14 +446,15 @@ Dataset tools are available under `backend/dataset/` and the Compose `tools` pro
 - **Frontend:** dashboard/course/assignment flows use real APIs. Some profile metadata, announcements, parts of feedback/recommendations, and some legacy pages still use local/mock state and need follow-up before calling the whole product production-ready.
 - **AI output:** fallback feedback is explicitly marked as fallback and may be generic. Revised code is unavailable when a task-specific rewrite cannot be generated; generated drafts are not verified until judged. Similarity is unavailable when there are no same-problem peer submissions or the database cannot supply them. Projections are estimates, not verified outcomes.
 - **Execution isolation:** Docker runners disable networking and apply resource restrictions. Student code is not executed if the engine is unavailable. The service still mounts the host Docker socket; this is a trusted-host development deployment and needs a stronger isolation boundary before public production use.
-- **Deployment:** Compose runs the Vite development server and permissive CORS. It is a development setup.
+- **Deployment:** Compose builds the frontend and serves it with Nginx over HTTP. Set `CORS_ALLOW_ORIGINS` to the trusted frontend origin for deployment.
 
 ## Troubleshooting and maintenance
 
 | Issue or change | Where to look |
 | --- | --- |
 | Missing environment/secrets | Copy `.env.example` to `.env`, configure both required secrets, and copy `backend/.env.example` to `backend/.env`. |
-| Empty practice catalogue | Import practice data; check instructor catalogue separately. |
+| Healthy database, empty practice catalogue | Verify that the root environment points to the expected database. The practice endpoint filters for public problems and excludes built-in instructor IDs. A fresh local volume does not contain the Supabase catalogue. |
+| Nginx returns 502 | On EC2, test `curl -fsS http://127.0.0.1:8000/health` directly. If it fails, inspect `sudo docker compose logs --tail=80 backend` locally for connection or migration errors. If it succeeds but the proxied health check fails, restart the frontend and retry. Redact credentials before sharing logs. |
 | Generic feedback | Check Groq configuration and backend fallback logs. |
 | Slow or failed execution | Inspect backend/engine logs, runtime images, timeouts, and shared volume name. |
 | Authentication failure | Check `JWT_SECRET_KEY`, account role/profile, and backend logs; do not use demo credentials. |
