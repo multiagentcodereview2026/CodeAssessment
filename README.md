@@ -103,13 +103,13 @@ Programs must follow the selected problem's input/output format. The backend has
 
 ### 5. Evaluate and explain
 
-Execution results, source, language, student information, and the problem statement/constraints form `EvaluationState`. The core LangGraph has eight nodes: supervisor, correctness, complexity and style (parallel), aggregation, explainability, recommendation, and score projection. Similarity review and revised-code generation are separate workflows; revision is requested from a saved result.
+Execution results, source, language, student information, and the problem statement/constraints form `EvaluationState`. The core LangGraph has eight nodes: supervisor, correctness, complexity and style (parallel), aggregation, explainability, recommendation, and score projection. Similarity review and revised-code generation are separate workflows; revision is requested from a saved result. The revision workflow is a bounded background loop: it generates one private candidate, validates and judges it in the same sandbox, compares its measured score with the saved baseline, and publishes a projection only when the release gate passes.
 
 The shared agent helper loads prompts, calls Groq, parses JSON, and validates the response. If a call is unavailable or invalid, that agent uses its fallback. The correctness agent removes selected hidden-case details before constructing its model payload.
 
 ### 6. Save and display the result
 
-After the graph finishes, the backend removes hidden-case input, expected output, actual output, and stderr from per-case execution records before persistence and response. It generates a `SUB-XXXXXXXX` ID and saves source, component scores, execution results, feedback, recommendations, and score projection. Revised code is generated on demand from the saved submission and is explicitly labeled unverified until the judge checks it.
+After the graph finishes, the backend removes hidden-case input, expected output, actual output, and stderr from per-case execution records before persistence and response. It generates a `SUB-XXXXXXXX` ID and saves source, component scores, execution results, feedback, recommendations, and score projection. Revised code is generated on demand from the saved submission. Its private candidate is not shown; a guide may be released as **Not verified** when candidate verification fails, while a measured score projection is shown only after the sandbox judge and release gate succeed.
 
 The frontend receives the assessment and shows the result. `EVALUATED` records completion of the assessment pipeline. Acceptance and AI availability are reported separately. On-demand revisions use a separate verification path that can judge candidate code and measure its score.
 
@@ -161,9 +161,16 @@ flowchart TD
     Y --> A
     A --> E[Explainability]
     E --> R[Recommendation]
-    R --> P[Score projection]
+    R --> P[Baseline score projection]
     P --> END[Saved assessment]
-    END -. on-demand .-> V[Revision + verification]
+    END -. on-demand .-> J[Revision job]
+    J --> G[Generate guided steps and private candidate]
+    G --> V[Validate patch and candidate]
+    V --> D[Docker judge and score-cal]
+    D --> Q{Release gate passes?}
+    Q -- yes --> U[Publish verified guide + measured projection]
+    Q -- no, attempts remain --> G
+    Q -- no, limit reached --> N[Publish guide as Not verified; no projection]
     END -. instructor workflow .-> Z[Similarity review]
 ```
 
@@ -177,8 +184,8 @@ flowchart TD
 | Aggregation | Calculates the overall score from available components. |
 | Explainability | Turns assessment evidence into feedback. |
 | Recommendation | Suggests learning actions. |
-| Revision | Suggests improved code and explains changes. |
-| Projection | Estimates possible score improvement. |
+| Revision | Produces staged guidance and a private candidate on demand. |
+| Projection | Re-runs the private candidate through the same judge and releases a measured improvement only when the gate passes. |
 
 Prompts live in `backend/prompts/`, implementations in `backend/agents/`, and graph/state definitions in `backend/workflow/`. Groq responses are validated with Pydantic. Missing credentials or failed/invalid responses trigger agent-specific fallbacks.
 
