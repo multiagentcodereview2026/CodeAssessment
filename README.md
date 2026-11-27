@@ -28,7 +28,7 @@ The interface also uses the name **CodeVedha**. The project combines persisted b
 - **Storage:** Supabase PostgreSQL for the hosted deployment, bundled PostgreSQL for local Compose, and SQLite for backend development.
 - **Datasets:** import and normalization tools for APPS, CodeContests, and NewFacade.
 
-## Technology and architecture
+## Platform architecture
 
 | Component | Technologies | Responsibility |
 | --- | --- | --- |
@@ -40,26 +40,28 @@ The interface also uses the name **CodeVedha**. The project combines persisted b
 
 ```mermaid
 flowchart TD
-    Browser["Student or instructor browser"] -->|"HTTP on port 80"| Web
-    subgraph EC2["Docker Compose on EC2"]
-        Web["Nginx serves the React app"] -->|"/api and /health"| API
-        subgraph Backend["Backend container — port 8000"]
-            API["FastAPI authentication and application APIs"] --> Graph["LangGraph assessment and scoring"]
-            API --> Jobs["Revision job dispatcher"]
+    Browser["Student or instructor browser"] -->|"HTTP :80"| Web
+    subgraph EC2["Docker Compose deployment"]
+        Web["Nginx frontend"] -->|"/api and /health"| API
+        subgraph Backend["FastAPI backend :8000"]
+            API["Authentication and application APIs"] --> Graph["LangGraph assessment"]
+            API --> Jobs["Revision job worker"]
         end
-        API -->|"Judge submitted code"| Engine["Execution service — port 8001"]
+        API -->|"Judge submitted code"| Engine["Execution service :8001"]
         Jobs -->|"Verify candidate revisions"| Engine
-        Engine -->|"Host Docker socket"| Runner["Temporary Python, C, C++, Java and JavaScript containers"]
+        Engine -->|"Host Docker socket"| Runner["Isolated Python, C, C++, Java and JavaScript runners"]
     end
     API -->|"SQLAlchemy over TLS"| DB["Supabase PostgreSQL"]
     Jobs -->|"Durable job records"| DB
-    Graph -.-> AI["Groq for enabled AI features"]
+    Graph -.-> AI["Groq (optional AI features)"]
     Jobs -.-> AI
 ```
 
-### Platform architecture diagram
+### Architecture diagram
 
 ![CodeAssessment platform architecture with iterative score projection loop](docs/architecture-score-projection-loop.png)
+
+*CodeAssessment platform: secure submission, deterministic assessment, and bounded revision score projection.*
 
 The diagram shows the EC2 deployment. For local use, Compose also starts PostgreSQL and the backend selects it when the root `.env` has no external `DATABASE_URL`. Only the backend needs database credentials.
 
