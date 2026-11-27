@@ -59,7 +59,7 @@ flowchart TD
 
 ### Architecture diagram
 
-![CodeAssessment platform architecture with iterative score projection loop](docs/architecture-score-projection-loop.png)
+![CodeAssessment platform architecture with iterative score projection loop](docs/architecture-clean.svg)
 
 *CodeAssessment platform: secure submission, deterministic assessment, and bounded revision score projection.*
 
