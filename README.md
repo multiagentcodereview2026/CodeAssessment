@@ -362,13 +362,12 @@ backend/
   instructor_repository.py Assignment seeding and case loading
 docker-execution-engine/    Execution API, language configs, sandbox, tests
 docker/                     Additional runner Dockerfiles
-AI/                         Separate AI pipeline and experiments
 database/                   Backup instructions
 docs/                       Architecture documentation
 docker-compose.yml          Development stack and dataset tools
 ```
 
-The application uses `backend/workflow`, not the separate `AI/` pipeline. Similarly, active engine language settings reference the standard images listed above, rather than the custom `codeassessment-*` runner images.
+Assessment logic lives in `backend/workflow`, `backend/agents`, and `backend/analysis`. Active engine language settings reference the standard images listed above, rather than custom `codeassessment-*` runner images.
 
 ## Tests and datasets
 
