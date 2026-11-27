@@ -57,6 +57,10 @@ flowchart TD
     Jobs -.-> AI
 ```
 
+### Platform architecture diagram
+
+![CodeAssessment platform architecture with iterative score projection loop](docs/architecture-score-projection-loop.png)
+
 The diagram shows the EC2 deployment. For local use, Compose also starts PostgreSQL and the backend selects it when the root `.env` has no external `DATABASE_URL`. Only the backend needs database credentials.
 
 Nginx serves the built frontend and forwards API requests across the Compose network. The backend obtains judge results before calculating assessment scores. The execution service launches resource-limited containers using a shared workspace volume. Optional AI calls provide feedback and revision guidance. The revision dispatcher lives inside the backend process and persists its jobs in PostgreSQL.
