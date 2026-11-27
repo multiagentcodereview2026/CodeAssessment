@@ -1,6 +1,6 @@
 FROM eclipse-temurin:17-jdk
 
-RUN useradd -m -u 1000 sandboxuser
+RUN getent passwd 1000 >/dev/null || useradd -m -u 1000 sandboxuser
 
 WORKDIR /code
 
