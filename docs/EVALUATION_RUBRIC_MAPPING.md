@@ -1,8 +1,7 @@
 # CodeAssessment Academic Evaluation Rubric Mapping
 
 **Project Title:** CodeAssessment (*CodeVedha*) — Architecting Mixed-Evidence Automated Programming Assessment  
-**Authors:** A. Manigreeva, D. Nayaneesh, Kantam Pavan Sai Reddy, Kura Vignesh Reddy, Vitta Karthikeya  
-**Document Lead:** Kantam Pavan Sai Reddy (DevOps & Infrastructure Lead)  
+**Authors:** A. Manigreeva, D. Nayaneesh, Kantam Pavan Sai Reddy, Kura Vignesh Reddy, Vitta Karthikeya    
 **Date:** November 2026  
 
 ---
